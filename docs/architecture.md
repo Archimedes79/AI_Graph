@@ -270,7 +270,7 @@ engine/src                               editor/src
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
     triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
-    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the Preview tab, layout, schemes
+    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the running app, layout, schemes
     reuse.ts  interface.ts  examples.ts
   project/           a graph on disk
     folder.ts        read · write · watch
@@ -305,7 +305,7 @@ editor asks the registry what a node is. Panels are lazy chunks, so there is no 
 One window, three parts on the Graph tab, and nothing over them but a dialog asked for:
 
 ```
- header   AI-Graph · the graph's name · Graph | Page | Preview      File ▾ ↶ ↷ ▶ Run  Generate  Settings  Deploy
+ header   AI-Graph · the graph's name · Graph | Page (| ● App)       File ▾ ↶ ↷ ▶ Run  Generate  Settings  Deploy
  ┌──────┬─────────────────────────────────────────┬──────────────────────────────┐
  │ pal- │ the canvas: a card per node              │ the panel of the node that   │
  │ ette │                                          │ is selected -- or, with none,│
@@ -351,7 +351,14 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
 - **The header** (`app/Toolbar.tsx`) holds the app's name, the graph's name, the views
   (`app/ViewTabs.tsx`) and what is done to the graph as a whole: Undo and Redo as icons,
   ▶ Run, Generate, Settings, Deploy; the file actions and ✨ AI Graph, which designs a new
-  graph, are its File menu (`app/FileMenu.tsx`). Below 1280 pixels its buttons and the
+  graph, are its File menu (`app/FileMenu.tsx`). **▶ Run runs the application**
+  (`app/application.ts`), as an IDE runs what it builds: with a page, the App tab opens on
+  it -- `page/ApplicationView.tsx`, the delivered page attached to the document -- and the
+  graph runs when the page is used; without one, what starts the graph starts it
+  (`startEvents`: the trigger nodes set to fire at start, or, with no trigger node and
+  nothing on a page to start it, the whole graph once), and each clock keeps its time. It
+  is ■ Stop while it runs, and ends by itself where nothing is left to happen. A delivered
+  tool starts the same way when it is opened, and has no ▶ Run of its own. Below 1280 pixels its buttons and the
   palette are their icons, and at 1024 nothing scrolls the page sideways. What Generate
   says stands whole in a line under it until dismissed; what it says of saving and
   opening is kept with the document it was said of, and goes when another is opened.

@@ -9,20 +9,20 @@ import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
 
 /**
- * What the deployed tool looks like — the same component, not a rendition.
+ * The application, running (▶ Run, `app/application.ts`): its page, as the
+ * deployed tool draws it -- the same component, not a rendition.
  *
  * `GuiSurfacePage` is what `runtime/RuntimeApp.tsx` renders when a bundle is
- * opened on someone else's machine, under the same `DeliveredHeader`, started
- * by the same `useDeliveredRun`. Rendering it here means the preview cannot
- * flatter: if a block is unreadable, mis-sized or missing in the bundle, it is
- * unreadable, mis-sized or missing here, because there is nothing else to be.
+ * opened on someone else's machine, under the same `DeliveredHeader`, and
+ * each round goes through the same `useDeliveredRun`. So what is seen here is
+ * what they get: a block unreadable, mis-sized or missing in the bundle is so
+ * here, because there is nothing else to be.
  *
- * It is the tool, running, attached to the document -- so what a run produces
- * still lights up the nodes on the graph canvas next door. Its header has no
- * ▶ Run of its own: the toolbar's is the one, on every tab. What it has is the
- * pop-out, the same tool detached.
+ * It runs attached to the document: what the page starts lights up the nodes
+ * on the graph next door. The graph runs when the page is used -- a button, a
+ * file picked, a box that says so; its fields hold what they were set to.
  */
-export default function PreviewTab() {
+export default function ApplicationView() {
   const blocks = usePage().widgets;
   const delivered = useDeliveredRun();
   const [opening, setOpening] = useState('');
@@ -70,11 +70,10 @@ export default function PreviewTab() {
       />
       <div className="px-8 py-1.5 flex items-center gap-3" style={{ borderBottom: `1px solid ${LINE}` }}>
         <span className="text-xs" style={{ color: MUTED }}>
-          As delivered
+          Running
         </span>
         <span className="text-xs" style={{ color: DIMMER }}>
-          The same page without the tools — it works here exactly as it will for whoever gets it.
-          Nothing runs until you use a block, or press ▶ Run in the toolbar.
+          As whoever gets it will use it: the graph runs when you use the page. ■ Stop ends it.
         </span>
       </div>
 

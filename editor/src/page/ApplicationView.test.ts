@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import PreviewTab from './PreviewTab';
+import ApplicationView from './ApplicationView';
 import DeliveredHeader from './DeliveredHeader';
 import { NODE_KINDS } from '@/document/nodeKinds';
 
@@ -23,17 +23,15 @@ vi.mock('@/store/graphStore', () => ({
   useGraphStore: Object.assign((select: (state: typeof open) => unknown) => select(open), { getState: () => open }),
 }));
 
-describe('the Preview tab', () => {
-  it('has no ▶ Run of its own -- the toolbar\'s is the one, on every tab -- and pops the tool out', () => {
-    // The Preview header had a ▶ Run beside the toolbar's, and "Open as a tool"
-    // was in the Deploy menu, one tab and one menu away from the page it opens.
-    const html = renderToStaticMarkup(createElement(PreviewTab));
+describe('the application, running', () => {
+  it('has no ▶ Run of its own -- ▶ Run started it, and its page runs the graph -- and pops the tool out', () => {
+    const html = renderToStaticMarkup(createElement(ApplicationView));
     expect(html).toContain('Population plotter');
     expect(html).not.toContain('▶ Run</button>');
     expect(html).toMatch(/<button[^>]*title="A window of its own[^"]*"[^>]*>⧉ Open as a tool<\/button>/);
   });
 
-  it('shows a graph without a page as it is delivered: the result of the toolbar\'s ▶ Run', () => {
+  it('shows a graph without a page as it is delivered: what its run handed back', () => {
     // It said "No page yet" and nothing else, where the delivered tool shows
     // what the run handed back.
     const page = open.rfNodes;
@@ -44,7 +42,7 @@ describe('the Preview tab', () => {
       outputs: { Words: { value: 'forty-two words' } },
     } as never;
     try {
-      const html = renderToStaticMarkup(createElement(PreviewTab));
+      const html = renderToStaticMarkup(createElement(ApplicationView));
       expect(html).toContain('No page yet');
       expect(html).toContain('forty-two words');
     } finally {
@@ -58,7 +56,7 @@ describe('the Preview tab', () => {
     open.rfNodes = [];
     open.executionResult = { status: 'success', node_results: [], outputs: {} } as never;
     try {
-      const html = renderToStaticMarkup(createElement(PreviewTab));
+      const html = renderToStaticMarkup(createElement(ApplicationView));
       expect(html).toContain('This graph has no nodes yet.');
       expect(html).not.toContain('ready to run');
     } finally {
@@ -67,12 +65,11 @@ describe('the Preview tab', () => {
     }
   });
 
-  it('keeps the delivered tool\'s ▶ Run: a tool someone was handed has no toolbar', () => {
-    const header = (onRun?: () => void) => renderToStaticMarkup(createElement(DeliveredHeader, { onRun }));
-    expect(header(() => {})).toContain('▶ Run</button>');
-    expect(header()).not.toContain('▶ Run');
+  it('has a delivered tool say what it is, and offer no ▶ Run: started, it runs when its page is used', () => {
+    const header = renderToStaticMarkup(createElement(DeliveredHeader, {}));
+    expect(header).not.toContain('▶ Run');
     // What the tool is, from the graph: its name and what it does.
-    expect(header()).toContain('Plotter');
-    expect(header()).toContain('Plots a CSV');
+    expect(header).toContain('Plotter');
+    expect(header).toContain('Plots a CSV');
   });
 });

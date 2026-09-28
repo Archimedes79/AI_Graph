@@ -330,7 +330,7 @@ describe('validate_graph', () => {
     expect(problems[0].where).toBe('nodes "a", "b"');
     expect(problems[0].fix).toMatch(/remembers/);
 
-    const panel = page('panel', [{ id: 'box', kind: 'text_io', mode: 'input', label: 'Box' }, { id: 'shown', kind: 'text_io', mode: 'output', label: 'Shown' }]);
+    const panel = page('panel', [{ id: 'box', kind: 'text_io', mode: 'input', label: 'Box', run_on_change: true }, { id: 'shown', kind: 'text_io', mode: 'output', label: 'Shown' }]);
     expect(await problemsOf(graphOf([panel, code('work')], [
       edge('e1', 'panel.box_out', 'work.in'), edge('e2', 'work.out', 'panel.shown_in'),
     ]))).toEqual([]);

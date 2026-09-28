@@ -41,8 +41,8 @@ export default function TriggerNodePanel({ node, setConfig }: NodePanelProps) {
       <p className="text-xs mt-3" style={{ color: DIM }}>
         It starts what its port is wired to — a node's input, or its ◆ — and wired to nothing, the whole
         graph. A deployed tool's server keeps the time, with nobody watching; on the command line the
-        shortest interval applies and <code>--every</code> overrides it. In the editor nothing fires by
-        itself: press ▶ Run, which counts every trigger as fired.
+        shortest interval applies and <code>--every</code> overrides it. In the editor ▶ Run runs the
+        application: set to fire at start, it fires then, and its clock keeps time until ■ Stop.
       </p>
     </div>
   );

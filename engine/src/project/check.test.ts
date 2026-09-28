@@ -120,6 +120,28 @@ describe('what check finds in a graph', () => {
     expect(problemsIn(made)).toEqual([]);
   });
 
+  it('finds a page that takes something in where nothing starts the graph: its trigger is missing', () => {
+    const withPage = (blocks: Record<string, unknown>[], more: Record<string, unknown>[] = []) => {
+      const made = graph();
+      made.nodes.push(...parseGraph({ metadata: { name: 'x' }, nodes: [
+        { id: 'page', node_type: 'gui', label: 'Page', config: { gui_widgets: blocks } }, ...more,
+      ], edges: [] }).nodes);
+      return problemsIn(made);
+    };
+    const box = { id: 'msg', kind: 'text_io', mode: 'input', label: 'Message' };
+    expect(withPage([box])).toEqual([expect.objectContaining({
+      where: 'node "page"',
+      problem: expect.stringContaining('nothing on it starts the graph'),
+      fix: expect.stringContaining('Add a Button block'),
+    })]);
+    // A button starts it; so does the box itself, told to -- and a trigger node, which reads it at each round.
+    expect(withPage([box, { id: 'go', kind: 'button', label: 'Go' }])).toEqual([]);
+    expect(withPage([{ ...box, run_on_change: true }])).toEqual([]);
+    expect(withPage([box], [{ id: 'clock', node_type: 'trigger', label: 'Clock', config: { trigger_every: '5m' } }])).toEqual([]);
+    // A page that only shows takes nothing in: it runs once when the tool starts, which is all it needs.
+    expect(withPage([{ id: 'answer', kind: 'text_io', mode: 'output', label: 'Answer' }])).toEqual([]);
+  });
+
   it('finds a second page: a graph is one tool, with one page', () => {
     const page = (id: string, block: string) => ({ id, node_type: 'gui', label: 'Page', inputs: [], outputs: [],
       config: { gui_widgets: [{ id: block, kind: 'text_io', mode: 'output', label: block }] } });
@@ -140,7 +162,7 @@ describe('what check finds in a setting that would silently do nothing', () => {
     metadata: { name: 'Folder' },
     nodes: [
       { id: 'page', node_type: 'gui', inputs: [], outputs: [], config: { gui_widgets: [
-        { id: 'folder', kind: 'input_picker', mode: 'directory' }, { id: 'shown', kind: 'text_io', mode: 'output' },
+        { id: 'folder', kind: 'input_picker', mode: 'directory', run_on_change: true }, { id: 'shown', kind: 'text_io', mode: 'output' },
       ] } },
       { id: 'each', node_type: 'ai', description: 'Summarises one story.', inputs: [{ ...port('story', 'input'), ...story }], outputs: [port('output', 'output')],
         config: { prompt: 'Summarise the story.', ...config } },

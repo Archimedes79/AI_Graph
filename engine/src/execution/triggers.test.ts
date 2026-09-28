@@ -3,7 +3,7 @@ import { type Graph, type GraphNode } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
-import { RUN_PORT, graphTriggers, triggeredNodes } from './triggers.ts';
+import { RUN_PORT, graphTriggers, pageStarts, startEvents, triggeredNodes } from './triggers.ts';
 import { LastOutputs } from './reuse.ts';
 import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
 
@@ -125,6 +125,36 @@ describe('graphTriggers', () => {
       { event: { node_id: 'clock', port_id: 'fired' }, on_start: false, every: '5m' },
       { event: { node_id: 'start', port_id: 'fired' }, on_start: true, every: '' },
     ]);
+  });
+});
+
+describe('starting the application', () => {
+  const page = (blocks: Record<string, unknown>[]) => node('page', 'gui', { gui_widgets: blocks });
+
+  it('waits for its page where something on it starts the graph: a button, a box that says so', () => {
+    const buttoned = graphOf([page([{ id: 'msg', kind: 'text_io', mode: 'input' }, { id: 'go', kind: 'button' }]), node('a')], []);
+    expect(pageStarts(buttoned, registry)).toBe(true);
+    expect(startEvents(buttoned, registry)).toEqual([]);
+    const live = graphOf([page([{ id: 'pick', kind: 'input_picker', run_on_change: true }]), node('a')], []);
+    expect(startEvents(live, registry)).toEqual([]);
+  });
+
+  it('runs whole once where nothing would ever start it: no page, or one with nothing to press', () => {
+    expect(startEvents(graphOf([node('a')], []), registry)).toEqual([null]);
+    const shown = graphOf([page([{ id: 'chart', kind: 'plot_window' }]), node('a')], []);
+    expect(pageStarts(shown, registry)).toBe(false);
+    expect(startEvents(shown, registry)).toEqual([null]);
+  });
+
+  it('fires the trigger nodes set to fire at start, and only those, where the graph has any', () => {
+    const graph = graphOf([
+      node('clock', 'trigger', { trigger_on_start: false, trigger_every: '5m' }),
+      node('start', 'trigger', {}),
+      page([{ id: 'go', kind: 'button' }]),
+    ], []);
+    expect(startEvents(graph, registry)).toEqual([{ node_id: 'start', port_id: 'fired' }]);
+    // A trigger node is no block on a page: it does not make the page start anything.
+    expect(pageStarts(graphOf([node('start', 'trigger', {})], []), registry)).toBe(false);
   });
 });
 

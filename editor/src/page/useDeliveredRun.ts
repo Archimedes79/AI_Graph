@@ -6,21 +6,21 @@ import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 /**
- * Starting a run the way the delivered tool starts one.
+ * Starting a round the way the delivered tool starts one.
  *
  * Two hosts render the delivered page -- `runtime/RuntimeApp.tsx` for a bundle
- * someone was handed, and the editor's Preview tab -- and the toolbar's ▶ Run
- * of a graph without a page is the same run again. A run from any of them
- * has the same two steps: ask what the graph still needs (a file to read, a
- * place to write), and only then run. The preview had the second step and not
- * the first, so pressing a button there failed on a file nobody had chosen,
- * while the same press in the delivered tool politely asked for it. A preview
- * that behaves differently from the thing it previews is the one thing this
- * page is not allowed to be, so the two steps live here and every host uses
- * them.
+ * someone was handed, and the editor's running application -- and the rounds
+ * ▶ Run starts without a page (`app/application.ts`) are the same rounds
+ * again. A round from any of them has the same two steps: ask what the graph
+ * still needs (a file to read, a place to write), and only then run. The
+ * editor's page once had the second step and not the first, so pressing a
+ * button there failed on a file nobody had chosen, while the same press in the
+ * delivered tool politely asked for it; the two steps live here and every host
+ * uses them.
  *
- * A page event brings the port it fired on, and the run is then only what that
- * port is wired to; ▶ Run brings none, and runs everything.
+ * An event brings the port it fired on -- a block on the page, a trigger node
+ * -- and the round is then only what that port is wired to; none, and it runs
+ * everything.
  */
 export function useDeliveredRun() {
   const exportGraph = useGraphStore((s) => s.exportGraph);

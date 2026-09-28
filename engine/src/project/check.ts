@@ -9,7 +9,7 @@
 
 import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
-import { RUN_PORT } from '../execution/triggers.ts';
+import { RUN_PORT, graphTriggers, pageStarts } from '../execution/triggers.ts';
 import { ERROR_PORT, names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { resultKeys } from '../elements/NodeRunner.ts';
@@ -163,9 +163,29 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       fix: 'End every branch in an "output" node -- the run\'s result, under its label; config.write_mode "file" or "directory" writes it too -- or in a "gui" node with a block that displays the value.',
     });
   }
-  if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph));
+  if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph), ...idlePage(graph));
 
   return problems;
+}
+
+/**
+ * A page that takes something in -- a box, a picker, a choice -- where nothing
+ * starts the graph: no block on it does, and no trigger node. The tool runs
+ * once when it is started (`startEvents`), and what is entered afterwards is
+ * never read. A page is how a person runs the tool, so it needs its trigger.
+ */
+function idlePage(graph: Graph): Problem[] {
+  if (graphTriggers(graph).length || pageStarts(graph, registry)) return [];
+  const page = graph.nodes.find((node) => registry.node(node.node_type)?.hasInterface);
+  if (!page) return [];
+  const takes = registry.node(page.node_type)!.derivedPorts(page, registry)?.outputs ?? page.outputs;
+  if (!takes.length) return [];
+  return [{
+    where: `node "${page.id}"`,
+    problem: `Its page takes something in (${takes.map((port) => `"${port.name}"`).join(', ')}), but nothing on it starts the graph: `
+      + 'what is entered there is read once, when the tool starts, and never again.',
+    fix: 'Add a Button block, or tick "Using this starts the graph" on one of those blocks (config.run_on_change: true in a graph file).',
+  }];
 }
 
 /**

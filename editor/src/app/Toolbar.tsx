@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Play, Redo2, Rocket, Settings, Square, Undo2, Wand2 } from 'lucide-react';
 import ToolbarButton from '@/ui/ToolbarButton';
 import { useGraphStore } from '@/store/graphStore';
@@ -13,6 +13,8 @@ import LiveGeneration from '@/authoring/LiveGeneration';
 import SubgraphTrail from './SubgraphTrail';
 import GraphProblems from './GraphProblems';
 import ViewTabs, { type EditorView } from './ViewTabs';
+import { startApplication, stopApplication, useApplication } from './application';
+import { usePage } from '@/page/GuiPage';
 import FileMenu, { fileActions } from './FileMenu';
 import { ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
@@ -75,7 +77,7 @@ interface ToolbarProps {
 }
 
 /**
- * The header: the app's name, the graph's, its three views -- and on the
+ * The header: the app's name, the graph's, its views -- and on the
  * right what is done to the graph as a whole: ▶ Run first, then Generate,
  * Settings and Deploy. What is done now and then is in the File menu (New,
  * ✨ AI Graph, Open, Save, Save as…, Reload, JSON); Undo and Redo are icons.
@@ -94,7 +96,6 @@ export default function Toolbar({
   const isDirty = useGraphStore((s) => s.isDirty);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
-  const stopRun = useGraphStore((s) => s.stopRun);
   const runProgress = useGraphStore((s) => s.runProgress);
   const isProject = useGraphStore((s) => s.isProject);
   const undo = useGraphStore((s) => s.undo);
@@ -126,17 +127,36 @@ export default function Toolbar({
   const dirty = isDirty() && (rfNodes.length > 0 || rfEdges.length > 0);
 
   /**
-   * ▶ Run: the whole graph, now, on what is set -- the same on every tab.
+   * ▶ Run: the application, run as whoever gets it will run it -- one button,
+   * the same on every tab (`app/application.ts`). With a page, the page opens
+   * (the App tab) and the graph runs when it is used; without one, what starts
+   * the graph starts it. While it runs the button is ■ Stop, which ends it.
    *
-   * It used to mean three things. With a page it was ▶ Start, which only
-   * switched to the Preview tab, whose header then had a ▶ Run of its own; a
-   * graph without a page ran here. One button, one meaning: what a page's own
-   * blocks start is theirs, and they still start it.
-   *
-   * What the graph still asks -- a file nobody chose, a place to write -- is
+   * It is the document that runs: from inside a node's graph, the canvas goes
+   * back up to the top first, where the page is and where the results land.
+   * What a round still needs -- a file nobody chose, a place to write -- is
    * asked first, by the delivered tool's own steps (`useDeliveredRun`).
    */
-  const handleRun = () => { void delivered.run(null); };
+  const appRunning = useApplication((s) => s.running);
+  const hasPage = usePage().widgets.length > 0;
+  // Where ■ Stop goes back to: the view ▶ Run was pressed on.
+  const ranFrom = useRef<EditorView>('graph');
+  const handleRun = () => {
+    const store = useGraphStore.getState();
+    if (store.subgraphStack.length) store.closeSubgraphsTo(0);
+    if (hasPage) {
+      if (view !== 'app') ranFrom.current = view;
+      onViewChange('app');
+    }
+    void startApplication(useGraphStore.getState().exportGraph(), (event) => delivered.run(event));
+  };
+  // Stopped -- by ■ Stop, or by itself, having nothing left to do -- it takes its tab with it.
+  useEffect(() => {
+    if (!appRunning && view === 'app') onViewChange(ranFrom.current);
+  }, [appRunning, view, onViewChange]);
+  // Another graph opened, or started anew: the application was the last one's.
+  const documentOpen = useGraphStore((s) => s.document);
+  useEffect(() => stopApplication, [documentOpen]);
 
   // Deploying used to have no busy state and no error handling, so a slow or
   // rejecting backend looked exactly like a dead button.
@@ -246,7 +266,7 @@ export default function Toolbar({
 
         <SubgraphTrail />
 
-        <ViewTabs view={view} onChange={onViewChange} />
+        <ViewTabs view={view} onChange={onViewChange} running={appRunning && hasPage} />
 
         {/* What is going on, cut to the room between the tabs and the actions. */}
         <div className="flex flex-1 min-w-0 items-center justify-end gap-2 overflow-hidden">
@@ -310,10 +330,10 @@ export default function Toolbar({
           <ToolbarButton icon={Redo2} title="Redo (Ctrl+Shift+Z)" onClick={redo} disabled={!redoAvailable} />
         </div>
 
-        {isExecuting ? (
+        {appRunning || isExecuting ? (
           <button
-            onClick={stopRun}
-            title="Stop this run"
+            onClick={stopApplication}
+            title="Stop the application: its clocks, and the round in flight"
             className="h-9 px-4 flex-shrink-0 rounded-lg text-sm font-semibold flex items-center gap-2"
             style={{ background: DANGER, color: 'white' }}
           >
@@ -323,7 +343,9 @@ export default function Toolbar({
         ) : (
           <button
             onClick={handleRun}
-            title="Run the whole graph on what is set now. Anything it still needs is asked for first."
+            title={hasPage
+              ? 'Run the application: its page opens, and the graph runs when you use it'
+              : 'Run the application: what starts the graph starts it -- its triggers, or, with none, the whole graph once'}
             className="h-9 px-4 flex-shrink-0 rounded-lg text-sm font-semibold flex items-center gap-2"
             style={PRIMARY_BUTTON}
           >
@@ -358,7 +380,7 @@ export default function Toolbar({
         />
 
         {/* One thing to do, so no menu: the look at the tool detached is the
-            Preview tab's pop-out, beside the page it opens. */}
+            running application's pop-out, beside the page it opens. */}
         <ToolbarButton
           icon={Rocket}
           label={deployBusy ? `${deployBusy}…` : 'Deploy'}

@@ -75,7 +75,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   result, under its name; a file or a folder of it if asked), Trigger (the tool starting,
   a clock), Subgraph: a node that holds a graph of its own, so a graph grows in depth as
   well as in width — and the Page, one per graph, which its first block makes.
-- **One ▶ Run, and results in place** — the toolbar's ▶ Run runs the graph from any tab,
+- **One ▶ Run, and results in place** — ▶ Run runs the application, as an IDE does: its
+  page opens and runs the graph as it is used; without a page, its triggers, or the whole
+  graph once,
   and after it every node shows what it made under its port: a line of text, *214 rows*
   and the first, a small chart of numbers, a thumbnail, or the first line of an error.
 - **Events are booleans, and every node has a gate** — a button or a trigger is `true` for
@@ -149,7 +151,7 @@ built *is* the example, and runs it.
 
 **Every example is held to the same three things by the test suite**
 (`engine/src/examples.test.ts`), and an example added to the folder is held to them
-without anyone listing it: it runs with a click on **▶ Run** on nothing but its own
+without anyone listing it: it runs whole on nothing but its own
 defaults; its page events run what they are wired to; and it can be **deployed** — written
 as a bundle into an empty folder and run from there, with the files it starts on carried
 along.

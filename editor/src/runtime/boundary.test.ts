@@ -38,7 +38,7 @@ const EDITOR_ONLY = [
   'page/DesignerTab',
   'page/DesignerSurface',
   'page/DesignerPalette',
-  'page/PreviewTab',
+  'page/ApplicationView',
   'page/WidgetEditor',
 ];
 

@@ -79,32 +79,39 @@ A trigger's time is kept by whatever runs the graph, not by a browser tab. A dep
 keeps the last result, and a page opened later shows that result and when the next run is
 due. Several triggers keep their own time; rounds never overlap. On the command line the
 shortest interval applies without a flag, a round is the whole graph, and `--every`
-overrides it. In the editor nothing fires by itself — there you press ▶ Run, which counts
-every event as having happened. A clock inside a [subgraph](#subgraph-nodes) never ticks,
+overrides it. In the editor ▶ Run runs the application: a trigger set to fire at start
+fires then, and a clock keeps its time until ■ Stop. A clock inside a [subgraph](#subgraph-nodes) never ticks,
 and `check` says so: only the outermost graph is held by something that keeps time.
 
-**▶ Run runs the graph** — one button, in the header, the same on every tab: every node,
-now, on what is set. Anything it still needs — a file nobody chose, a place to write — is
-asked for first. What a block on the page starts is the block's (below), and a delivered
-tool, which has no editor around it, keeps a ▶ Run in its own header.
+**▶ Run runs the application**, as an IDE runs the program it builds — one button, in the
+header, the same on every tab. With a page, the page opens (the **App** tab, there while it
+runs) with its fields as they are set, and the graph runs when the page is used: a button
+pressed, a file picked, a box ticked *Using this starts the graph*. Without a page, what
+starts the graph starts it: its trigger nodes as they are set — or, with none, the whole
+graph once, as a program runs when it is started. While it runs the button is **■ Stop**,
+which ends it; a graph that only computes ends by itself. Anything a round still needs — a
+file nobody chose, a place to write — is asked for first. A delivered tool starts the same
+way when it is opened, and has no ▶ Run of its own: its page is how it is run, so a page
+that takes something in needs something on it that starts the graph, and `check` says so.
 
 After a run every node's card shows what it made, named by its port where it has several:
 a line of text or a number, *214 rows* and the first row for a list of records, a small line
 or bars for numbers or a chart's figure, a thumbnail for a picture — and a failed node the
 first line of its error. A page shows, under each block's port, what that block shows.
 
-The **Preview** tab is the page exactly as delivered, under the tool's own header: the
-graph's name and description. Its **⧉ Open as a tool** is the same tool *detached*: the
+The **App** tab is the page exactly as delivered, under the tool's own header: the graph's
+name and description — attached to the document, so what it runs lights up the cards on
+the Graph tab. Its **⧉ Open as a tool** is the same tool *detached*: the
 graph is handed to the server and `runtime.html` opens in a window of its own — the
 delivered page, the delivered entry point, the delivered routes, with no editor around it
 at all. A run there happens in that window's own copy of the graph, so the editor's
-canvas learns nothing from it; use the Preview tab while building, and the pop-out to see
+canvas learns nothing from it; use the App tab while building, and the pop-out to see
 what you are about to hand over. Nothing is written to disk, and the window keeps the
 graph it was handed until it is opened again.
 
 **A node with nothing to do is left alone.** If a port marked *required* is wired and
 brought nothing — or, for an AI node, *every* wired input came up empty — the node is
-skipped, what hangs off it is skipped, and the run is still a success. ▶ Run on a chat
+skipped, what hangs off it is skipped, and the run is still a success. A round on a chat
 nobody has typed into asks no model and changes no conversation. A page or a data node is
 never skipped for that: its own button, or the value it keeps, is news by itself.
 
@@ -133,7 +140,7 @@ Which blocks fire:
 *value* on its port — the text typed, the option chosen, the number, the path — and a run
 reads whatever it holds at that moment. Using the block is an *event* only when it starts
 the graph as above. Without the tick a dropdown is a setting: changing it starts nothing,
-and the next run (by a button, the header's ▶ Run, or the clock) picks the new value up.
+and the next run (by a button on the page, or the clock) picks the new value up.
 When it does fire, the moment is the one a person means: a dropdown on choosing, a slider
 on letting go (or an arrow key) rather than on every value it passes, a file picker on
 picking, a text box on Enter. A button's value *is* its event: whether it was pressed just
@@ -159,7 +166,8 @@ and amber.
   redraws a chart a button can start too — or some node computed `true` onto the ◆ in this
   round. Several wires are OR-ed. **Only `true` opens**; `"yes"` and `1` do not,
   and `check` reports a wire into a ◆ from a port declared as text or number.
-- **A run nobody's event started** — ▶ Run, the command line, a graph inside a node —
+- **A run nobody's event started** — a graph with no page and no trigger started, the
+  command line, a graph inside a node —
   counts every event as having happened. "Run everything" runs everything.
 
 **Filtering and routing is a code node.** Wire the events into *named* boolean inputs, so
@@ -581,8 +589,8 @@ called from inside is a model the recipient is told to configure.
 
 **Open this graph ▸** in the node's panel goes in; the breadcrumb in the header comes
 back out, one click per level. Each level has its own undo. Save and Deploy are about the
-whole document from any depth, while ▶ Run stays on the level in front of you — running a
-part on its own is what you want while you are in it.
+whole document from any depth, and so is ▶ Run: it runs the application, and takes you
+back up to the top first.
 
 A subgraph may be nothing but its sentence to begin with: an empty one with a description
 is how a plan is drawn before it is built, and `check` lists it as something still to do.
@@ -711,7 +719,7 @@ run begins. Every other output is a value: read when something else starts a run
 starting nothing by itself.
 
 Blocks are live while you build — a button pressed here runs the graph, a chat sends —
-and the **Preview** tab is the delivered page itself. `w`/`h` are presentational only —
+and the **App** tab, while ▶ Run runs the application, is the delivered page itself. `w`/`h` are presentational only —
 they never affect ports, wiring or execution.
 
 ### Cyclic graphs: page → ai → page
