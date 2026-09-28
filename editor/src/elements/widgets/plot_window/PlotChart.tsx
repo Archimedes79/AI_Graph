@@ -195,19 +195,24 @@ function fit(label: string, slotWidth: number): string {
  * finished SVG and this shows it -- so what can be plotted is whatever that
  * node can write, not whatever was foreseen here.
  *
- * Scripts and event handlers are stripped. The markup is made by code the
- * person asked for, but it also travels inside a graph that may be handed on,
- * and "it came from our own AI" is not a reason to run whatever arrives.
+ * It is shown as a picture (`drawingSource`), never as markup in the page: a
+ * picture runs no script and fetches nothing, whatever its SVG holds. The
+ * markup is made by code the person asked for, but it also travels inside a
+ * graph that may be handed on -- a chart's stored value is drawn before any
+ * run -- and stripping scripts out of it by pattern left ways in that markup
+ * in the page would have run, in the editor's own origin.
  */
 export function asDrawing(data: unknown): string | null {
   if (typeof data !== 'string') return null;
   const text = data.trim();
   if (!/^<svg[\s>]/i.test(text)) return null;
-  return text
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
-    .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-    .replace(/javascript:/gi, '');
+  // A picture's SVG has to say it is SVG, which markup inside a page need not.
+  return /^<svg\b[^>]*\sxmlns=/i.test(text) ? text : text.replace(/^<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+}
+
+/** A finished drawing, as the source of the picture that shows it. */
+export function drawingSource(drawing: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawing)}`;
 }
 
 /**
@@ -236,12 +241,9 @@ export default function PlotChart({ data, width = 220, height = 90 }: PlotWidget
   const drawing = asDrawing(data);
   if (drawing) {
     return (
-      <div
-        className="w-full h-full flex items-center justify-center overflow-hidden"
-        style={{ background: RAISE, borderRadius: 4 }}
-        // Set as HTML on purpose: stripped by asDrawing above
-        dangerouslySetInnerHTML={{ __html: drawing }}
-      />
+      <div className="w-full h-full flex items-center justify-center overflow-hidden" style={{ background: RAISE, borderRadius: 4 }}>
+        <img src={drawingSource(drawing)} alt="" className="w-full h-full object-contain" />
+      </div>
     );
   }
 

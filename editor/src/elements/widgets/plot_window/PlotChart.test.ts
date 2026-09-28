@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import PlotChart, { asDrawing, axisLabel, chartMargins, computeAxisRange, labelEvery, toFigure } from './PlotChart';
+import PlotChart, { asDrawing, axisLabel, chartMargins, computeAxisRange, drawingSource, labelEvery, toFigure } from './PlotChart';
 
 describe('computeAxisRange', () => {
   it('includes 0 in the range for all-positive data', () => {
@@ -36,9 +36,10 @@ describe('a chart the model drew itself', () => {
    * finished SVG -- a scatter, a pie, its own legend -- and it is drawn as it
    * stands.
    */
-  it('takes an SVG document as the drawing', () => {
-    const svg = '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>';
+  it('takes an SVG document as the drawing, saying it is SVG where it does not', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>';
     expect(asDrawing(svg)).toBe(svg);
+    expect(asDrawing('<svg viewBox="0 0 10 10"></svg>')).toBe('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>');
   });
 
   it('is not fooled by ordinary text or by points', () => {
@@ -47,13 +48,18 @@ describe('a chart the model drew itself', () => {
     expect(asDrawing('<svgnotreally>')).toBeNull();
   });
 
-  it('strips what would run, since a graph can be handed on', () => {
-    const hostile = '<svg onload="steal()"><script>steal()</script><a href="javascript:steal()">x</a></svg>';
-    const safe = asDrawing(hostile)!;
-    expect(safe).not.toContain('<script');
-    expect(safe).not.toContain('onload');
-    expect(safe).not.toContain('javascript:');
-    expect(safe).toContain('<svg');
+  it('is shown as a picture, never as markup in the page -- a graph can be handed on, a chart\'s value with it', () => {
+    // What a pattern that strips scripts let through: a handler without
+    // quotes, HTML inside foreignObject, an entity in "javascript:".
+    for (const hostile of [
+      '<svg><foreignObject><img src=x onerror=alert(document.domain)></foreignObject></svg>',
+      '<svg><image href=x onerror=alert(1) /></svg>',
+      '<svg><a href="java&#115;cript:alert(1)">x</a></svg>',
+    ]) {
+      const html = renderToStaticMarkup(createElement(PlotChart, { data: hostile, width: 200, height: 100 }));
+      expect(html, hostile).toMatch(/^<div[^>]*><img src="data:image\/svg\+xml;charset=utf-8,[^"<>]*"[^>]*\/><\/div>$/);
+      expect(html).toContain(drawingSource(asDrawing(hostile)!).replace(/&/g, '&amp;'));
+    }
   });
 });
 
