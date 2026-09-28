@@ -18,6 +18,7 @@ vi.mock('@/store/graphStore', () => ({
 open.rfNodes = [
   { id: 'count', data: { graphNode: { ...NODE_KINDS.code.create('count'), label: 'Count words' } } },
   { id: 'source', data: { graphNode: { ...NODE_KINDS.input.create('source'), label: 'The text' } } },
+  { id: 'capitals', data: { graphNode: { ...NODE_KINDS.data.create('capitals'), label: 'Capitals' } } },
 ];
 
 /** The bar as drawn with *openId*'s panel open, and its "on:" button. */
@@ -43,11 +44,15 @@ describe('the bar under the canvas', () => {
     const { on } = bar('count');
     expect(on).toContain('>on: Count words<');
     expect(on).not.toContain('disabled');
-    expect(on).toContain('title="Say it about the whole graph instead"');
+    // A quarter of the row at most, so the field keeps room beside a panel at 1024; whole in its title.
+    expect(on).toContain('max-w-[25%]');
+    expect(on).toContain('title="On Count words. Click to say it about the whole graph instead"');
   });
 
   it('says where a change goes: a body to its node\'s panel, anything else to ✨ AI Graph, shown before it is applied', () => {
     expect(bar('count').change).toContain('title="Change Count words as said: its panel writes it, and tries it"');
+    // A data node has no ▶ Try.
+    expect(bar('capitals').change).toContain('title="Change Capitals as said: its panel writes it"');
     expect(bar('source').change).toMatch(/title="Ask ✨ AI Graph to change the graph as said: you see what it changes before it is applied"/);
     expect(bar(null).change).toMatch(/title="Ask ✨ AI Graph/);
     // Nothing said yet, nothing to send.

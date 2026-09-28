@@ -5,6 +5,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { ApiError, call, watchGeneration, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import LiveGeneration from '@/authoring/LiveGeneration';
+import { hasDefinitions } from '@/authoring/generation';
 import GraphProblems from './GraphProblems';
 import { lastAsked } from './Toolbar';
 import { changeGoesTo, changeTarget, describeChange, graphChange, graphRequest, targetName } from './graphChange';
@@ -40,11 +41,13 @@ export default function ChangeBar() {
   // Only the last change asked for is still wanted: Stop leaves the one on its way unwanted.
   const asked = useRef(lastAsked());
   // Another graph opened, or a level in or out of this one: a change asked of
-  // the graph before -- on its way, or back and not applied -- is not this one's.
+  // the graph before -- on its way, or back and not applied -- is not this
+  // one's, and nor are the words said of it, waiting in the field.
   const opened = useGraphStore((s) => s.document);
   useEffect(() => {
     asked.current.cancel();
     setChange({ phase: 'idle' });
+    setText('');
   }, [opened]);
 
   const asking = change.phase === 'asking';
@@ -141,13 +144,15 @@ export default function ChangeBar() {
       )}
 
       <div className="flex items-center gap-2.5 min-w-0">
+        {/* A quarter of the row at most, whole in its title: at 40 % beside a
+            panel at 1024 pixels it left the field 147 pixels to say anything in. */}
         <button
           type="button"
           onClick={clearSelection}
           disabled={!target}
-          className="h-10 shrink-0 max-w-[40%] truncate rounded-lg px-3 text-sm"
+          className="h-10 shrink-0 max-w-[25%] truncate rounded-lg px-3 text-sm"
           style={{ background: SUNKEN, border: `1px solid ${LINE}`, color: TEXT, cursor: target ? 'pointer' : 'default' }}
-          title={target ? 'Say it about the whole graph instead' : 'Nothing is selected: what you say changes the graph itself'}
+          title={target ? `On ${targetName(target)}. Click to say it about the whole graph instead` : 'Nothing is selected: what you say changes the graph itself'}
         >
           on: {targetName(target)}
         </button>
@@ -178,7 +183,8 @@ export default function ChangeBar() {
           className="h-10 shrink-0 rounded-lg px-4 text-sm font-semibold"
           style={{ ...PRIMARY_BUTTON, opacity: asking || !text.trim() ? 0.55 : 1 }}
           title={target && changeGoesTo(target) === 'panel'
-            ? `Change ${targetName(target)} as said: its panel writes it, and tries it`
+            // A data node has no ▶ Try: what its panel writes is what it holds.
+            ? `Change ${targetName(target)} as said: its panel writes it${hasDefinitions(target) ? ', and tries it' : ''}`
             : 'Ask ✨ AI Graph to change the graph as said: you see what it changes before it is applied'}
         >
           Change
