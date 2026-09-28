@@ -84,11 +84,12 @@ export function everyGraphIn(graph: Graph, registry: Runners, inside = ''): { gr
 interface TestedExample { inside: string; nodeId: string; result: ExampleRun }
 
 /**
- * Run the example of every node that has one -- an input.js, or no inputs to
- * need one -- or only of the nodes with the id *only*, at every depth, because
- * the graph a node holds is part of the same project, as `check` also says. The
- * one runner behind `test` on the command line and `test_graph` over MCP.
- * `tested` counts the nodes it ran; none means nothing matched.
+ * Run the example of every code and ai node -- or only of the nodes with the
+ * id *only* -- at every depth, because the graph a node holds is part of the
+ * same project, as `check` also says. One that takes something in and has no
+ * input.js yet is said, skipped, rather than left out without a word. The one
+ * runner behind `test` on the command line and `test_graph` over MCP.
+ * `tested` counts the nodes it went through; none means nothing matched.
  */
 export async function testGraph(
   graph: Graph,
@@ -96,13 +97,15 @@ export async function testGraph(
 ): Promise<{ tested: number; results: TestedExample[] }> {
   const results: TestedExample[] = [];
   for (const { graph: level, inside } of everyGraphIn(graph, options.registry)) {
-    const nodes = level.nodes.filter((node) => {
-      if (options.only) return node.id === options.only;
-      const definitions = options.registry.node(node.node_type)?.definitions(node);
-      return !!definitions && (!!definitions.input.trim() || !node.inputs.length);
-    });
+    const nodes = level.nodes.filter((node) => (options.only
+      ? node.id === options.only
+      : options.registry.node(node.node_type)?.definitions(node) !== undefined));
     for (const node of nodes) {
-      const result = await runExample(level, node.id, { runtime: options.runtime(), registry: options.registry, offline: options.offline });
+      const definitions = options.registry.node(node.node_type)?.definitions(node);
+      const unwritten = !options.only && definitions && node.inputs.length && !definitions.input.trim();
+      const result: ExampleRun = unwritten
+        ? { status: 'skipped', details: ['It has no input.js yet, so there is nothing to try it on: write one with ✨ Input.'], held: !!definitions.output.trim() }
+        : await runExample(level, node.id, { runtime: options.runtime(), registry: options.registry, offline: options.offline });
       results.push({ inside, nodeId: node.id, result });
     }
   }

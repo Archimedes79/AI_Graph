@@ -367,7 +367,7 @@ async function runTests(argv: string[]): Promise<number> {
       const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
       const said = { skipped: ' (skipped)', pass: result.held ? ': fits its output.js' : ': runs', fail: ': does not fit its output.js', error: ': fails' }[result.status];
       process.stdout.write(`${mark} ${path} ${inside}${nodeId}${said}\n`);
-      for (const line of result.status === 'skipped' ? [] : result.details) process.stdout.write(`    ${line}\n`);
+      for (const line of result.details) process.stdout.write(`    ${line}\n`);
       if (result.status === 'fail' || result.status === 'error') failed += 1;
     }
     if (!tested) process.stdout.write(`· ${path}: ${only ? `no node "${only}"` : 'no node has an example in an input.js'}\n`);
@@ -378,14 +378,22 @@ async function runTests(argv: string[]): Promise<number> {
 /**
  * Run one node by itself and print what it returned: on the inputs given as
  * JSON, as a run hands them to it -- files read, a list fanned out -- or,
- * without them, once on the example in its input.js, held to its output.js.
- * What the node's ▶ Try runs is what this runs, with no editor anywhere.
+ * without them, a code or an ai node once on the example in its input.js,
+ * held to its output.js: what its ▶ Try runs, with no editor anywhere. A node
+ * of another kind has no example, and runs on what the nodes feeding it
+ * produce, as the MCP server's `run_node` runs it.
  */
 async function runNodeCommand([path, nodeId, given]: string[]): Promise<number> {
   if (!path || !nodeId) throw new Error('Usage: run-node <graph or project> <node id> [\'{"port": value}\']');
   const graph = await loadGraph(path);
   const node = graph.nodes.find((candidate) => candidate.id === nodeId);
   if (!node) throw new Error(`There is no node "${nodeId}" in ${path}. Its nodes are: ${graph.nodes.map((one) => one.id).join(', ')}.`);
+  if (!given && registry.node(node.node_type)?.definitions(node) === undefined) {
+    process.stderr.write(`${nodeName(node)}, on what the nodes feeding it produce\n`);
+    const { result } = await runNodeAlone(graph, nodeId, undefined, { runtime: nodeRuntime(), registry });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return result.status === 'error' ? 1 : 0;
+  }
   if (!given) {
     process.stderr.write(`${nodeName(node)}, on the example in its input.js\n`);
     const tried = await runExample(graph, nodeId, { runtime: nodeRuntime(), registry });

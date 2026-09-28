@@ -112,6 +112,25 @@ describe('run-node', () => {
     }
   }, 30_000);
 
+  it('runs a node of another kind -- one with no input.js -- on what the nodes feeding it produce', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
+    await writeProject(dir, parseGraph({
+      metadata: { name: 'Say' },
+      nodes: [
+        { id: 'said', node_type: 'input', label: 'Said', outputs: [port('output', 'output', 'text')], config: { value: 'hello' } },
+        { id: 'result', node_type: 'output', label: 'Result', inputs: [port('value', 'input')], config: {} },
+      ],
+      edges: [{ id: 'e', source_node_id: 'said', source_port_id: 'output', target_node_id: 'result', target_port_id: 'value' }],
+    }));
+    try {
+      const { code, out } = await printed(['run-node', dir, 'result']);
+      expect(code).toBe(0);
+      expect(JSON.parse(out)).toMatchObject({ status: 'success', inputs: { value: 'hello' } });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('says what to do for a node with no example', async () => {
     const dir = await project({});
     try {

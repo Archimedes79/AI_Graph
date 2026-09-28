@@ -93,17 +93,18 @@ describe('testing a graph', () => {
     metadata: { name: 'outer' },
     nodes: [
       ...counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 3 };' }).nodes,
-      // Not tried: it has inputs, and no input.js to try it on.
+      // Not tried, and said: it has inputs, and no input.js to try it on.
       { ...counter({}).nodes[0], id: 'plain' },
       { id: 'part', node_type: 'subgraph', label: 'Part', inputs: [], outputs: [], config: { subgraph: inner } },
     ],
     edges: [],
   });
 
-  it('runs every node that has an example, at every depth, and names the way down to it', async () => {
+  it('runs every node that has an example, at every depth, names the way down to it -- and says one that has none yet', async () => {
     const { tested, results } = await testGraph(graph, { runtime: () => running, registry });
-    expect(tested).toBe(2);
-    expect(results.map(({ inside, nodeId, result }) => `${inside}${nodeId}: ${result.status}`)).toEqual(['count: pass', 'part ▸ count: pass']);
+    expect(tested).toBe(3);
+    expect(results.map(({ inside, nodeId, result }) => `${inside}${nodeId}: ${result.status}`)).toEqual(['count: pass', 'plain: skipped', 'part ▸ count: pass']);
+    expect(results[1].result.details).toEqual(['It has no input.js yet, so there is nothing to try it on: write one with ✨ Input.']);
   });
 
   it('runs only the node asked for, and says so where it has nothing to run it on', async () => {
