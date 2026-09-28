@@ -16,6 +16,11 @@ export default function InputPickerWidgetView({ widget, value, onChange, onTrigg
   const isDir = widget.mode === 'directory';
   const listed = Array.isArray(value);
   const hasValue = listed ? value.length > 0 : !!value;
+  // Filled in already, it starts the graph only when chosen -- which a person
+  // looking at a path that is there does not think of doing again: said.
+  const startsWith = hasValue && !listed && !!onTrigger && widgetFiresRun(widget)
+    ? `Press Enter to use this ${isDir ? 'folder' : 'file'}`
+    : '';
 
   return (
     <div className="flex flex-col gap-2 h-full">
@@ -51,8 +56,10 @@ export default function InputPickerWidgetView({ widget, value, onChange, onTrigg
       {listed && (
         <span className="text-xs" style={{ color: MUTED }}>{`${value.length} file(s) selected`}</span>
       )}
-      {widget.extensions && !isDir && (
-        <span className="text-xs" style={{ color: DIMMER }}>Allowed: {widget.extensions}</span>
+      {((widget.extensions && !isDir) || startsWith) && (
+        <span className="text-xs" style={{ color: DIMMER }}>
+          {[widget.extensions && !isDir ? `Allowed: ${widget.extensions}` : '', startsWith].filter(Boolean).join(' · ')}
+        </span>
       )}
     </div>
   );
