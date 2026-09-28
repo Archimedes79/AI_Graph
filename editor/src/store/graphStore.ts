@@ -229,10 +229,11 @@ export interface GraphStore {
    * Take in code and prompts that changed in the project folder on disk.
    *
    * One undo step, so a change from another editor can be taken back like any
-   * other. What is on disk is saved by definition: a graph that was clean stays
-   * clean, and one with unsaved edits keeps exactly those.
+   * other -- and none when nothing of it is taken. What is on disk is saved by
+   * definition: a graph that was clean stays clean, and one with unsaved edits
+   * keeps exactly those. Returns the nodes whose graph was left on disk
+   * because there is unsaved work here.
    */
-  /** Returns the nodes whose graph was left on disk because there is unsaved work here. */
   takeDiskChanges: (changes: TextChange[]) => string[];
   /**
    * Execute *graph* and put the whole outcome into the store: the result, the
@@ -878,29 +879,33 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     takeDiskChanges: (changes) => {
-      if (!changes.length) return [];
       const wasClean = !get().isDirty();
-      const refused: string[] = [];
+      const nodeOf = (id: string) => get().rfNodes.find((n: RFNode) => n.id === id)?.data.graphNode;
+      // A whole graph a node holds, changed in its own folder, is taken only
+      // into a document with nothing unsaved in it: unlike a text, which
+      // patches one field, it replaces every node, edge and position in that
+      // graph. Over unsaved work it would be silent and total, so it is left
+      // on disk and said out loud instead.
+      const refused = changes.filter((change) => change.field === NESTED_GRAPH_FIELD && !wasClean && nodeOf(change.node_id))
+        .map((change) => change.node_id);
+      // What is taken: a change to a node that is here, which changes it. The
+      // step was taken first, and was an empty one -- Redo thrown away -- when
+      // every change was refused, for a node gone, or what the node held.
+      const taken = changes.filter((change) => {
+        const node = nodeOf(change.node_id);
+        if (!node) return false;
+        if (change.field === NESTED_GRAPH_FIELD) return wasClean;
+        return JSON.stringify((node.config as unknown as Record<string, unknown>)[change.field]) !== JSON.stringify(change.value);
+      });
+      if (!taken.length) return refused;
       get().commit();
       set((state) => {
-        for (const change of changes) {
-          const node = state.rfNodes.find((n: RFNode) => n.id === change.node_id)?.data.graphNode;
-          if (!node) continue;
-          // A whole graph a node holds, changed in its own folder. Where it is
-          // kept is the element's business, and the ports follow from it.
-          //
-          // Taken only into a document with nothing unsaved in it: unlike a
-          // text, which patches one field, this replaces every node, edge and
-          // position in that graph. Over unsaved work it would be silent and
-          // total, so it is left on disk and said out loud instead.
-          if (change.field === NESTED_GRAPH_FIELD) {
-            if (!wasClean) { refused.push(change.node_id); continue; }
-            engineRegistry.node(node.node_type)?.setNestedGraph(node as never, change.value as never);
-            Object.assign(node, derivedNodePorts(node) ?? {});
-            continue;
-          }
-          (node.config as unknown as Record<string, unknown>)[change.field] = change.value;
-          // A page's page.json is its blocks, and its ports are theirs.
+        for (const change of taken) {
+          const node = state.rfNodes.find((n: RFNode) => n.id === change.node_id)!.data.graphNode;
+          // Where a node keeps the graph it holds is the element's business.
+          if (change.field === NESTED_GRAPH_FIELD) engineRegistry.node(node.node_type)?.setNestedGraph(node as never, change.value as never);
+          else (node.config as unknown as Record<string, unknown>)[change.field] = change.value;
+          // The ports follow: from the graph it holds, and a page's page.json is its blocks.
           Object.assign(node, derivedNodePorts(node) ?? {});
         }
       });

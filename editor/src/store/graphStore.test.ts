@@ -450,6 +450,27 @@ describe('graphStore, a project open on disk', () => {
     expect(nodeById('page').outputs.map((port) => port.id)).toEqual(['file_out']);
   });
 
+  it('takes no undo step, and keeps Redo, when nothing that came from disk is taken', () => {
+    // A change for a node that is gone, one that says what the node holds,
+    // one left on disk: the step was taken before any of that was known.
+    loadTestGraph([codeNode(), graphNode({ id: 'part', node_type: 'subgraph', config: { ...blankConfig(), subgraph: { metadata: { name: 'Inner' }, nodes: [], edges: [] } } })]);
+    useGraphStore.getState().markSaved();
+    useGraphStore.getState().updateNode('count', { label: 'Renamed' });
+    useGraphStore.getState().updateNode('count', { label: 'Renamed again' });
+    useGraphStore.getState().undo();
+    const { past, future } = useGraphStore.getState();
+    const refused = useGraphStore.getState().takeDiskChanges([
+      { node_id: 'gone', field: 'code', value: 'function run() {}' },
+      { node_id: 'count', field: 'code', value: nodeById('count').config.code },
+      { node_id: 'part', field: NESTED_GRAPH_FIELD, value: { metadata: { name: 'Inner' }, nodes: [graphNode({ id: 'theirs' })], edges: [] } },
+    ]);
+    expect(refused).toEqual(['part']);
+    expect(useGraphStore.getState().past).toEqual(past);
+    expect(useGraphStore.getState().future).toEqual(future);
+    useGraphStore.getState().redo();
+    expect(nodeById('count').label).toBe('Renamed again');
+  });
+
   it('keeps unsaved edits unsaved when a change comes in from disk', () => {
     loadTestGraph([codeNode()]);
     useGraphStore.getState().markSaved();
