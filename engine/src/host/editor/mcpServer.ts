@@ -67,6 +67,7 @@ import { message } from '../http.ts';
 import { nodeRuntime } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
+import { withoutAuthoring } from '../../authoring/handedOn.ts';
 import {
   FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
@@ -211,13 +212,15 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'generate_graph',
-    description: 'Have the model configured on this machine design a whole graph from a description. Returns the '
-      + 'graph, the model\'s explanation and any problems validation found. With save_as, a graph without problems is also '
-      + 'written there. If no model is configured, use authoring_guide and save_graph instead.',
+    description: 'Have the model configured on this machine design a whole graph from a description -- or, given the path '
+      + 'of a saved graph, change that graph as the description says, its ids and whatever the change does not touch kept. '
+      + 'Returns the graph, the model\'s explanation and any problems validation found. With save_as, a graph without '
+      + 'problems is also written there. If no model is configured, use authoring_guide and save_graph instead.',
     parameters: {
       type: 'object',
       properties: {
-        description: { type: 'string', description: `What the graph should do, in plain words. At most ${MAX_DESCRIPTION_CHARS} characters.` },
+        description: { type: 'string', description: `What the graph should do, or what to change, in plain words. At most ${MAX_DESCRIPTION_CHARS} characters.` },
+        path: { type: 'string', description: 'Optional: the saved graph to change rather than design a new one, as a .json path relative to the server\'s folder (a project: its flow.json).' },
         save_as: { type: 'string', description: 'Optional .json path, relative to the server\'s folder, to save the graph to.' },
       },
       required: ['description'],
@@ -501,6 +504,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       // Before the model is asked, not after: a minute of generation that ends
       // in "you cannot save there" is a minute nobody gets back.
       if (args.save_as !== undefined) await confine(args.save_as, 'save_as');
+      // The graph to change, as the editor's bar sends the one it holds: its
+      // ids and what the change does not touch are kept, each node's history too.
+      const current = args.path !== undefined ? (await loadGraph(args.path)).graph : undefined;
 
       const otherwise = 'The other way needs no model here: call authoring_guide, write the graph yourself, then validate_graph and save_graph.';
       const target = await options.target();
@@ -510,7 +516,7 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
 
       let generated: { graph: unknown; explanation: string };
       try {
-        generated = await generateGraph(description, { ai: options.ai, target });
+        generated = await generateGraph(description, { ai: options.ai, target }, current);
       } catch (error) {
         throw new Refused(`Generation with ${target.provider} / ${target.model} failed: ${message(error).slice(0, ERROR_LIMIT)}\n`
           + `If that model is not set up or not running, configure one in the AI-Graph editor's Settings. ${otherwise}`);
@@ -526,7 +532,8 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
       } else {
         Object.assign(report, { problems: problemsIn(graph) });
       }
-      return json({ ...report, explanation: generated.explanation, graph });
+      // How each node was written stays in the project it is saved to: the caller is handed what runs.
+      return json({ ...report, explanation: generated.explanation, graph: withoutAuthoring(graph) });
     },
 
     async validate_graph(args) {

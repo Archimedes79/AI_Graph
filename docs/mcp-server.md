@@ -59,7 +59,7 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 | Tool | Arguments | What it does |
 |---|---|---|
 | `authoring_guide` | — | The authoring prompt the editor's own generation uses, plus the node types and block kinds this engine has. Read before writing a graph by hand. |
-| `generate_graph` | `description`, `save_as?` | Has the model configured on this machine design a graph. Returns the graph, the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
+| `generate_graph` | `description`, `path?`, `save_as?` | Has the model configured on this machine design a graph -- or, with `path`, change that saved graph as described, its ids and what the change does not touch kept, each node's history too. Returns the graph (without any node's history: that stays in the project), the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
 | `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. |
 | `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them. |
 | `run_graph` | `path`, `inputs?`, `trigger?` | Runs once. Reports overall status, each node's status and error, and each node's outputs with every value cut to about 600 characters. |

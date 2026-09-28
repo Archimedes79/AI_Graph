@@ -152,6 +152,27 @@ describe('generate_graph', () => {
     ]);
   });
 
+  it('changes a saved graph as said, given its path: the history stays in the project, and out of what is sent and returned', async () => {
+    const worked = (body: string) => graphOf([textInput('greeting'), code('work', body), output('result')],
+      [edge('e1', 'greeting.output', 'work.in'), edge('e2', 'work.out', 'result.value')], 'Worked');
+    const written = worked('function run(inputs) { return { out: inputs.in }; }');
+    (written.nodes[1] as { config: Record<string, unknown> }).config.history = '## 2026-09-27 10:00 · ✨ Code\n\nNothing was sent.';
+    await writeFile(join(root, 'worked.json'), JSON.stringify(written));
+    const asked: string[] = [];
+    const changed = worked('function run(inputs) { return { out: String(inputs.in).toUpperCase() }; }');
+    const tools = toolsWith({ ai: { async complete(request) { asked.push(request.prompt); return fenced(changed, 'It shouts.'); } } });
+    const made = await answer(tools, 'generate_graph', { description: 'Shout it.', path: 'worked.json', save_as: 'worked.json' });
+    expect(made.json.saved).toBe('worked.json');
+    // Sent the graph there is, without how its nodes were written; handed back what runs.
+    expect(asked[0]).toContain('return { out: inputs.in }');
+    expect(asked[0]).not.toContain('Nothing was sent.');
+    expect(made.json.graph.nodes[1].config).not.toHaveProperty('history');
+    // The project keeps it: the changed node, with this exchange after it.
+    const saved = JSON.parse(await readFile(join(root, 'worked.json'), 'utf8'));
+    expect(saved.nodes[1].config.code).toContain('toUpperCase');
+    expect(saved.nodes[1].config.history).toMatch(/^## 2026-09-27 10:00 · ✨ Code\n\nNothing was sent\.\n\n## .* · Change of the graph: Shout it\./);
+  });
+
   it('returns the graph without writing anything when no save_as is given', async () => {
     const made = await answer(toolsWith(), 'generate_graph', { description: 'greet the world' });
     expect(made.json.graph.edges).toHaveLength(1);
