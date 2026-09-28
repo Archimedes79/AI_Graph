@@ -13,7 +13,7 @@ const OUTPUT = new OutputNodeRunner();
  *
  * What it is and where it goes are what the node feeding it is told it wants
  * (`OutputNodeGuiBuilder.wantsOn`), so they are asked in those words. What the
- * result is called is what the node is called: the dialog's title -- unless
+ * result is called is what the node is called: the panel's heading -- unless
  * another output node has that name already, which it then says. It had a
  * second name for that, and a window of its own in the editor; a page is
  * where a result is shown.

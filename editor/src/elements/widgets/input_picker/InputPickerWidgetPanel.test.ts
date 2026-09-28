@@ -22,7 +22,7 @@ describe('a folder picker, in its panel', () => {
     expect(list).not.toBe('');
     expect(list).not.toContain('disabled');
     expect(html).not.toContain('✨');
-    expect(html).not.toContain('Try it');
+    expect(html).not.toContain('▶ Try');
   });
 
   it('says in one line that keeping some of the files is a code node after it', () => {

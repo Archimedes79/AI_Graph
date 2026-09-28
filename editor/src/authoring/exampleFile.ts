@@ -51,7 +51,7 @@ export function inputFilesOf(node: GraphNode, nodes: GraphNode[], edges: Wire[],
  * "⟳ From the graph": the file the graph hands one of *node*'s file-reading
  * inputs -- without running anything where it can say, and otherwise what the
  * nodes that feed it deliver when they are run now (the node itself is not).
- * *graph* is the canvas as the dialog asking holds it.
+ * *graph* is the canvas as the panel asking holds it.
  */
 export async function fileFromTheGraph(
   node: GraphNode, nodes: GraphNode[], edges: Wire[], result: ExecutionResult | null, graph: () => Graph,

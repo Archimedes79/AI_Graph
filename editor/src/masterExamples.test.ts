@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { useGraphStore } from '@/store/graphStore';
 import type { Graph, GraphNode, GuiWidget, NodeType, Port, WidgetKind } from '@/graph';
 import { withPorts } from '@/canvas/nodeDraft';
-import { nodeDialog } from '@/canvas/nodeDialog';
+import { nodePanel } from '@/canvas/nodePanel';
 import { newBlock } from '@/page/DesignerPalette';
 import { pageOf } from '@/document/guiWidgets';
 import { insertBlock, patchBlock } from '@/page/pageWrite';
@@ -25,13 +25,13 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  * A plotter, a folder of summaries, a chat: each is a page and one node, and
  * each is put together here the way a person puts it together -- blocks added
  * to the page (the first one makes it), a node dropped on the canvas, its text
- * typed and its ✨ pressed in its dialog, a wire dragged from one port to
+ * typed and its ✨ pressed in its panel, a wire dragged from one port to
  * another. No mouse, no browser, and no copy of what the editor's handlers do:
  * a block comes from the palette's `newBlock` and reaches the page through
- * `insertBlock` and `patchBlock`, a node's dialog is its own `nodeDialog` --
+ * `insertBlock` and `patchBlock`, a node's panel is its own `nodePanel` --
  * changed as its ports editor and its fields change it, and what ✨ brings back
- * written in by `writtenInto`, as the dialog writes it -- and a wire is the
- * store's `connect`: the functions the designer and the node dialog call. What
+ * written in by `writtenInto`, as the panel writes it -- and a wire is the
+ * store's `connect`: the functions the designer and the node panel call. What
  * ✨ brings back is the example's own files, so no model is asked; what stays
  * in the components -- which row was clicked -- is left out.
  *
@@ -42,7 +42,7 @@ import type { Runtime } from '@engine/elements/Runtime.ts';
  *   - does it work: run on a file, a folder, a message, does the page show it?
  *
  * The second is what keeps the examples honest. An example somebody can open
- * but could not have built -- a port type no dialog sets, a wire no handle
+ * but could not have built -- a port type no panel sets, a wire no handle
  * offers -- is a trick, and this is where it is caught.
  */
 
@@ -86,48 +86,48 @@ function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<
 }
 
 /**
- * Open a node's dialog and do what it asks: its heading and its text, what
+ * Open a node's panel and do what it asks: its heading and its text, what
  * its inputs are called (its ports, under Advanced), a ✨ pressed for each of
- * its files -- *written*, what came back, written in as the dialog writes it:
+ * its files -- *written*, what came back, written in as the panel writes it:
  * output.js names its outputs -- and "Run once per item", ticked or not, which
  * sets how the node runs and which inputs fan out and which outputs hand on a
  * list, together (`withPerItem`), for the lists that arrive. Port *types* no
- * dialog sets, but a wire from a picker ticks "Read the file at this path".
+ * panel sets, but a wire from a picker ticks "Read the file at this path".
  * *needed* ticks "needed" on those inputs (`PortsEditor`), which sets
  * `required` on the port.
  *
- * Done through the dialog's own `nodeDialog`: each change as its ports editor
+ * Done through the panel's own `nodePanel`: each change as its ports editor
  * and its fields make it, and written into the graph as it writes -- closed.
  */
 function edit(nodeId: string, changes: {
   label: string; text: string; input?: string[]; written: Partial<Record<Write, string>>; perItem?: boolean; needed?: string[];
 }): void {
-  const dialog = nodeDialog(nodeId);
+  const panel = nodePanel(nodeId);
   // A row renamed in the ports editor; past the last row, one added with + and then named.
   const renamed = (ports: Port[], names: string[], kind: Port['kind']) => names.map((name, index) => ({
     ...(ports[index] ?? { kind, data_type: 'any', multi: false, required: false, description: '' }), id: name, name,
   }));
-  dialog.change((draft) => withPorts(draft, {
+  panel.change((draft) => withPorts(draft, {
     inputs: (changes.input ? renamed(draft.inputs, changes.input, 'input') : draft.inputs)
       .map((port) => (changes.needed?.includes(port.id) ? { ...port, required: true } : port)),
     outputs: draft.outputs,
   }));
-  dialog.change((draft) => ({ ...draft, label: changes.label }));
-  dialog.change((draft) => ({ ...draft, description: changes.text }), { field: 'description' });
+  panel.change((draft) => ({ ...draft, label: changes.label }));
+  panel.change((draft) => ({ ...draft, description: changes.text }), { field: 'description' });
   for (const write of ['input', 'output', 'body'] as const) {
     const result = changes.written[write];
     if (!result) continue;
-    dialog.change((now) => writtenInto(now, write, { result, calls: [] }, writeName(now, write)), ONCE);
+    panel.change((now) => writtenInto(now, write, { result, calls: [] }, writeName(now, write)), ONCE);
   }
   if (changes.perItem !== undefined) {
-    const shown = dialog.node()!;
+    const shown = panel.node()!;
     const read = definitionExample(String(shown.config.input_definition ?? ''));
     const lists = listPorts(shown, 'example' in read ? read.example : undefined, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
     // The box is there only when a list arrives; a new code or ai node's input is declared one.
     expect(lists.length).toBeGreaterThan(0);
-    dialog.change((draft) => withPerItem(draft, changes.perItem!, lists));
+    panel.change((draft) => withPerItem(draft, changes.perItem!, lists));
   }
-  dialog.write();
+  panel.write();
 }
 
 /** Drag a wire from one handle to another. */

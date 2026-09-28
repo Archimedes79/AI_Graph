@@ -24,7 +24,7 @@ interface CodeFieldProps {
 }
 
 /**
- * Where a node's files are written in its dialog: a real editor in place of a
+ * Where a node's files are written in its panel: a real editor in place of a
  * textarea.
  *
  * The boxes that hold a node's code and its prompts were `<textarea>`s --
@@ -45,7 +45,7 @@ export default function CodeField({
   const [large, setLarge] = useState(false);
 
   // What is there for the moment the editor takes to arrive: the same text in
-  // a plain box, editable, so nothing about the dialog waits on a download.
+  // a plain box, editable, so nothing about the panel waits on a download.
   const plain = (
     <textarea
       className="w-full rounded-lg px-3 py-2 text-sm font-mono resize-none"
@@ -60,7 +60,7 @@ export default function CodeField({
   useEffect(() => {
     if (!large) return undefined;
     // Escape closes the large editor and nothing else: left to bubble, it
-    // would reach the node dialog underneath and ask to discard the node.
+    // would reach the node's panel underneath and close it.
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
@@ -93,7 +93,7 @@ export default function CodeField({
         <div
           className="fixed inset-0 flex flex-col"
           style={{ zIndex: 200, background: SCRIM, padding: '3vh 3vw' }}
-          role="dialog"
+          role="panel"
           aria-label={title ?? 'Editor'}
         >
           <div

@@ -44,7 +44,7 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
   });
 
   it('has a Panel, loaded only when the node is opened -- or is a page, and never opened', () => {
-    // A page is edited on the Page tab and its node dialog is never opened
+    // A page is edited on the Page tab and its panel is never opened
     // (App.tsx), so a panel of its own is one nobody can reach -- which the
     // gui node's was, stale copy and all.
     if (showsPage(nodeType)) {
@@ -60,11 +60,11 @@ describe.each(Object.entries(NODE_BUILDERS))('node element: %s', (nodeType, elem
 
   it('draws its own text where ✨ writes for it, and defines itself exactly where the engine keeps its definitions', () => {
     const node = kind.create(`${nodeType}-gen`);
-    // Its panel draws the text ✨ writes from above the ✨ rows: the dialog's
+    // Its panel draws the text ✨ writes from above the ✨ rows: the side panel's
     // own box above that would be a second text.
     if (bodyOf(node)) expect(element.ownsDescription).toBe(true);
     // Its ports folded away, its input.js and output.js in its panel: the
-    // dialog's answer and the engine's are one.
+    // side panel's answer and the engine's are one.
     expect(element.definesItself).toBe(hasDefinitions(node));
   });
 

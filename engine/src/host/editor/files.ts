@@ -101,7 +101,7 @@ export function textEditorFor(path: string, system: string = platform()): { comm
 /**
  * Open one of a graph's node files in the editor the person actually works in.
  *
- * The box in the node dialog is fine for an edit; an afternoon's work wants a
+ * The box in the node's panel is fine for an edit; an afternoon's work wants a
  * language server, a debugger's view, a second monitor. The file is already
  * there -- "keep this in a file beside the graph" -- so the missing piece was
  * only the way to it.

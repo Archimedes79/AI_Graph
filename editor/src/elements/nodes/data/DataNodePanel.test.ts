@@ -6,7 +6,7 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { NODE_BUILDERS } from '@/elements/registry';
 import DataNodePanel, { holdDropped } from './DataNodePanel';
 
-/** A data node's dialog, drawn as the node dialog hands it: the node, its setters, and what only the dialog has. */
+/** A data node's panel, drawn as the side panel hands it: the node, its setters, and what only the side panel has. */
 function panel(node: GraphNode): string {
   return renderToStaticMarkup(createElement(DataNodePanel, {
     builder: NODE_BUILDERS.data, node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
@@ -15,7 +15,7 @@ function panel(node: GraphNode): string {
   }));
 }
 
-describe('a data node\'s dialog', () => {
+describe('a data node\'s panel', () => {
   it('is its text, what it holds -- its kind and the value -- and ✨ Data, which writes the value: no definitions, no ▶ Try', () => {
     const node = NODE_KINDS.data.create('memory');
     node.config.data_format = 'structure';

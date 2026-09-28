@@ -102,7 +102,7 @@ export function inputSources(
 
 /**
  * Where each of *nodeId*'s output ports goes, by port id: `"Chart" (port
- * "Points")`. The other half of `inputSources`, for the dialog: a port says
+ * "Points")`. The other half of `inputSources`, for the panel: a port says
  * what it is connected to, so "how does this reach that" is answered where the
  * port is named rather than by squinting at the canvas.
  */

@@ -10,7 +10,7 @@ import { ERROR_PORT, errorOutput } from '@engine/execution/wiring.ts';
 const CAUGHT = 'Why this node failed. Optional to wire: unwired, the run simply carries on.';
 
 /**
- * The node dialog's *draft* with its setting *key* set to *value*, and its
+ * The node panel's *draft* with its setting *key* set to *value*, and its
  * ports following the setting where they are derived from it.
  *
  * *value* may be a function of the setting as *draft* holds it: a change that
@@ -43,7 +43,7 @@ export function withSetting(draft: GraphNode, key: string, value: unknown): Grap
 }
 
 /**
- * The node dialog's *draft* with the ports edited in the ports editor, and its
+ * The node panel's *draft* with the ports edited in the ports editor, and its
  * definitions keyed by the names the ports have now.
  *
  * A definition is keyed by port. A port renamed or removed carried its wire
@@ -62,20 +62,20 @@ export function withPorts(draft: GraphNode, ports: { inputs: Port[]; outputs: Po
 }
 
 /**
- * What the node dialog writes: *draft* into the store as node *nodeId*, its
+ * What the node panel writes: *draft* into the store as node *nodeId*, its
  * wires following its ports. *before* is the node as the store holds it;
  * *coalesce* names the change, so the change of the same fields just before
  * it takes the same undo step (`graphStore.commit`).
  *
- * A port's id is the name a body reads it by, so it is edited in the dialog --
+ * A port's id is the name a body reads it by, so it is edited in the panel --
  * and an edge points at the old one. Each port of the draft remembers the id it
  * had in *before* (`trackPorts`), so a renamed port takes its wires along and a
  * removed one takes them away. It used to be worked out by position, which read
  * removing a port as renaming it to the one that slid into its row, and handed
  * that port the removed one's wire.
  *
- * A function rather than a few lines inside the dialog, so a test writes a
- * dialog's change the way the dialog does (`nodeDialog.write`).
+ * A function rather than a few lines inside the panel, so a test writes a
+ * panel's change the way the panel does (`nodePanel.write`).
  */
 export function saveDraft(nodeId: string, before: GraphNode | undefined, draft: GraphNode, coalesce?: string): void {
   useGraphStore.getState().updateNode(nodeId, untracked(draft), portRenames(before, draft), coalesce);

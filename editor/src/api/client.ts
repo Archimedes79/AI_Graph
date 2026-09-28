@@ -82,8 +82,8 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
  * second what has gone out turns that wait into something a person can read
  * and judge -- the prompt, the context, each step. *run* is handed the id to
  * send as `progress_id`, which is what the engine files the calls under. A
- * poll that fails changes nothing: the generation is what matters. The node
- * dialog and ✨ AI Graph each wrote this out.
+ * poll that fails changes nothing: the generation is what matters. A node's
+ * panel and ✨ AI Graph each wrote this out.
  */
 export async function watchGeneration<T>(
   run: (progressId: string) => Promise<T>,

@@ -35,7 +35,7 @@ describe('an output node\'s panel', () => {
 
   it('names the key its value really has when another output node has its name already', () => {
     // Two output nodes renamed to one label: the run keeps the second under
-    // "Totals (avg)" (`resultKeys`), and its dialog said the result calls it "Totals".
+    // "Totals (avg)" (`resultKeys`), and its panel said the result calls it "Totals".
     const first = { ...NODE_KINDS.output.create('sum'), label: 'Totals' };
     const second = { ...NODE_KINDS.output.create('avg'), label: 'Totals' };
     open.rfNodes = [first, second].map((graphNode) => ({ id: graphNode.id, data: { graphNode } }));
@@ -43,7 +43,7 @@ describe('an output node\'s panel', () => {
       const html = panel(second);
       expect(html).toContain('“Totals” is another output node&#x27;s already, so the run&#x27;s result calls this one “Totals (avg)”.');
       expect(html).not.toContain('what this node is called');
-      // The first keeps its name, and the second as the dialog has it -- renamed -- is its own.
+      // The first keeps its name, and the second as the panel has it -- renamed -- is its own.
       expect(panel(first)).toContain('what this node is called: “Totals”.');
       expect(panel({ ...second, label: 'Averages' })).toContain('what this node is called: “Averages”.');
     } finally {
@@ -54,7 +54,7 @@ describe('an output node\'s panel', () => {
   it('asks what the result is, which the node feeding it is told, in its own words', () => {
     const node = { ...NODE_KINDS.output.create('o'), description: 'one row per country' };
     expect(panel(node)).toMatch(/<textarea[^>]*aria-label="What the result is"[^>]*>one row per country<\/textarea>/);
-    // One box for it: the dialog draws no second "Description" above the panel.
+    // One box for it: the side panel draws no second "Description" above it.
     expect(NODE_BUILDERS.output.ownsDescription).toBe(true);
   });
 

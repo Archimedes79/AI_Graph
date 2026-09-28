@@ -4,21 +4,21 @@ import { NODE_KINDS } from '@/document/nodeKinds';
 import { useGraphStore } from '@/store/graphStore';
 import { ONCE } from '@/elements/NodeGuiBuilder';
 import { holdDropped } from '@/elements/nodes/data/DataNodePanel';
-import { WRITE_AFTER_MS, changedFields, nodeDialog, overlay, writeBeforeKey } from './nodeDialog';
+import { WRITE_AFTER_MS, changedFields, nodePanel, overlay, writeBeforeKey } from './nodePanel';
 import { withPorts } from './nodeDraft';
 
 /**
- * A node's dialog with no Save and no Cancel: what is changed is written into
+ * A node's panel with no Save and no Cancel: what is changed is written into
  * the graph a moment later, typing into one field is one undo step, Undo takes
- * it back, and closing the dialog loses nothing.
+ * it back, and closing the panel loses nothing.
  */
 
 const store = () => useGraphStore.getState();
 const stored = (id: string) => store().rfNodes.find((item) => item.id === id)!.data.graphNode as GraphNode;
 const rename = (ports: Port[], at: number, id: string) => ports.map((port, i) => (i === at ? { ...port, id, name: id } : port));
 /** The node's text typed into its box, as the panel writes it (`NodeEditor`'s `setDescription`). */
-const say = (dialog: ReturnType<typeof nodeDialog>, text: string) =>
-  dialog.change((node) => ({ ...node, description: text }), { field: 'description' });
+const say = (panel: ReturnType<typeof nodePanel>, text: string) =>
+  panel.change((node) => ({ ...node, description: text }), { field: 'description' });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -32,83 +32,83 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); });
 
-describe('a change in a node\'s dialog', () => {
+describe('a change in a node\'s panel', () => {
   it('is shown at once, and in the graph a moment later', () => {
-    const dialog = nodeDialog('code');
-    say(dialog, 'Count the words.');
-    expect(dialog.node()?.description).toBe('Count the words.');
+    const panel = nodePanel('code');
+    say(panel, 'Count the words.');
+    expect(panel.node()?.description).toBe('Count the words.');
     expect(stored('code').description).toBe('');
     vi.advanceTimersByTime(WRITE_AFTER_MS);
     expect(stored('code').description).toBe('Count the words.');
   });
 
   it('typed into one field, is one undo step, and Undo takes it back', () => {
-    const dialog = nodeDialog('code');
+    const panel = nodePanel('code');
     const before = store().past.length;
     for (const text of ['C', 'Co', 'Cou', 'Count']) {
-      say(dialog, text);
+      say(panel, text);
       vi.advanceTimersByTime(WRITE_AFTER_MS);
     }
     expect(stored('code').description).toBe('Count');
     expect(store().past.length).toBe(before + 1);
     store().undo();
     expect(stored('code').description).toBe('');
-    expect(dialog.node()?.description).toBe('');
+    expect(panel.node()?.description).toBe('');
   });
 
   it('written as its own step, is not added to what was typed before it: what ✨ writes is undone alone', () => {
-    const dialog = nodeDialog('code');
-    dialog.setConfig('code', 'typed');
-    dialog.write();
-    dialog.setConfig('code', 'generated');
-    dialog.write(true);
+    const panel = nodePanel('code');
+    panel.setConfig('code', 'typed');
+    panel.write();
+    panel.setConfig('code', 'generated');
+    panel.write(true);
     store().undo();
     expect(stored('code').config.code).toBe('typed');
   });
 
   it('keeps what changed in the graph meanwhile -- a file saved in the person\'s own editor -- under what waits to be written', () => {
-    const dialog = nodeDialog('code');
-    say(dialog, 'Shout it.');
+    const panel = nodePanel('code');
+    say(panel, 'Shout it.');
     store().updateNode('code', { config: { ...stored('code').config, code: 'function run(inputs) { return { output: 1 }; }' } });
-    expect(dialog.node()).toMatchObject({ description: 'Shout it.', config: { code: 'function run(inputs) { return { output: 1 }; }' } });
-    dialog.write();
+    expect(panel.node()).toMatchObject({ description: 'Shout it.', config: { code: 'function run(inputs) { return { output: 1 }; }' } });
+    panel.write();
     expect(stored('code')).toMatchObject({ description: 'Shout it.', config: { code: 'function run(inputs) { return { output: 1 }; }' } });
   });
 
   it('takes a renamed port\'s wire along, keystroke by keystroke', () => {
-    const dialog = nodeDialog('code');
+    const panel = nodePanel('code');
     for (const typed of ['r', 're', 'res', 'result']) {
-      dialog.change((node) => withPorts(node, { inputs: node.inputs, outputs: rename(node.outputs, 0, typed) }));
+      panel.change((node) => withPorts(node, { inputs: node.inputs, outputs: rename(node.outputs, 0, typed) }));
       vi.advanceTimersByTime(WRITE_AFTER_MS);
     }
     expect(store().rfEdges.map((edge) => edge.sourceHandle)).toEqual(['result']);
   });
 
-  it('is written when the dialog is closed, and nothing is lost', () => {
+  it('is written when the panel is closed, and nothing is lost', () => {
     store().setEditingNode('code');
-    const dialog = nodeDialog('code');
-    const stop = dialog.watch(() => {});
-    say(dialog, 'Keep me.');
+    const panel = nodePanel('code');
+    const stop = panel.watch(() => {});
+    say(panel, 'Keep me.');
     store().setEditingNode(null);
     expect(stored('code').description).toBe('Keep me.');
     stop();
   });
 
   it('never lands in another graph opened meanwhile, which may have a node of the same id', () => {
-    const dialog = nodeDialog('code');
-    say(dialog, 'Meant for the first graph.');
+    const panel = nodePanel('code');
+    say(panel, 'Meant for the first graph.');
     store().loadGraph({ metadata: { name: 'Other', description: '', gui_scheme: 'night' }, nodes: [NODE_KINDS.code.create('code')], edges: [] });
-    dialog.write();
+    panel.write();
     vi.advanceTimersByTime(WRITE_AFTER_MS);
     expect(stored('code').description).toBe('');
-    expect(dialog.node()).toBeUndefined();
+    expect(panel.node()).toBeUndefined();
   });
 
-  it('is written first when the graph is saved with Ctrl+S, so the file holds what the dialog shows', () => {
-    const dialog = nodeDialog('code');
-    say(dialog, 'Saved with it.');
-    // The dialog hears the key first (capture); the save is the page's, after it.
-    writeBeforeKey(dialog)({ ctrlKey: true, metaKey: false, key: 's' });
+  it('is written first when the graph is saved with Ctrl+S, so the file holds what the panel shows', () => {
+    const panel = nodePanel('code');
+    say(panel, 'Saved with it.');
+    // The panel hears the key first (capture); the save is the page's, after it.
+    writeBeforeKey(panel)({ ctrlKey: true, metaKey: false, key: 's' });
     expect(store().rootGraph().nodes.find((node) => node.id === 'code')?.description).toBe('Saved with it.');
   });
 });
@@ -120,11 +120,11 @@ describe('what a run keeps, landing while a word is typed', () => {
   } as never);
 
   it('ends the word\'s undo step: Undo takes back what was typed after it, and leaves what the run kept', () => {
-    const dialog = nodeDialog('code');
-    say(dialog, 'C'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    const panel = nodePanel('code');
+    say(panel, 'C'); vi.advanceTimersByTime(WRITE_AFTER_MS);
     ranWithMemory();
     // Well within the moment in which typing into the same field adds to its step.
-    say(dialog, 'Co'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    say(panel, 'Co'); vi.advanceTimersByTime(WRITE_AFTER_MS);
     store().undo();
     expect(stored('code').description).toBe('C');
     expect(stored('history').config.data_value).toBe('turn 1');
@@ -133,34 +133,34 @@ describe('what a run keeps, landing while a word is typed', () => {
 
 describe('what is not typing, written into a field just typed into', () => {
   /** A ✨ prompt box typed into, as the panel writes it: the node keeps only the prompts it changed. */
-  const prompt = (dialog: ReturnType<typeof nodeDialog>, write: 'input' | 'output', text: string) =>
-    dialog.setConfig('prompts', (current: unknown) => ({ ...(current as Record<string, string> | undefined), [write]: text }), { field: `prompts.${write}` });
+  const prompt = (panel: ReturnType<typeof nodePanel>, write: 'input' | 'output', text: string) =>
+    panel.setConfig('prompts', (current: unknown) => ({ ...(current as Record<string, string> | undefined), [write]: text }), { field: `prompts.${write}` });
 
   it('a file dropped on a data node\'s box is an undo step of its own, not more of what was typed there', async () => {
-    const dialog = nodeDialog('history');
-    dialog.setConfig('data_value', 'typed by hand'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    const panel = nodePanel('history');
+    panel.setConfig('data_value', 'typed by hand'); vi.advanceTimersByTime(WRITE_AFTER_MS);
     // The drop, as the box takes it.
-    await holdDropped({ name: 'state.json', size: 12, text: async () => '{"count": 3}' }, (key, value, step) => dialog.setConfig(key, value, step), () => {});
+    await holdDropped({ name: 'state.json', size: 12, text: async () => '{"count": 3}' }, (key, value, step) => panel.setConfig(key, value, step), () => {});
     expect(stored('history').config.data_value).toEqual({ count: 3 });
     store().undo();
     expect(stored('history').config.data_value).toBe('typed by hand');
   });
 
   it('a file given to ✨ Input is an undo step of its own, after a prompt typed a moment before', () => {
-    const dialog = nodeDialog('code');
-    prompt(dialog, 'input', 'Read the columns.');
+    const panel = nodePanel('code');
+    prompt(panel, 'input', 'Read the columns.');
     vi.advanceTimersByTime(WRITE_AFTER_MS);
-    dialog.setConfig('input_files', (current: unknown) => [...((current as string[] | undefined) ?? []), 'data/people.csv'], ONCE);
+    panel.setConfig('input_files', (current: unknown) => [...((current as string[] | undefined) ?? []), 'data/people.csv'], ONCE);
     store().undo();
     expect(stored('code').config.input_files).toBeUndefined();
     expect(stored('code').config.prompts).toEqual({ input: 'Read the columns.' });
   });
 
   it('two prompt boxes are two fields, two undo steps, though both are the node\'s prompts', () => {
-    const dialog = nodeDialog('code');
-    prompt(dialog, 'input', 'Mine.');
+    const panel = nodePanel('code');
+    prompt(panel, 'input', 'Mine.');
     vi.advanceTimersByTime(WRITE_AFTER_MS);
-    prompt(dialog, 'output', 'Mine too.');
+    prompt(panel, 'output', 'Mine too.');
     vi.advanceTimersByTime(WRITE_AFTER_MS);
     store().undo();
     expect(stored('code').config.prompts).toEqual({ input: 'Mine.' });

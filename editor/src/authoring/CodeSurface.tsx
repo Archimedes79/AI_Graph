@@ -46,7 +46,7 @@ export default function CodeSurface({ value, onChange, language, placeholder, he
   changed.current = onChange;
   const languageSlot = useRef(new Compartment());
   // One Dark on a dark scheme, CodeMirror's own light look on a light one: a
-  // black editor in the middle of a paper-coloured dialog is the one thing in
+  // black editor in the middle of a paper-coloured panel is the one thing in
   // it that ignored the scheme.
   const light = scheme(useGraphStore((state) => state.metadata.gui_scheme)).light === true;
 

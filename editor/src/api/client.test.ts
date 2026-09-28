@@ -3,7 +3,7 @@ import { call, watchGeneration, type AICall } from './client';
 
 /**
  * What a generation has sent so far is asked for while it runs, under the id
- * it is handed, and no longer once it is over. The node dialog and ✨ AI Graph
+ * it is handed, and no longer once it is over. A node's panel and ✨ AI Graph
  * each wrote this poll out.
  */
 describe('a watched generation', () => {

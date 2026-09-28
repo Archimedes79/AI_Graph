@@ -264,7 +264,7 @@ export default function App() {
   // in VS Code, by git, by an assistant. The folder is asked every second and
   // a half what changed, and what did comes in as one undo step -- no reload,
   // no button, and nothing typed here is lost (see takeDiskChanges, and the
-  // node dialog's "changed while open" question). Only while the page is
+  // node's panel, which keeps what it has not written yet on top of a change from outside). Only while the page is
   // looked at: a hidden tab has nobody to show a change to.
   useEffect(() => {
     // Not while a node is open from the inside: a change down there arrives as

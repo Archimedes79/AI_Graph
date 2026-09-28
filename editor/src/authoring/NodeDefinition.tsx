@@ -293,7 +293,7 @@ export default function NodeDefinition({ node, setConfig, updateNode, setDescrip
   const graph = shell?.graph ?? (() => ({ metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] }));
   const trying = useTryExample(node, graph);
   const liveCalls = useLiveGeneration();
-  // What the dialog still holds goes into the graph before a file is opened, so the file says it.
+  // What the panel still holds goes into the graph before a file is opened, so the file says it.
   const before = () => shell?.flush();
 
   // "Say what to change", asked of this node from the bar under the canvas.

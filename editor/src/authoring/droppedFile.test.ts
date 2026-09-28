@@ -69,7 +69,7 @@ describe('a file dropped onto a node on the canvas', () => {
     });
   });
 
-  it('is one more file ✨ Input writes from -- a file given twice is still one -- one undo step, and opens the node\'s dialog', async () => {
+  it('is one more file ✨ Input writes from -- a file given twice is still one -- one undo step, and opens the node\'s panel', async () => {
     await dropExample('reader', 'path', dropped('people.csv', 'name\nAnna'), one('D:/work/people.csv'), as);
     expect(stored('reader').config.input_files).toEqual(['D:/work/people.csv']);
     expect(store().editingNodeId).toBe('reader');

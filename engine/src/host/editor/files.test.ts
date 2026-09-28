@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { fileSearch, findFiles, findProjects } from './files.ts';
 
 /**
- * What the editor's project search and its "open in my editor" get from the machine.
+ * What the editor's project search and its file chips -- a node's file,
+ * opened in the person's own editor -- get from the machine.
  *
  * Browsing is not here: it is the same picker a deployed tool serves, and it
  * is tested in `host/browse.test.ts` beside the code.

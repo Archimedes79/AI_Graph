@@ -7,7 +7,7 @@ import { useGraphStore } from '@/store/graphStore';
 import NodeEditor from '@/canvas/NodeEditor';
 
 /**
- * A node's dialog in a page, typed into as a keyboard types: what a field
+ * A node's panel in a page, typed into as a keyboard types: what a field
  * shows is what was typed -- a space at the end included, while the next key
  * is still to come. A field that showed what the node holds trimmed ate the
  * space, and "a b" came out "ab".
@@ -41,7 +41,7 @@ async function field(label: string): Promise<HTMLInputElement | HTMLTextAreaElem
     if (found) return found;
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
   }
-  throw new Error(`no field "${label}" in the dialog`);
+  throw new Error(`no field "${label}" in the panel`);
 }
 
 /** *text* put into *box* as one edit: a key pressed, or all of it selected and deleted. */
@@ -64,7 +64,7 @@ async function type(box: HTMLInputElement | HTMLTextAreaElement, keys: string): 
   return shown;
 }
 
-describe('a field of a node\'s dialog, typed into', () => {
+describe('a field of a node\'s panel, typed into', () => {
   it('shows "a", "a ", "a b" as they are typed -- the heading, the text and a ✨ prompt box -- and the node holds "a b"', async () => {
     const heading = await field('Heading');
     // Emptied first: shown empty, and not written -- a heading is never empty.
@@ -78,7 +78,7 @@ describe('a field of a node\'s dialog, typed into', () => {
     await edit(prompt, '');
     expect(await type(prompt, 'a b')).toEqual(['a', 'a ', 'a b']);
 
-    // Closing the dialog writes what waits into the graph.
+    // Closing the panel writes what waits into the graph.
     await act(async () => { root.unmount(); });
     root = createRoot(page);
     const node = store().rfNodes.find((item) => item.id === nodeId)!.data.graphNode as GraphNode;

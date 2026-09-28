@@ -13,9 +13,9 @@ export function useLiveGeneration(): AICall[] {
 }
 
 /**
- * Hand the transcript of a node dialog's ✨ to whatever draws its result.
+ * Hand the transcript of a node panel's ✨ to whatever draws its result.
  *
- * A context rather than a prop because the path from the dialog, which owns
+ * A context rather than a prop because the path from the panel, which owns
  * `useGenerate`, down to where the exchange is drawn runs through the node's
  * own panel (`NodeDefinition`), which does nothing with it but pass it on. A
  * row of forwarding props like that is what let the ✨ buttons drift apart in

@@ -7,7 +7,7 @@ import {
 
 /**
  * What a node's ✨ asks and what it writes in: the request built in one place
- * for the dialog, the sweep and "what ✨ sends", and the answer written into
+ * for the panel, the sweep and "what ✨ sends", and the answer written into
  * the node by one pure function.
  */
 

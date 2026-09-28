@@ -66,7 +66,7 @@ describe('parseArgs', () => {
 });
 
 /**
- * One node by itself, from a command line: what its dialog tries, with no
+ * One node by itself, from a command line: what its panel tries, with no
  * editor anywhere -- the node's example, and the files its example reads.
  */
 describe('run-node', () => {

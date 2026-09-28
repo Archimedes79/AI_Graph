@@ -5,7 +5,7 @@
 // data node holds -- through one route (`generate`), from one request built
 // here: the node as the panel holds it, the graph around it in words
 // ({Context}, `graphContext.ts`), what feeds each input and what each output
-// feeds, and the files ✨ Input and ✨ Output are given. The node dialog,
+// feeds, and the files ✨ Input and ✨ Output are given. A node's panel,
 // the toolbar's sweep and "what ✨ sends" all build it here, so none of them
 // can tell the model less than the others. What comes back is written into the
 // node by one pure function (`writtenInto`), and the exchange into its

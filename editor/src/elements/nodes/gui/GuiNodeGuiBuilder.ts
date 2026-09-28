@@ -37,7 +37,7 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
 
   // No Panel: the page is edited on the Page tab, under the graph's name and
-  // description (`PageHeading`), and the node dialog is never opened for it
+  // description (`PageHeading`), and no panel is opened for it
   // (App.tsx). It has no name of its own to give: the tool's is the graph's.
 
   /**

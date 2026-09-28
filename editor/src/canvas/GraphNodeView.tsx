@@ -172,9 +172,9 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
       ...graphNode.outputs.map((port) => [port, previews.outputs[port.id]] as const)].filter(([, preview]) => preview)
     : [];
 
-  // A file dropped on a node fills what the element says (`dropPort`): the
-  // example of a node built in the four steps, what a data node holds. No
-  // dialog on the way; its own panel opens on it (`dropExample`).
+  // A file dropped on a node fills what the element says (`dropPort`): a
+  // file a code or ai node's ✨ Input writes from, what a data node holds.
+  // Nothing to browse for; its own panel opens on it (`dropExample`).
   const dropInto = builder?.dropPort(graphNode);
   const [fileOver, setFileOver] = useState(false);
   const [dropFailed, setDropFailed] = useState('');

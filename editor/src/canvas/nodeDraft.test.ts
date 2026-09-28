@@ -6,7 +6,7 @@ import { trackPorts } from '@/store/portRenames';
 import { withPorts, withSetting } from './nodeDraft';
 
 /**
- * The node dialog's draft, edited the way its ports editor edits it: a row
+ * The node panel's draft, edited the way its ports editor edits it: a row
  * renamed by spreading it with its new id, removed by filtering it out, a new
  * one appended (`PortsEditor`).
  */
@@ -22,7 +22,7 @@ ${Object.keys(example).map((key) => ` * @property {string} ${key} What arrives o
 module.exports = ${JSON.stringify(example, null, 2)};
 `;
 
-/** A code node with inputs *ids* and an input definition of *example*, opened in the dialog. */
+/** A code node with inputs *ids* and an input definition of *example*, opened in the panel. */
 function opened(ids: string[], example: Record<string, unknown>): GraphNode {
   const node = NODE_KINDS.code.create('worker');
   node.inputs = ids.map(fresh);

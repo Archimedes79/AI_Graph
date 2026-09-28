@@ -38,7 +38,7 @@ export interface GenerateOptions<T> {
  * button you pressed.
  *
  * What comes back is written in at once, as one undo step: Undo is how it is
- * taken back, as for anything else changed in a node's dialog. It used to wait
+ * taken back, as for anything else changed in a node's panel. It used to wait
  * for Accept or Discard -- a click after every ✨, with the result on screen
  * but not in the node, so nothing could try it. The exchange that produced it
  * stays on screen either way (`GenerationTranscript`).

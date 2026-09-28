@@ -322,7 +322,7 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   (`canvas/wireLook.ts`); the others are soft grey.
 - **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`), in place of
   the modal dialog it was: `NodeEditor` as it was -- the element's own `Panel`, the ports,
-  Advanced -- with the same write-through and undo steps (`nodeDialog.ts`). One click opens
+  Advanced -- with the same write-through and undo steps (`nodePanel.ts`). One click opens
   it, another node shows that one, and ✕, Escape or a click on the empty canvas close it,
   as `graphStore.clearSelection` does; a node's panel opening beside it is kept in view. The
   page's panel is the way to the Page tab, where the page is built. The node the person is
@@ -504,7 +504,7 @@ in the file, with a chip beside it that opens the file in the person's own edito
 which runs a .js on Windows).
 
 **No Save.** What a node's panel changes is written into the graph a moment later
-(`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
+(`canvas/nodePanel.ts`), one undo step per field typed into (`graphStore.commit`'s
 coalescing) -- the field on screen, not the setting it writes: two prompt boxes are two
 fields of one setting. What is not typing -- a file dropped in, what ✨ wrote, a box ticked
 -- is a step of its own (`UndoStep`), and a run that lands ends the step being typed. What a

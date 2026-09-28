@@ -5,7 +5,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { derivedNodePorts } from '@/document/guiWidgets';
 import PortsEditor from './PortsEditor';
 import { withPorts } from './nodeDraft';
-import { useNodeDialog } from './nodeDialog';
+import { useNodePanel } from './nodePanel';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { ONCE, type NodePanelProps, type UndoStep } from '@/elements/NodeGuiBuilder';
 import SidePanel from '@/ui/SidePanel';
@@ -34,10 +34,10 @@ interface NodeEditorProps {
  * A node's panel, docked beside the canvas while the node is selected. There
  * is no Save and no Cancel: what is changed here is in the graph a moment
  * later, Undo takes it back, and ✕ or Esc close it with nothing lost
- * (`nodeDialog.ts`) -- as does choosing another node, whose panel it becomes.
+ * (`nodePanel.ts`) -- as does choosing another node, whose panel it becomes.
  */
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
-  const dialog = useNodeDialog(nodeId);
+  const panel = useNodePanel(nodeId);
   const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
   const graphEdges = useGraphStore((s) => s.rfEdges);
   const metadata = useGraphStore((s) => s.metadata);
@@ -47,30 +47,30 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   // One state machine for every ✨ in this editor.
   const generate = useGenerate();
 
-  const node = dialog.node();
+  const node = panel.node();
   if (!node) return null;
 
   const element = NODE_BUILDERS[node.node_type];
   const caught = node.config.catch_errors === true;
 
-  const setConfig: NodePanelProps['setConfig'] = (key, value, step) => dialog.setConfig(key, value, step);
-  const setDescription = (value: string) => dialog.change((current) => ({ ...current, description: value }), { field: 'description' });
+  const setConfig: NodePanelProps['setConfig'] = (key, value, step) => panel.setConfig(key, value, step);
+  const setDescription = (value: string) => panel.change((current) => ({ ...current, description: value }), { field: 'description' });
 
-  // The graph on the canvas with this node in it as the dialog shows it, read
+  // The graph on the canvas with this node in it as the panel shows it, read
   // when asked: what is tried, fetched from the graph and sent to ✨ is the
   // edit as it is then.
   const graph = (): Graph => {
     const whole = useGraphStore.getState().exportGraph();
-    const current = dialog.node() ?? node;
+    const current = panel.node() ?? node;
     whole.nodes = whole.nodes.map((candidate) => (candidate.id === current.id ? current : candidate));
     return whole;
   };
   const around = () => {
-    const current = dialog.node() ?? node;
+    const current = panel.node() ?? node;
     return { nodes: graphNodes.map((candidate) => (candidate.id === current.id ? current : candidate)), edges: graphEdges, metadata };
   };
   const requestFor = (write: Write, refine?: Refine) => {
-    const current = dialog.node() ?? node;
+    const current = panel.node() ?? node;
     const { nodes, edges } = around();
     return generateRequest(current, write, around(), inputFilesOf(current, nodes, edges, executionResult), refine);
   };
@@ -84,10 +84,10 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
    * of the body alone. Resolves to whether all of it was written.
    */
   const handleGenerate = async (write: Write, refine?: Refine): Promise<boolean> => {
-    const start = dialog.node();
+    const start = panel.node();
     if (!start) return false;
     for (const one of refine ? ['body' as const] : writesFor(start, write)) {
-      const current = dialog.node();
+      const current = panel.node();
       if (!current) return false;
       const name = exchangeName(current, one, refine);
       const request = requestFor(one, refine);
@@ -98,11 +98,11 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
         run: (progressId?: string) => call('generate', { ...request, ...(progressId ? { progress_id: progressId } : {}) }),
         apply: (result) => {
           unfit = unfitDefinition(one, result.probe);
-          dialog.change((now) => writtenInto(now, one, result, name), ONCE);
+          panel.change((now) => writtenInto(now, one, result, name), ONCE);
         },
         success: (result) => resultMessage(writeName(current, one), result.probe, !!refine?.change?.trim()),
         failure: `${writeName(current, one)} failed`,
-        failed: (calls) => dialog.change((now) => ({ ...now, config: { ...now.config, history: withHistory(now, `${name} (failed)`, calls) } }), ONCE),
+        failed: (calls) => panel.change((now) => ({ ...now, config: { ...now.config, history: withHistory(now, `${name} (failed)`, calls) } }), ONCE),
       });
       if (!written || unfit) return false;
     }
@@ -117,7 +117,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     inputs: inputSources(node.id, graphNodes, graphEdges),
     outputs: outputTargets(node.id, graphNodes, graphEdges, true),
   };
-  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }, step?: UndoStep) => dialog.change((current) => withPorts(current, ports), step);
+  const setPorts = (ports: { inputs: Port[]; outputs: Port[] }, step?: UndoStep) => panel.change((current) => withPorts(current, ports), step);
   // The ports are the person's to name, rather than following a setting.
   const ownPorts = derivedNodePorts(node) === null;
   const defined = element.definesItself && ownPorts;
@@ -140,16 +140,16 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
     preview: (write) => previewGeneration(requestFor(write)),
     graphFile: () => {
       const { nodes, edges } = around();
-      return fileFromTheGraph(dialog.node() ?? node, nodes, edges, executionResult, graph);
+      return fileFromTheGraph(panel.node() ?? node, nodes, edges, executionResult, graph);
     },
-    flush: () => dialog.write(),
+    flush: () => panel.write(),
   } : undefined;
 
   return (
     <SidePanel
       kicker={<NodeKind node={node} />}
       title={
-        <HeadingField heading={node.label} onChange={(label) => dialog.change((current) => ({ ...current, label }))} />
+        <HeadingField heading={node.label} onChange={(label) => panel.change((current) => ({ ...current, label }))} />
       }
       onClose={onClose}
     >
@@ -178,7 +178,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 builder={element}
                 node={node}
                 setConfig={setConfig}
-                updateNode={(change, step) => dialog.change(change, step)}
+                updateNode={(change, step) => panel.change(change, step)}
                 setDescription={setDescription}
                 generating={generate.busy}
                 message={generate.message}
@@ -211,7 +211,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                   </summary>
                   <div className="px-3 pb-3 pt-1 space-y-4">
                     <Suspense fallback={null}>
-                      <element.AdvancedPanel node={node} setConfig={setConfig} updateNode={(change, step) => dialog.change(change, step)}
+                      <element.AdvancedPanel node={node} setConfig={setConfig} updateNode={(change, step) => panel.change(change, step)}
                         ports={defined ? ports : undefined} />
                     </Suspense>
                     <WhatRuns node={node} />

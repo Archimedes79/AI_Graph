@@ -10,7 +10,7 @@ const ELEMENT = new SubgraphNodeRunner();
 /**
  * In. The panel goes first, because what is behind it is about to be a
  * different graph -- and a panel closed writes what it still holds into the
- * graph it was opened in (`nodeDialog.watch`), before the canvas goes in.
+ * graph it was opened in (`nodePanel.watch`), before the canvas goes in.
  */
 export function enterGraphOf(nodeId: string): void {
   const store = useGraphStore.getState();

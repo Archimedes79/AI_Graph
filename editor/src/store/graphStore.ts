@@ -191,7 +191,7 @@ export interface GraphStore {
    * delete that arrives through two paths (the node's own button and ReactFlow's
    * remove change) from costing two presses of Ctrl+Z.
    *
-   * *coalesce* names the change -- a node and the fields a dialog wrote. A
+   * *coalesce* names the change -- a node and the fields its panel wrote. A
    * change of the same name within a moment of the last one adds to that
    * one's undo step instead of taking one of its own: a word typed into a
    * field is one step, not one per keystroke. Anything else in between -- an
@@ -202,7 +202,7 @@ export interface GraphStore {
   redo: () => void;
   /**
    * Internal: replace the graph with a serialised snapshot (used by undo/redo).
-   * *keepEditing*: the node dialog stays open when its node is still there --
+   * *keepEditing*: the node's panel stays open when its node is still there --
    * Undo takes back what it changed, and it shows what Undo left.
    */
   applyGraphSnapshot: (json: string, keepEditing?: boolean) => void;
@@ -215,8 +215,8 @@ export interface GraphStore {
    *
    * What counts as saved is the graph that was sent, not the one there is when
    * the write comes back: an edit made while it was on its way is not on disk,
-   * and must still read as unsaved. Save, Save As and both "Open in my editor"
-   * buttons each wrote this out, and each marked the later graph saved.
+   * and must still read as unsaved. Save, Save As and a file chip -- which saves
+   * before it opens a file -- each wrote this out, and each marked the later graph saved.
    */
   save: (path?: string) => Promise<{ path: string }>;
   /**
@@ -459,7 +459,7 @@ export const useGraphStore = create<GraphStore>()(
     currentRunId: null,
 
     setMetadata: (meta) => {
-      // Named without ": ", so it is never taken for a node dialog's change (`nodeId: fields`).
+      // Named without ": ", so it is never taken for a node panel's change (`nodeId: fields`).
       get().commit(`metadata.${Object.keys(meta).join('+')}`);
       set((state) => {
         Object.assign(state.metadata, meta);
@@ -614,7 +614,7 @@ export const useGraphStore = create<GraphStore>()(
 
     clearSelection: () => {
       // The panel first, on its own: a panel closed while the graph stays
-      // writes what still waits in it (`nodeDialog.watch`), and the marks
+      // writes what still waits in it (`nodePanel.watch`), and the marks
       // below are a change to the canvas's nodes.
       set((state) => {
         state.editingNodeId = null;
@@ -839,8 +839,8 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = rfEdges;
         // Everything that names a node of the graph that was here. Left
         // standing, each points at something that may not exist any more: a
-        // result against ids that now mean other nodes, a dialog on one of
-        // them. The node dialog stays for Undo, on a node that is still there:
+        // result against ids that now mean other nodes, a panel on one of
+        // them. The node's panel stays for Undo, on a node that is still there:
         // the same graph, a step back.
         state.executionResult = null;
         const stays = keepEditing && graph.nodes.some((node) => node.id === state.editingNodeId);

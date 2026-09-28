@@ -1,4 +1,4 @@
-// What a node's port ids must be, for the node dialog to store them.
+// What a node's port ids must be, for the node panel to store them.
 //
 // A port's id is the name a body reads it by and a wire points at, so the
 // ports editor lets it be typed freely -- '' and a name another port has are

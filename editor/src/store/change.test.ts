@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GraphNode } from '@/graph';
 import { useGraphStore } from './graphStore';
 import { NODE_KINDS } from '@/document/nodeKinds';
-import { nodeDialog } from '@/canvas/nodeDialog';
+import { nodePanel } from '@/canvas/nodePanel';
 
 // What the bar under the canvas and the panel beside it ask of the store: a
 // change said for one node, waiting for its panel; nothing selected any more;
@@ -59,7 +59,7 @@ describe('clearing the selection', () => {
 
   it('writes what the panel still held, as closing it always did', () => {
     store().setEditingNode('count');
-    const panel = nodeDialog('count');
+    const panel = nodePanel('count');
     const stop = panel.watch(() => {});
     panel.setConfig('code', 'function run() {}');
     store().clearSelection();
@@ -79,7 +79,7 @@ describe('clearing the selection', () => {
 describe('the panel beside the canvas', () => {
   it('shows another node when another is chosen, and what the first still held is written first', () => {
     store().setEditingNode('count');
-    const panel = nodeDialog('count');
+    const panel = nodePanel('count');
     const stop = panel.watch(() => {});
     panel.setConfig('code', 'function run() {}');
     store().setEditingNode('shown');

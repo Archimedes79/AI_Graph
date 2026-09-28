@@ -20,7 +20,7 @@ export default function FileChip({ nodeId, file, written, before }: {
   file: string;
   /** The node holds something there; otherwise the file is its stub. */
   written: boolean;
-  /** Runs once the click is taken and before the save: what the dialog still holds is written into the graph first. */
+  /** Runs once the click is taken and before the save: what the panel still holds is written into the graph first. */
   before?: () => void;
 }) {
   const isProject = useGraphStore((s) => s.isProject);

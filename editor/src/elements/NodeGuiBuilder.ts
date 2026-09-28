@@ -8,7 +8,7 @@ import { ElementGuiBuilder } from './ElementGuiBuilder';
 import { previewOf, type PortPreviews } from './resultPreview';
 
 /**
- * Which undo step a change made in a node's dialog is (`canvas/nodeDialog.ts`).
+ * Which undo step a change made in a node's panel is (`canvas/nodePanel.ts`).
  * Typing is one step with what was typed into the same field a moment before:
  * the setting's own field, unless `{ field }` names the one typed into. `ONCE`
  * is what is not typing -- a file dropped in, a box ticked, what ✨ wrote --
@@ -20,7 +20,7 @@ export type UndoStep = typeof ONCE | { field: string };
 /**
  * What the node editor hands every node panel. A panel takes the part it needs.
  *
- * What a panel changes is in the graph a moment later (`canvas/nodeDialog.ts`):
+ * What a panel changes is in the graph a moment later (`canvas/nodePanel.ts`):
  * there is no Save to wait for. So what cannot be stored yet -- JSON that does
  * not parse, a name another port has -- is not handed on at all: the field
  * keeps it as typed and says why (`useTyped`).
@@ -51,15 +51,15 @@ export interface NodePanelProps {
    * ("Say what to change", ✨ Fix). Resolves to whether something was written.
    */
   onGenerate: (write: Write, refine?: Refine) => Promise<boolean>;
-  /** What only the dialog has, for a panel of a node ✨ writes for. */
+  /** What only the side panel has, for a panel of a node ✨ writes for. */
   shell?: {
-    /** The graph on the canvas with this node as the dialog shows it: what ▶ Try is asked of is the edit. */
+    /** The graph on the canvas with this node as the side panel shows it: what ▶ Try is asked of is the edit. */
     graph: () => Graph;
     /** What *write*'s ✨ would send, filled in, without sending it. */
     preview: (write: Write) => Promise<AICall[]>;
     /** The file the graph hands one of this node's file-reading inputs -- a picker's value, a path the last run brought -- or undefined. */
     graphFile: () => Promise<string | undefined>;
-    /** Write what the dialog still holds into the graph now: before a project is saved to open one of its files. */
+    /** Write what the side panel still holds into the graph now: before a project is saved to open one of its files. */
     flush: () => void;
   };
 }
@@ -68,7 +68,7 @@ export type PortEditing = 'edit' | 'fixed' | 'none';
 
 /** The folded-away settings most people never touch -- and, where they are the node's own to edit, its ports. */
 export type NodeAdvancedPanelProps = Pick<NodePanelProps, 'node' | 'setConfig' | 'updateNode'> & {
-  /** The ports editor, drawn by the dialog, for a node that keeps its ports among these settings (`definesItself`). */
+  /** The ports editor, drawn by the side panel, for a node that keeps its ports among these settings (`definesItself`). */
   ports?: ReactNode;
 };
 
@@ -108,7 +108,7 @@ export abstract class NodeGuiBuilder extends ElementGuiBuilder<NodePanelProps> {
 
   /**
    * The panel draws the node's text itself -- what it should do, the text ✨
-   * writes from -- so the dialog draws no description box of its own above it.
+   * writes from -- so the side panel draws no description box of its own above it.
    */
   readonly ownsDescription?: boolean;
 

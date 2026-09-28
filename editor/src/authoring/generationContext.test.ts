@@ -156,7 +156,7 @@ describe('what an output node wants', () => {
   });
 });
 
-describe('what a node is wired to, as the dialog and ✨ say it', () => {
+describe('what a node is wired to, as the panel and ✨ say it', () => {
   it('names where each output goes, node and port', () => {
     const code = NODE_KINDS.code.create('worker');
     const out = NODE_KINDS.output.create('shown');
@@ -167,7 +167,7 @@ describe('what a node is wired to, as the dialog and ✨ say it', () => {
     expect(targets).toEqual({ output: '"Report" (port "Value")' });
   });
 
-  it('names what feeds each input -- plainly for the dialog, with what it hands on for ✨', () => {
+  it('names what feeds each input -- plainly for the panel, with what it hands on for ✨', () => {
     const ai = NODE_KINDS.ai.create('writer');
     ai.label = 'Writer';
     ai.config.output_definition = 'module.exports = { "output": "one short paragraph" };';

@@ -138,7 +138,7 @@ describe('undo / redo', () => {
   });
 
   describe('a change typed into one field', () => {
-    // A dialog writes what is typed as it is typed, a moment later each time:
+    // A panel writes what is typed as it is typed, a moment later each time:
     // one undo step per keystroke was fifty steps for a sentence.
     beforeEach(() => { vi.useFakeTimers(); });
     afterEach(() => { vi.useRealTimers(); });
@@ -177,7 +177,7 @@ describe('undo / redo', () => {
     });
   });
 
-  it('leaves the node\'s dialog open on an undo that keeps its node, and closes it on one that takes it away', () => {
+  it('leaves the node\'s panel open on an undo that keeps its node, and closes it on one that takes it away', () => {
     store().addNode('code', { x: 0, y: 0 });
     const id = store().rfNodes[0].id;
     store().updateNode(id, { label: 'Renamed' });
