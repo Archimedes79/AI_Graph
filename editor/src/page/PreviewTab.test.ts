@@ -53,6 +53,20 @@ describe('the Preview tab', () => {
     }
   });
 
+  it('says a graph of nothing has no nodes yet, run or not -- not that it is ready to run', () => {
+    const page = open.rfNodes;
+    open.rfNodes = [];
+    open.executionResult = { status: 'success', node_results: [], outputs: {} } as never;
+    try {
+      const html = renderToStaticMarkup(createElement(PreviewTab));
+      expect(html).toContain('This graph has no nodes yet.');
+      expect(html).not.toContain('ready to run');
+    } finally {
+      open.rfNodes = page;
+      open.executionResult = null;
+    }
+  });
+
   it('keeps the delivered tool\'s ▶ Run: a tool someone was handed has no toolbar', () => {
     const header = (onRun?: () => void) => renderToStaticMarkup(createElement(DeliveredHeader, { onRun }));
     expect(header(() => {})).toContain('▶ Run</button>');
