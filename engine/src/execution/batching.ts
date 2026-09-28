@@ -78,8 +78,8 @@ export function batchItems(
 
 /**
  * Collect one result per item, flattening only the ports declared multi. Run
- * over a list (*fanned*), every output is a list: one of none on each but the
- * error port, which says why once for the node, when there were no items.
+ * over a list (*fanned*), every output is a list -- for no items an empty one,
+ * on each output but the error port, which says why once for the node.
  */
 export function mergeBatchOutputs(
   node: GraphNode,
