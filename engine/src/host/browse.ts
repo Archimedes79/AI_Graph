@@ -86,5 +86,7 @@ export async function browse(path: string, extensions: string[] = [], home = pro
     parent: parent === root ? null : parent,
     entries: [...directories, ...files],
     roots: filesystemRoots(),
+    // The folder shown can be a project itself: a picker opened inside one can open it.
+    ...(isProjectFolder(root) ? { project: true } : {}),
   };
 }
