@@ -43,7 +43,7 @@ import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry } from '../elements/registry.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
-import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
+import { FLOW_FILE, flowOf, graphFrom, sorted } from './flow.ts';
 import { folderName } from './names.ts';
 import { NotAGraph, NotFound } from '../errors.ts';
 
@@ -400,11 +400,6 @@ export async function loadGraph(path: string, guard?: Guard): Promise<Graph> {
 // ---------------------------------------------------------------------------
 // Writing
 // ---------------------------------------------------------------------------
-
-/** Keys in one order, so saving an unchanged graph changes nothing in the file. */
-function sorted<T extends Record<string, unknown>>(record: T): T {
-  return Object.fromEntries(Object.keys(record).sort().map((key) => [key, record[key]])) as T;
-}
 
 /**
  * Write *graph* as the project folder *folder*.

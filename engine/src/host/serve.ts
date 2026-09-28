@@ -21,7 +21,7 @@ import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
 import { runtimeRequirements } from '../execution/runtimeValues.ts';
 import { triggeredNodes } from '../execution/triggers.ts';
-import { aiSetting, candidatePaths } from '../ai/settings.ts';
+import { aiSetting, settingsPath } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
   Download, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
@@ -216,7 +216,7 @@ function toolRoutes(
     async toolAiSettings() {
       // The function a run asks, so the page says what a run calls.
       const { provider, model } = await aiSetting();
-      const file = candidatePaths().find((path) => existsSync(path)) ?? candidatePaths()[0];
+      const file = settingsPath();
       return {
         provider,
         model,

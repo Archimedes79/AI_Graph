@@ -10,11 +10,10 @@
 // page that could write credentials into a file nobody asked for is not a page
 // a recipient should be handed. Hence `host/editor/`.
 
-import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
-  aiSetting, candidatePaths, LOCAL_PROVIDERS, parseSettingsFile, probeLocal, readSettingsFile, type SettingsFile,
+  aiSetting, LOCAL_PROVIDERS, parseSettingsFile, probeLocal, readSettingsFile, settingsPath, type SettingsFile,
 } from '../../ai/settings.ts';
 import { Refusal, message } from '../http.ts';
 import { CREDENTIALS, DEFAULT_SETTINGS, ENDPOINT_ENV } from '../../ai/providers.ts';
@@ -27,19 +26,6 @@ const ENDPOINT_PROVIDERS = Object.keys(ENDPOINT_ENV);
 
 /** The variables that are the one AI setting on a machine without the dialog. */
 const AI_ENV = ['AI_GRAPH_AI_PROVIDER', 'AI_GRAPH_AI_MODEL'];
-
-/**
- * The file that is in use, or would be written.
- *
- * `AI_GRAPH_SETTINGS` wins outright, whether or not the file exists yet: "use
- * this file" has to hold for the first write too, or a save silently lands
- * somewhere else. Otherwise the first candidate that exists, else the first
- * candidate, which is where a save creates it.
- */
-export function settingsPath(cwd = process.cwd(), env: Env = process.env): string {
-  const candidates = candidatePaths(cwd, env);
-  return candidates.find((path) => existsSync(path)) ?? candidates[0];
-}
 
 /** What the dialog shows: the AI saved, endpoints, and whether each credential is set — never the credential. */
 export function status(cwd = process.cwd(), env: Env = process.env): SettingsStatus {

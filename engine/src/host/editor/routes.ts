@@ -20,7 +20,7 @@ import { registry } from '../../elements/registry.ts';
 import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
 import { nodeRuntime } from '../node.ts';
-import { aiSetting } from '../../ai/settings.ts';
+import { aiSetting, settingsPath } from '../../ai/settings.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
 import * as files from './files.ts';
@@ -183,7 +183,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       try {
         return await settings.save(asked);
       } catch (error) {
-        throw new Refusal(500, `Could not write ${settings.settingsPath()}: ${message(error)}`);
+        throw new Refusal(500, `Could not write ${settingsPath()}: ${message(error)}`);
       }
     },
 

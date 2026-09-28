@@ -61,6 +61,19 @@ export function installFolder(): string {
   return dirname(dir);
 }
 
+/**
+ * The file that is in use, or would be written.
+ *
+ * `AI_GRAPH_SETTINGS` wins outright, whether or not the file exists yet: "use
+ * this file" has to hold for the first write too, or a save silently lands
+ * somewhere else. Otherwise the first candidate that exists, else the first
+ * candidate, which is where a save creates it.
+ */
+export function settingsPath(cwd = process.cwd(), env: Record<string, string | undefined> = process.env): string {
+  const candidates = candidatePaths(cwd, env);
+  return candidates.find((path) => existsSync(path)) ?? candidates[0];
+}
+
 export interface SettingsFile {
   /** The one AI setting (`aiSetting`), as ⚙ Settings saves it. */
   ai?: { provider?: string; model?: string };
@@ -102,26 +115,22 @@ export function readSettingsFile(path: string): SettingsFile {
   }
 }
 
-/** The first settings file that exists, as provider settings, or nothing. */
+/** The settings file in use, as provider settings, or nothing. */
 export function fromFile(
   cwd = process.cwd(),
   env: Record<string, string | undefined> = process.env,
 ): Partial<ProviderSettings> {
-  for (const path of candidatePaths(cwd, env)) {
-    if (!existsSync(path)) continue;
-    const parsed = readSettingsFile(path);
-    // Malformed reads as empty, and empty means "nothing configured here" --
-    // not "keys and endpoints, both blank", which would look configured.
-    if (Object.keys(parsed).length === 0) return {};
-    return {
-      ...(parsed.ai?.provider ? { provider: parsed.ai.provider } : {}),
-      ...(parsed.ai?.model ? { model: parsed.ai.model } : {}),
-      apiKeys: parsed.api_keys ?? {},
-      // A blank address is no address: the provider's own default stands.
-      endpoints: Object.fromEntries(Object.entries(parsed.endpoints ?? {}).filter(([, url]) => String(url ?? '').trim())),
-    };
-  }
-  return {};
+  const parsed = readSettingsFile(settingsPath(cwd, env));
+  // Missing and malformed read as empty, and empty means "nothing configured
+  // here" -- not "keys and endpoints, both blank", which would look configured.
+  if (Object.keys(parsed).length === 0) return {};
+  return {
+    ...(parsed.ai?.provider ? { provider: parsed.ai.provider } : {}),
+    ...(parsed.ai?.model ? { model: parsed.ai.model } : {}),
+    apiKeys: parsed.api_keys ?? {},
+    // A blank address is no address: the provider's own default stands.
+    endpoints: Object.fromEntries(Object.entries(parsed.endpoints ?? {}).filter(([, url]) => String(url ?? '').trim())),
+  };
 }
 
 /**
@@ -240,8 +249,8 @@ export async function aiSetting(cwd = process.cwd(), env: Env = process.env): Pr
 }
 
 /**
- * The tool servers this machine has configured, from the first settings file
- * that exists -- the same file the key comes from, found the same way.
+ * The tool servers this machine has configured, from the settings file in
+ * use -- the same file the key comes from, found the same way.
  *
  * This is the only source there is, and that is the point of it. A graph names
  * a tool server; what the name *starts* is written here, by whoever owns the
@@ -259,19 +268,15 @@ export function configuredMcpServers(
   env: Record<string, string | undefined> = process.env,
   cwd = process.cwd(),
 ): Record<string, McpServerConfig> {
-  for (const path of candidatePaths(cwd, env)) {
-    if (!existsSync(path)) continue;
-    const listed = readSettingsFile(path).mcp_servers;
-    if (!listed || typeof listed !== 'object' || Array.isArray(listed)) return {};
+  const listed = readSettingsFile(settingsPath(cwd, env)).mcp_servers;
+  if (!listed || typeof listed !== 'object' || Array.isArray(listed)) return {};
 
-    const servers: Record<string, McpServerConfig> = {};
-    for (const [name, entry] of Object.entries(listed)) {
-      const { command, url } = (entry ?? {}) as { command?: unknown; url?: unknown };
-      if ((typeof command === 'string' && command) || (typeof url === 'string' && url)) servers[name] = entry;
-    }
-    return servers;
+  const servers: Record<string, McpServerConfig> = {};
+  for (const [name, entry] of Object.entries(listed)) {
+    const { command, url } = (entry ?? {}) as { command?: unknown; url?: unknown };
+    if ((typeof command === 'string' && command) || (typeof url === 'string' && url)) servers[name] = entry;
   }
-  return {};
+  return servers;
 }
 
 export { FILENAME as SETTINGS_FILENAME };
