@@ -1,12 +1,15 @@
-// What a graph carries when it is handed on: to a deployed tool, and to the
-// page a served tool draws.
+// What a graph carries when it leaves the person's project: to a deployed
+// tool, to the page a served tool draws, in a run the editor posts, in an
+// answer over MCP, and to a model asked to change the whole graph.
 //
 // A node keeps some things only for writing it: its history.md -- every
 // prompt and reply, with the start of the files its author gave ✨ -- the ✨
 // prompts it changed, and the files its ✨ Input and ✨ Output were given.
 // Nothing a run reads is among them. They stay with the project, where they
 // are the node's own record; a bundle's graph.json carried up to half a
-// megabyte of them per node, to whoever it was handed.
+// megabyte of them per node, to whoever it was handed. What comes back from
+// a change of the whole graph takes them from the graph that was sent
+// (`generateGraph`), so leaving them out loses none of them.
 
 import type { Graph } from '../graph.ts';
 import type { Runners } from '../elements/NodeRunner.ts';

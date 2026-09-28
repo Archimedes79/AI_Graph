@@ -36,7 +36,10 @@ import { definitionExample, misfits, textOutput, type Definitions } from '../../
 import { filePorts } from '../../execution/fileInputs.ts';
 import { runsPerItem } from '../../execution/batching.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
-import type { GraphNode } from '../../graph.ts';
+import { parseGraph, type Graph, type GraphNode } from '../../graph.ts';
+import { registry } from '../../elements/registry.ts';
+import { AUTHORING_KEYS, withoutAuthoring } from '../../authoring/handedOn.ts';
+import { exchangeEntry, withExchange } from '../../authoring/history.ts';
 import { renderSkeleton } from './skeleton.ts';
 import { BUDGET, clip, shown, variables } from './brief.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
@@ -588,17 +591,17 @@ export class GenerationFailed extends Error {
 
 // The system prompt lives in graphPrompt.ts: it is prose, and it is long.
 
-type Graph = import('../../graph.ts').Graph;
-
 /**
  * What a change to *current* is asked with: the graph as the document the
  * model writes, and the whole document back. Asked for a patch, a model makes
  * up a format of its own; asked for the document it knows, it keeps what it
- * was shown.
+ * was shown. Shown what runs, not how each node was written
+ * (`withoutAuthoring`): a node's history is up to half a megabyte of earlier
+ * prompts, and none of it is the model's to change.
  */
 function changePrompt(current: Graph, description: string): string {
   return [
-    `This is the graph as it is now:\n\`\`\`json\n${JSON.stringify(current, null, 2)}\n\`\`\``,
+    `This is the graph as it is now:\n\`\`\`json\n${JSON.stringify(withoutAuthoring(current), null, 2)}\n\`\`\``,
     `Change it as follows:\n${description}`,
     'Answer with the whole graph after the change, as one complete document of the same shape. Keep every '
       + 'node\'s id, and keep everything the change does not touch -- nodes, wires, positions, labels, settings, '
@@ -606,26 +609,68 @@ function changePrompt(current: Graph, description: string): string {
   ].join('\n\n');
 }
 
+/** A value as JSON with every object's keys in one order: two that say the same compare equal. */
+const canonical = (value: unknown): string => JSON.stringify(value, (_key, item: unknown) => (
+  item && typeof item === 'object' && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+    : item));
+
+/** What a node says and holds, as a change could touch it: not where it stands, and not what only writing it needs. */
+function said(node: unknown): string {
+  try {
+    const [parsed] = parseGraph({ nodes: [node], edges: [] }).nodes;
+    const config = { ...parsed.config } as Record<string, unknown>;
+    for (const key of AUTHORING_KEYS) delete config[key];
+    return canonical([parsed.node_type, parsed.label, parsed.description, parsed.inputs, parsed.outputs, config]);
+  } catch {
+    // Not a node the route could read either: said once, where the document is parsed.
+    return '';
+  }
+}
+
 /**
  * *answer* with what it left out of *current* put back: the graph's name and
  * scheme, where each node it kept stands, and the size a page was drawn at.
  * Left out, each fell to its default -- a change to one node renamed the tool
  * and moved every node into the corner.
+ *
+ * And what only writing a node needs (`AUTHORING_KEYS`, its history above all)
+ * is the project's, never the answer's: the model was not shown it, so each
+ * node kept has its own back -- in the graphs nodes hold too -- and what the
+ * answer says there is dropped. A node the change touched -- new, or different
+ * in what it says or holds -- gets *entry* at the end of its history, as after
+ * every ✨.
  */
-function keptFrom(current: Graph, answer: unknown): unknown {
+function keptFrom(current: Graph, answer: unknown, entry: string): unknown {
   if (!answer || typeof answer !== 'object') return answer;
   const document = answer as { metadata?: object; nodes?: unknown };
   const before = new Map(current.nodes.map((node) => [node.id, node]));
   const nodes = Array.isArray(document.nodes)
-    ? document.nodes.map((node: Record<string, unknown>) => {
-      const was = node && typeof node === 'object' ? before.get(String(node.id)) : undefined;
-      if (!was) return node;
-      const kept = { ...node };
-      for (const key of ['position', 'width', 'height'] as const) if (kept[key] === undefined) kept[key] = was[key];
-      return kept;
-    })
+    ? document.nodes.map((node: unknown) => keptNode(node && typeof node === 'object' ? before.get(String((node as { id?: unknown }).id)) : undefined, node, entry))
     : document.nodes;
   return { ...document, metadata: { ...current.metadata, ...(document.metadata ?? {}) }, nodes };
+}
+
+/** One node of an answer, as `keptFrom` hands it on: *was* is the node of that id in the graph that was sent. */
+function keptNode(was: GraphNode | undefined, given: unknown, entry: string): unknown {
+  if (!given || typeof given !== 'object') return given;
+  const node = { ...given } as Record<string, unknown> & GraphNode;
+  const config = { ...(node.config && typeof node.config === 'object' ? node.config : {}) } as Record<string, unknown>;
+  for (const key of AUTHORING_KEYS) delete config[key];
+  if (was) {
+    for (const key of ['position', 'width', 'height'] as const) if (node[key] === undefined) (node as Record<string, unknown>)[key] = was[key];
+    for (const key of AUTHORING_KEYS) if (was.config[key] !== undefined) config[key] = was.config[key];
+  }
+  node.config = config as GraphNode['config'];
+  const element = registry.node(String(node.node_type));
+  const inside = element?.nestedGraph(node);
+  if (element && inside) {
+    const before = (was && registry.node(was.node_type)?.nestedGraph(was)) || parseGraph({ nodes: [], edges: [] });
+    element.setNestedGraph(node, parseGraph(keptFrom(before, inside, entry)));
+  }
+  const keepsHistory = !!element?.texts(node).some((text) => text.field === 'history');
+  if (keepsHistory && (!was || said(was) !== said(node))) config.history = withExchange(String(config.history ?? ''), entry);
+  return node;
 }
 
 /**
@@ -657,7 +702,7 @@ export async function generateGraph(
     throw new GenerationFailed('Could not parse a Graph DSL JSON document from the AI response', calls);
   }
   return {
-    graph: current ? keptFrom(current, graph) : graph,
+    graph: current ? keptFrom(current, graph, exchangeEntry(`Change of the graph: ${description}`, calls, new Date())) : graph,
     explanation: fenced ? raw.slice(fenced.index + fenced[0].length).trim() : '',
     calls,
   };

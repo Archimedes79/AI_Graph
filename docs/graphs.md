@@ -753,7 +753,11 @@ the one showing the page.
 against the Graph schema. Sent the graph there is as well (`graph`), it hands that graph
 back changed as described instead: every node's id is kept, and so is whatever the change
 does not touch -- what the answer leaves out of the graph's name and scheme, where a node
-stands and how big the page was drawn is taken from the graph that was sent. Use it
+stands and how big the page was drawn is taken from the graph that was sent. The model is
+shown what runs, not how each node was written: each node's history.md, its ✨ prompts and
+the files ✨ was given come back from the graph that was sent, never from the answer, and a
+node the change touched gets the exchange at the end of its history, as after every ✨.
+The MCP server's `generate_graph` does the same with the `path` of a saved graph. Use it
 standalone (e.g. from a script or CI) without touching the editor at all, or:
 
 - **File ▸ ✨ AI Graph…** designs a new graph from a description, which replaces the one

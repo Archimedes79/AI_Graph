@@ -408,4 +408,53 @@ describe('a whole graph, changed as said', () => {
     expect(ai.asked[0].prompt).toBe('Design a graph that does the following:\nCount the words of a text.');
     expect(parseGraph(reply.graph).metadata).toMatchObject({ name: 'My tool', gui_scheme: 'office' });
   });
+
+  it('is not sent how each node was written, and loses none of it: a kept node\'s history comes back from the graph that was sent', async () => {
+    const written = parseGraph({
+      metadata: { name: 'Words' },
+      nodes: [
+        { id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words.', config: {
+          code: 'function run() { return {}; }', prompts: { body: 'Mine.' },
+          history: '## 2026-09-27 10:00 · ✨ Code\n\nPrompt:\n\n```\nIBAN DE00 1234\n```',
+        } },
+        { id: 'say', node_type: 'ai', label: 'Say', description: 'Says the count.', config: {
+          prompt: 'Say it.', history: '## 2026-09-27 11:00 · ✨ Prompt\n\nNothing was sent.',
+        } },
+      ],
+      edges: [],
+    });
+    // "say" changed, "note" new -- and a history the model made up for "count", which is not the node's.
+    const answer = {
+      nodes: [
+        { id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words.', config: { code: 'function run() { return {}; }', history: 'made up' } },
+        { id: 'say', node_type: 'ai', label: 'Say', description: 'Says the count kindly.', config: { prompt: 'Say it kindly.' } },
+        { id: 'note', node_type: 'data', label: 'Note', description: 'Keeps a note.', config: { data_format: 'text', data_value: 'hi' } },
+      ],
+      edges: [],
+    };
+    const ai = scripted([`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``]);
+    const reply = await generateGraph('Say it kindly, and keep a note.', { ai, target }, written);
+    expect(ai.asked[0].prompt).not.toMatch(/IBAN|Mine\.|✨ Prompt/);
+    const [count, say, note] = parseGraph(reply.graph).nodes;
+    // Kept and untouched: its history and its ✨ prompts, as they were sent.
+    expect(count.config).toMatchObject({ history: written.nodes[0].config.history, prompts: { body: 'Mine.' } });
+    // Touched: the exchange at the end of its history, as after every ✨; new: its history begins with it.
+    const exchange = /## \d{4}-\d\d-\d\d \d\d:\d\d · Change of the graph: Say it kindly, and keep a note\.\n\n### Sent to test m\n\nSystem:/;
+    expect(String(say.config.history)).toMatch(new RegExp(`^## 2026-09-27 11:00 · ✨ Prompt\\n\\nNothing was sent\\.\\n\\n${exchange.source}`));
+    expect(String(note.config.history)).toMatch(new RegExp(`^${exchange.source}`));
+  });
+
+  it('keeps the history of the nodes inside a node that holds a graph', async () => {
+    const inner = (config: Record<string, unknown>) => ({
+      metadata: { name: 'inside' }, edges: [],
+      nodes: [{ id: 'count', node_type: 'code', label: 'Count', description: 'Counts the words.', config: { code: 'x', ...config } }],
+    });
+    const sent = parseGraph({ metadata: { name: 'Outer' }, nodes: [{ id: 'part', node_type: 'subgraph', label: 'Part', config: { subgraph: inner({ history: 'the history inside' }) } }], edges: [] });
+    const answer = { nodes: [{ id: 'part', node_type: 'subgraph', label: 'Part, renamed', config: { subgraph: inner({}) } }], edges: [] };
+    const ai = scripted([`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``]);
+    const reply = await generateGraph('Rename the part.', { ai, target }, sent);
+    expect(ai.asked[0].prompt).not.toContain('the history inside');
+    const [part] = parseGraph(reply.graph).nodes;
+    expect(registry.node('subgraph')!.nestedGraph(part)!.nodes[0].config.history).toBe('the history inside');
+  });
 });
