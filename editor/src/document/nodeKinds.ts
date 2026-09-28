@@ -109,7 +109,7 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
       inputs: [{ id: 'input', name: 'Input', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }],
       // No description on the output: "one result per item" was true only while
       // "Run once per item" was ticked, and ✨ is told that by the brief itself.
-      outputs: [{ id: 'output', name: 'Output batch', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
+      outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'any', multi: true, required: false, description: '' }],
       // No code: its code.js is the stub until ✨ Code writes it from the text.
       config: { ...baseNodeConfig(), batch_mode: 'per_item' },
     }),

@@ -52,9 +52,10 @@ describe('a node\'s card', () => {
     expect(handles).toHaveLength(4);
     expect(html).toMatch(/title="Words not to count"/);
     expect(html).toMatch(/group-hover:opacity-100"[^>]*>Stop words</);
-    // A list says so: a ring rather than a dot, and ∞ by its name.
-    expect(html).toMatch(/title="[^"]*\(a list\)"/);
-    expect(html).toMatch(/group-hover:opacity-100"[^>]*>[^<]* ∞</);
+    // A list says so: a ring rather than a dot, and ∞ by its name. A new code
+    // node's output is called what an ai node's is: "Output".
+    expect(html).toContain('title="Output (a list)"');
+    expect(html).toMatch(/group-hover:opacity-100"[^>]*>Output ∞</);
     // Spread down the edge: two inputs at a third and two thirds.
     expect(html).toContain('top:33.33');
     expect(html).toContain('top:66.66');
