@@ -19,7 +19,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_SETTINGS, settingsFromEnv, type ProviderSettings } from './providers.ts';
 import type { McpServerConfig } from './mcp.ts';
@@ -40,14 +40,25 @@ export function candidatePaths(
   env: Record<string, string | undefined> = process.env,
 ): string[] {
   if (env.AI_GRAPH_SETTINGS) return [env.AI_GRAPH_SETTINGS];
-  const beside = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..');
   return [...new Set([
     join(cwd, FILENAME),
     // Beside the bundle, which is the deployed equivalent of a config file:
     // a recipient drops one next to `run.sh` and never sets a variable.
-    join(beside, FILENAME),
+    join(installFolder(), FILENAME),
     join(homedir(), '.ai-graph', 'settings.json'),
   ])];
+}
+
+/**
+ * The folder the engine came in, with its launchers: the one holding
+ * `engine/` -- a checkout, the downloadable package, a bundle. Found by name,
+ * not counted: a bundle keeps `engine/src`'s files in `engine/` itself, and
+ * four folders up from here was the folder above the bundle.
+ */
+function installFolder(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  while (basename(dir) !== 'engine' && dirname(dir) !== dir) dir = dirname(dir);
+  return dirname(dir);
 }
 
 export interface SettingsFile {

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parseGraph } from '../graph.ts';
 import { loadGraph } from '../project/folder.ts';
 import { registry } from '../elements/registry.ts';
@@ -89,6 +90,28 @@ describe('a bundle', () => {
       expect(JSON.parse(out).status).toBe('success');
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it('looks for its AI settings beside run.sh, where a recipient drops them, from wherever it is started', async () => {
+    // The bundle's own copy is asked: it keeps engine/src's files in engine/ itself.
+    const dir = await bundleOf(MINIMAL);
+    const elsewhere = await mkdtemp(join(tmpdir(), 'ai-graph-elsewhere-'));
+    try {
+      const settings = pathToFileURL(join(dir, 'engine', 'ai', 'settings.ts')).href;
+      const asked = `const { candidatePaths } = await import(${JSON.stringify(settings)}); process.stdout.write(JSON.stringify(candidatePaths(${JSON.stringify(elsewhere)}, {})));`;
+      const looked = await new Promise<string[]>((answered, failed) => {
+        let out = '';
+        const child = spawn(process.execPath, ['--input-type=module', '-e', asked], { windowsHide: true, stdio: ['ignore', 'pipe', 'inherit'] });
+        child.stdout.on('data', (chunk) => { out += chunk; });
+        child.on('error', failed);
+        child.on('close', () => answered(JSON.parse(out) as string[]));
+      });
+      expect(looked).toContain(join(dir, 'ai-settings.json'));
+      expect(looked).not.toContain(join(dir, '..', 'ai-settings.json'));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+      await rm(elsewhere, { recursive: true, force: true });
     }
   }, 120_000);
 
