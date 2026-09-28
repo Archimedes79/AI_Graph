@@ -20,6 +20,14 @@ async function sandbox() {
   return dir;
 }
 
+describe('what opens a node file without VS Code', () => {
+  it('is a text editor, never the system\'s "open": on Windows that runs a .js with Windows Script Host', async () => {
+    const { textEditorFor } = await import('./files.ts');
+    expect(textEditorFor('C:\\p\\nodes\\count\\code.js', 'win32')).toEqual({ command: 'notepad.exe', args: ['C:\\p\\nodes\\count\\code.js'] });
+    expect(textEditorFor('/p/nodes/count/code.js', 'darwin')).toEqual({ command: 'open', args: ['-t', '/p/nodes/count/code.js'] });
+  });
+});
+
 describe('openExternal', () => {
   // Only the refusals are tested: the acceptance starts a program on whatever
   // machine runs the suite, and a test that opens an editor window is one

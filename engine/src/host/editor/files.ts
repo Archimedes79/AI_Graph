@@ -83,11 +83,20 @@ export function fileSearch(root = process.cwd()): string {
 
 export class NotOpenable extends Error {}
 
+/** What a node keeps its writing in: input.js, code.js, prompt.md, data.json, data.txt, history.md. Nothing else is ever handed to another program. */
+const OPENABLE = new Set(['.js', '.md', '.json', '.txt']);
+
 /**
- * What a project keeps writing in, and the text an example reads: nothing a
- * system would run when it is "opened". Nothing else is ever handed to another program.
+ * What opens *path* when VS Code is not there: a text editor, never the
+ * system's "open" -- which on Windows runs a .js with Windows Script Host,
+ * outside every sandbox. Notepad is on every Windows; a Mac opens its default
+ * text editor with `open -t`; elsewhere the desktop's opener decides.
  */
-const OPENABLE = new Set(['.js', '.md', '.json', '.txt', '.csv', '.tsv', '.jsonl', '.xml', '.yaml', '.yml', '.log']);
+export function textEditorFor(path: string, system: string = platform()): { command: string; args: string[] } {
+  if (system === 'win32') return { command: 'notepad.exe', args: [path] };
+  if (system === 'darwin') return { command: 'open', args: ['-t', path] };
+  return { command: 'xdg-open', args: [path] };
+}
 
 /**
  * Open one of a graph's node files in the editor the person actually works in.
@@ -101,7 +110,7 @@ const OPENABLE = new Set(['.js', '.md', '.json', '.txt', '.csv', '.tsv', '.jsonl
  * must be an existing text file (`OPENABLE`) inside the project's `nodes/` folder,
  * so a page cannot use it to launch an arbitrary file. VS Code is tried first, by
  * its `code` command, since that is where a `.js` with a JSDoc header is most
- * useful; anything else falls to whatever the system opens that file type with.
+ * useful; without it, a text editor (`textEditorFor`).
  */
 export async function openExternal(nodesDir: string, relative: string): Promise<{ path: string; with: string }> {
   const root = resolve(nodesDir);
@@ -136,8 +145,7 @@ export async function openExternal(nodesDir: string, relative: string): Promise<
   if (await start(windows ? `code -g "${path}"` : 'code', windows ? [] : ['-g', path], windows)) {
     return { path, with: 'VS Code' };
   }
-  const opener = windows ? ['cmd', ['/c', 'start', '', path]] as const
-    : platform() === 'darwin' ? ['open', [path]] as const : ['xdg-open', [path]] as const;
-  if (await start(opener[0], [...opener[1]], false)) return { path, with: 'the system default' };
+  const editor = textEditorFor(path);
+  if (await start(editor.command, editor.args, false)) return { path, with: windows ? 'Notepad' : 'a text editor' };
   throw new NotOpenable(`Nothing on this machine could open ${path}.`);
 }
