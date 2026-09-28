@@ -370,8 +370,12 @@ describe('a whole graph', () => {
     expect(reply.explanation).toBe('Done.');
   });
 
-  it('fails, with the transcript, when there is no document to parse', async () => {
-    await expect(generateGraph('x', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
+  it('fails, with the transcript and a sentence for a person, when there is no whole document to parse -- an answer cut off', async () => {
+    const failure = await generateGraph('x', { ai: scripted(['```json\n{"nodes": [{"id": "a", "config": {"history": "## 2026']), target })
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(GenerationFailed);
+    expect((failure as GenerationFailed).message).toBe('The model\'s answer was not a whole graph -- it may have been cut off. Try again, or ask for less at once.');
+    expect((failure as GenerationFailed).calls).toHaveLength(1);
   });
 });
 
