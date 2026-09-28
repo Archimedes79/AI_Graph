@@ -176,12 +176,26 @@ export function definitionShape(text: string): Schema | undefined {
 }
 
 /**
+ * Why the output definition *text* cannot be held to -- its example cannot be
+ * read -- as the sentence ▶ Try, `test` and ✨ say; undefined where it can, or
+ * where there is none.
+ */
+export function unreadableOutput(text: string): string | undefined {
+  if (!text.trim()) return undefined;
+  const read = definitionExample(text);
+  return 'problem' in read ? `output.js cannot be read: ${read.problem}` : undefined;
+}
+
+/**
  * Where *outputs* -- what one call returned -- do not fit the output
  * definition *text*, as sentences naming the place: a key it names that is
- * missing, a value of another shape. Empty when they fit, and when the
- * definition cannot be read (`check` says so, once, and not at every try).
+ * missing, a value of another shape. Empty when they fit, or there is no
+ * definition. One that cannot be read fits nothing, and says why
+ * (`unreadableOutput`): held to a file nobody could read, a try said "✓ fits".
  */
 export function misfits(outputs: Record<string, unknown>, text: string): string[] {
+  const unreadable = unreadableOutput(text);
+  if (unreadable) return [unreadable];
   const shape = definitionShape(text);
   return shape ? mismatches(outputs, shape) : [];
 }

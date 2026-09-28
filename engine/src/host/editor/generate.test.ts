@@ -102,6 +102,13 @@ describe('code', () => {
     expect(reply.result).toContain('"two"');
   }, 30_000);
 
+  it('is not said to fit an output.js that cannot be read -- and is not "repaired" for it: the code cannot mend the file', async () => {
+    const ai = scripted([js('function run(i) { return { lines: i.text.split("\\n").length }; }')]);
+    const reply = await generate({ node: node('code', { input_definition: INPUT, output_definition: 'module.exports = { "lines": 2, };' }) }, deps(ai, nodeCode));
+    expect(reply.probe).toMatchObject({ status: 'failed', error: '', problems: [expect.stringMatching(/^output\.js cannot be read: /)] });
+    expect(ai.asked).toHaveLength(1);
+  }, 30_000);
+
   it('leaves the error port to the executor: a body is neither asked for it nor held to it', async () => {
     const ai = scripted([js('function run(i) { return { lines: 2 }; }')]);
     const reply = await generate({ node: node('code', { input_definition: INPUT, catch_errors: true }, { outputs: ['lines', 'error'] }) }, deps(ai, nodeCode));

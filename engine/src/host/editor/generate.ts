@@ -32,7 +32,7 @@ import { runBody } from '../../elements/body.ts';
 import { PLAIN_ASK } from '../../elements/nodes/ai/ask.ts';
 import type { Generation } from '../../authoring/generation.ts';
 import { STANDARD_PROMPTS, fillPrompt, type PromptKind } from '../../authoring/prompts.ts';
-import { definitionExample, misfits, textOutput, type Definitions } from '../../authoring/definition.ts';
+import { definitionExample, misfits, textOutput, unreadableOutput, type Definitions } from '../../authoring/definition.ts';
 import { filePorts } from '../../execution/fileInputs.ts';
 import { runsPerItem } from '../../execution/batching.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
@@ -396,6 +396,8 @@ async function writeVerifiedCode(
   const sample = exampleOf(shape);
   if (!sample) return { ...first, probe: notProbed() };
   const output = shape.definitions?.output ?? '';
+  // An output.js that cannot be read is nothing a repair of the code mends: it is said, not repaired.
+  const unreadable = unreadableOutput(output);
 
   /** Run it, then ask: did it run, did it return every output, does it fit output.js. */
   const verdict = async (body: string) => {
@@ -404,12 +406,13 @@ async function writeVerifiedCode(
     const problems = ran.result
       ? [...missing.map((port) => `it returns no "${port}"`), ...misfits(ran.result, output).filter((line) => !missing.some((port) => line === `output "${port}" is missing`))]
       : [];
-    // How far it got: not at all, with its keys wrong, or all the way.
-    const reached = !ran.result ? 0 : problems.length ? 1 : 2;
+    // How far it got: not at all, with its keys wrong, or all the way -- as far as the code can take it.
+    const reached = !ran.result ? 0 : problems.some((line) => line !== unreadable) ? 1 : 2;
     return { ...ran, problems, reached };
   };
+  /** The report: *status* where nothing is left to say -- all the way, and output.js read -- else failed. */
   const reportOf = (found: Awaited<ReturnType<typeof verdict>>, status: ProbeReport['status']): ProbeReport => (
-    { status, error: found.error, problems: found.problems }
+    { status: found.problems.length ? 'failed' : status, error: found.error, problems: found.problems }
   );
 
   const attempt = await verdict(first.text);

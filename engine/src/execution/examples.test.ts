@@ -54,6 +54,12 @@ describe('a node\'s example', () => {
       .toEqual({ status: 'pass', details: [], outputs: { lines: 3 }, held: false });
   });
 
+  it('is held to nothing where its output.js cannot be read -- and fails, saying why, rather than "fits"', async () => {
+    const run = await runExample(counter({ input_definition: INPUT, output_definition: 'module.exports = { "lines": 3, };' }), 'count', { runtime: running, registry });
+    expect(run).toMatchObject({ status: 'fail', outputs: { lines: 3 }, held: false });
+    expect(run.details).toEqual([expect.stringMatching(/^output\.js cannot be read: its example after module\.exports is not plain JSON/)]);
+  });
+
   it('says what to do where there is nothing to try it on, or it cannot be read', async () => {
     expect((await runExample(counter({}), 'count', { runtime: running, registry })).details)
       .toEqual(['It has no input.js, so there is nothing to try it on: write one with ✨ Input.']);

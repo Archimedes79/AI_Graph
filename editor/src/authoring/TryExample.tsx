@@ -56,6 +56,19 @@ export function useTryExample(node: GraphNode, graph: () => Graph): { tried: Tri
   return { tried: held?.of === now ? held.tried : null, running, start };
 }
 
+/**
+ * What a try came to, in one line: ✓ only where it was held to an output.js
+ * and fits it. A failure held to none is one whose output.js cannot be read --
+ * its details say why -- and ✨ Output writes it again.
+ */
+export function triedLine(run: ExampleRun): string {
+  if (run.status === 'pass') return run.held ? '✓ fits output.js' : 'It runs. There is no output.js yet to hold it to.';
+  if (run.status === 'fail') {
+    return run.held ? `✗ Does not fit output.js: ${run.details.join('; ')}` : `✗ ${run.details.join('; ')}. ✨ Output writes it again.`;
+  }
+  return run.status === 'skipped' ? run.details.join(' ') : `It failed: ${run.details.join('\n')}`;
+}
+
 const clip = (text: string, limit = 1500) => (text.length > limit ? `${text.slice(0, limit)}\n… ${text.length - limit} more characters` : text);
 const asText = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? '');
 
@@ -109,10 +122,7 @@ export default function TryExample({ tried, running, onTry, whyNot, busy, onFix 
       ))}
       {run && (
         <p className="text-xs whitespace-pre-wrap" style={{ color: run.status === 'pass' ? SUCCESS : run.status === 'skipped' ? DIMMER : DANGER_TEXT }}>
-          {run.status === 'pass' ? (run.held ? '✓ fits output.js' : 'It runs. There is no output.js yet to hold it to.')
-            : run.status === 'fail' ? `✗ Does not fit output.js: ${run.details.join('; ')}`
-              : run.status === 'skipped' ? run.details.join(' ')
-                : `It failed: ${run.details.join('\n')}`}
+          {triedLine(run)}
         </p>
       )}
     </div>

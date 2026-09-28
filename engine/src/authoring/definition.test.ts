@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { definitionExample, definitionKeys, definitionShape, misfits, textOutput } from './definition.ts';
+import { definitionExample, definitionKeys, definitionShape, misfits, textOutput, unreadableOutput } from './definition.ts';
 
 const INPUT = `/**
  * @typedef {Object} Input
@@ -69,8 +69,13 @@ describe('what one call returned, held to an output definition', () => {
     expect(misfits({ figure: 3 }, OUTPUT)).toEqual(['output "figure" is a number; output.js says an object']);
   });
 
-  it('holds nothing to a definition that cannot be read: check says that, once', () => {
-    expect(misfits({}, 'module.exports = { figure };')).toEqual([]);
+  it('fits nothing to a definition that cannot be read, and says why; holds nothing to none', () => {
+    expect(misfits({ figure: {} }, 'module.exports = { "figure": {}, };')).toEqual([
+      expect.stringMatching(/^output\.js cannot be read: its example after module\.exports is not plain JSON .*no trailing commas$/),
+    ]);
+    expect(unreadableOutput('module.exports = { figure };')).toMatch(/^output\.js cannot be read: /);
+    expect(unreadableOutput(OUTPUT)).toBeUndefined();
     expect(misfits({}, '')).toEqual([]);
+    expect(unreadableOutput('')).toBeUndefined();
   });
 });

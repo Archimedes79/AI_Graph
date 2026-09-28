@@ -12,24 +12,32 @@
 import type { Graph } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
-import { definitionExample, misfits } from '../authoring/definition.ts';
+import { definitionExample, misfits, unreadableOutput } from '../authoring/definition.ts';
 import { callNode } from './executor.ts';
 
 /** How one node did on its example. */
 export interface ExampleRun {
   /**
    * `pass`: it ran and what came out fits its output.js (or it has none to
-   * fit); `fail`: it ran and does not fit; `error`: it could not be run, or
-   * failed; `skipped`: it asks a model and none was to be asked.
+   * fit); `fail`: it ran and does not fit -- or its output.js cannot be read;
+   * `error`: it could not be run, or failed; `skipped`: it asks a model and
+   * none was to be asked.
    */
   status: 'pass' | 'fail' | 'error' | 'skipped';
   /** Where it does not fit its output.js, or why it did not run. */
   details: string[];
   /** What one call returned. */
   outputs?: Record<string, unknown>;
-  /** Whether it was held to an output.js at all: a node without one only has to run. */
+  /**
+   * Whether it was held to an output.js: a node without one only has to run,
+   * and one whose output.js cannot be read is held to nothing -- it fails, and
+   * its details say why.
+   */
   held: boolean;
 }
+
+/** Whether an output definition is one a call can be held to: written, and readable. */
+const holds = (output: string): boolean => !!output.trim() && !unreadableOutput(output);
 
 /**
  * Run *nodeId* once on the example in its input.js -- on nothing, for a node
@@ -49,7 +57,7 @@ export async function runExample(
   if (!node || !element || !definitions) {
     return { status: 'error', details: [node ? 'It has no example: only a code or an ai node has an input.js.' : `No node "${nodeId}".`], held: false };
   }
-  const held = !!definitions.output.trim();
+  const held = holds(definitions.output);
   let inputs: Record<string, unknown> = {};
   if (definitions.input.trim()) {
     const read = definitionExample(definitions.input);
@@ -63,7 +71,7 @@ export async function runExample(
   }
   const ran = await callNode(graph, nodeId, inputs, { runtime: options.runtime, registry: options.registry });
   if (ran.status === 'error') return { status: 'error', details: [ran.error ?? 'It failed.'], outputs: ran.outputs, held };
-  const details = held ? misfits(ran.outputs, definitions.output) : [];
+  const details = misfits(ran.outputs, definitions.output);
   // A caught failure is on its error port, not in what it returns: it did not run through.
   if (ran.error) details.unshift(ran.error);
   return { status: details.length ? 'fail' : 'pass', details, outputs: ran.outputs, held };
@@ -104,7 +112,7 @@ export async function testGraph(
       const definitions = options.registry.node(node.node_type)?.definitions(node);
       const unwritten = !options.only && definitions && node.inputs.length && !definitions.input.trim();
       const result: ExampleRun = unwritten
-        ? { status: 'skipped', details: ['It has no input.js yet, so there is nothing to try it on: write one with ✨ Input.'], held: !!definitions.output.trim() }
+        ? { status: 'skipped', details: ['It has no input.js yet, so there is nothing to try it on: write one with ✨ Input.'], held: holds(definitions.output) }
         : await runExample(level, node.id, { runtime: options.runtime(), registry: options.registry, offline: options.offline });
       results.push({ inside, nodeId: node.id, result });
     }

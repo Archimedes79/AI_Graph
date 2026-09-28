@@ -276,7 +276,9 @@ points and a title saying what to choose).
 
 **▶ Try** runs this one node once, on the example in its input.js, as a run calls it --
 a model asked where it asks one -- and holds what comes out to output.js: **✓ fits
-output.js**, or where it does not. **✨ Fix** repairs the body from that. ✨ Code does the
+output.js**, or where it does not -- each output named once: *output "output" is a number;
+output.js says a list*. An output.js that cannot be read fits nothing: ▶ Try, `test` and
+✨ Code say *output.js cannot be read* and why. **✨ Fix** repairs the body from that. ✨ Code does the
 same by itself: what it writes is tried on the example, and sent back once to be repaired
 when it fails or does not fit. To change what a node does, say so in the bar under the
 canvas: its body is changed as said, with what the last try showed, and its text restated

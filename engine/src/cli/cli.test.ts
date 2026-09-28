@@ -112,6 +112,23 @@ describe('run-node', () => {
     }
   }, 30_000);
 
+  it('holds a node to no output.js that cannot be read: run-node and test fail, and say why, rather than "fits"', async () => {
+    const dir = await project({
+      input_definition: 'module.exports = { "csv": "name\\nAda\\nBo" };\n',
+      output_definition: 'module.exports = { "rows": 2, };\n',
+    });
+    try {
+      const alone = await printed(['run-node', dir, 'count']);
+      expect(alone.code).toBe(1);
+      expect(JSON.parse(alone.out)).toMatchObject({ status: 'fail', outputs: { rows: 2 }, held: false, details: [expect.stringMatching(/^output\.js cannot be read: /)] });
+      const tested = await printed(['test', dir]);
+      expect(tested.code).toBe(1);
+      expect(tested.out).toMatch(/^✗ .* count: is held to no output\.js\n {4}output\.js cannot be read: its example after module\.exports is not plain JSON/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it('runs a node of another kind -- one with no input.js -- on what the nodes feeding it produce', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
     await writeProject(dir, parseGraph({

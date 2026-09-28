@@ -365,7 +365,11 @@ async function runTests(argv: string[]): Promise<number> {
     const { tested, results } = await testGraph(await loadGraph(path), { runtime: () => nodeRuntime(), registry, offline, only });
     for (const { inside, nodeId, result } of results) {
       const mark = { pass: '✓', fail: '✗', error: '✗', skipped: '·' }[result.status];
-      const said = { skipped: ' (skipped)', pass: result.held ? ': fits its output.js' : ': runs', fail: ': does not fit its output.js', error: ': fails' }[result.status];
+      // A failure not held to its output.js is one whose output.js cannot be read: the line under it says why.
+      const said = {
+        skipped: ' (skipped)', pass: result.held ? ': fits its output.js' : ': runs',
+        fail: result.held ? ': does not fit its output.js' : ': is held to no output.js', error: ': fails',
+      }[result.status];
       process.stdout.write(`${mark} ${path} ${inside}${nodeId}${said}\n`);
       for (const line of result.details) process.stdout.write(`    ${line}\n`);
       if (result.status === 'fail' || result.status === 'error') failed += 1;
