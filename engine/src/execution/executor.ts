@@ -258,6 +258,8 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   const context = (nodeId: string): boolean => !!options.reuse && !!only
     && nodeId !== options.trigger?.node_id && !fired?.has(nodeId)
     && edges.some((e) => e.target_node_id === nodeId && e.target_port_id !== RUN_PORT && !feedback.has(e.id));
+  // Which model answers is part of what a node depends on (`reuse.ts`): asked once for the round.
+  const setting = options.reuse ? await runtime.ai.setting?.() : undefined;
 
   // Which event this round is. A run no event started counts every one as
   // having happened: that is what "run everything" means, and what lets a
@@ -407,7 +409,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
         const arrived = await readInputs(element, node, inputs, runtime, registry);
         // An event is a moment: `true` handed back from an earlier round would
         // open gates for a press that is over.
-        const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived);
+        const key = element.eventPorts(node).length ? undefined : options.reuse?.key(node, arrived, setting);
         const kept = key && context(nodeId) ? options.reuse!.get(key) : undefined;
         if (kept) {
           outputs.set(nodeId, kept);
@@ -488,7 +490,7 @@ function stoppable(runtime: Runtime, signal: AbortSignal | undefined): Runtime {
   const { tools } = runtime;
   return {
     ...runtime,
-    ai: { complete: (request) => runtime.ai.complete({ ...request, signal }) },
+    ai: { ...runtime.ai, complete: (request) => runtime.ai.complete({ ...request, signal }) },
     code: { run: (body, inputs, _signal, context) => runtime.code.run(body, inputs, signal, context) },
     ...(tools ? { tools: { open: (servers) => tools.open(servers, signal) } } : {}),
   };

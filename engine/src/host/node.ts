@@ -285,7 +285,7 @@ export function nodeRuntime(overrides: Partial<Runtime> = {}): Runtime {
     // the same answer the editor shows as "now: …", because it is the same
     // function. Asked per call, so a setting saved in ⚙ Settings while the
     // editor runs is the one the next call uses.
-    ai: { complete: async (request) => ai.complete({ ...request, ...lent(request, await aiSetting()) }) },
+    ai: { complete: async (request) => ai.complete({ ...request, ...lent(request, await aiSetting()) }), setting: () => aiSetting() },
     tools: mcpToolService(configuredMcpServers()),
     ...(Number(process.env.AI_GRAPH_MAX_LLM_CALLS) > 0 ? { llmCallsPerBody: Number(process.env.AI_GRAPH_MAX_LLM_CALLS) } : {}),
     ...overrides,

@@ -89,6 +89,11 @@ export interface AiRequest {
 
 export interface AiService {
   complete(request: AiRequest): Promise<string>;
+  /**
+   * The one AI setting as it stands: what answers a request that names no
+   * model of its own. Absent where nobody chooses one -- a test's model.
+   */
+  setting?(): Promise<ModelChoice>;
 }
 
 /** A provider and a model, as a request names them or a default supplies them. */
