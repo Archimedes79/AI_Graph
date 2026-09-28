@@ -66,17 +66,23 @@ export function entryOf(kind: WidgetKind, mode?: string): PaletteEntry | undefin
 }
 
 /**
- * The block an entry adds to a page whose blocks are called *taken*.
+ * The block an entry adds to a page that holds the blocks *taken*.
  *
  * A block with ports starts out named after what it is: its ports are named
  * after it, and "widget-1-1789753941087: message" is what an unnamed chat's
  * port was called. Whether a kind is named at all is its builder's answer.
+ * Beside a block of that name it is numbered, as a node is: two "Text output"
+ * rows on the page's card could not be told apart when wiring.
  */
-export function newBlock(kind: WidgetKind, mode: string | undefined, taken: string[]): GuiWidget {
+export function newBlock(kind: WidgetKind, mode: string | undefined, taken: GuiWidget[]): GuiWidget {
   const builder = WIDGET_BUILDERS[kind];
   const entry = entryOf(kind, mode) ?? builder.paletteEntries()[0];
   // Named for what it is, so its ports read as that: `plot_window_in`.
-  return { ...builder.create(builder.initialLabel(entry?.label ?? ''), mode), id: freeId(kind, taken) };
+  const named = builder.initialLabel(entry?.label ?? '');
+  const labels = new Set(taken.map((block) => block.label));
+  let label = named;
+  for (let n = 2; label && labels.has(label); n += 1) label = `${named} ${n}`;
+  return { ...builder.create(label, mode), id: freeId(kind, taken.map((block) => block.id)) };
 }
 
 const PALETTE = GROUPS.map((group) => ({

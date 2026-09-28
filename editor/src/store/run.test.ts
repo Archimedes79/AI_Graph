@@ -41,7 +41,9 @@ describe('what a run is sent', () => {
   it('is what runs: a node\'s history, up to half a megabyte, stays in the editor', async () => {
     store().addNode('code', { x: 0, y: 0 });
     const graph = store().exportGraph();
-    (graph.nodes[0].config as Record<string, unknown>).history = '## 2026-09-28 09:00 · ✨ Code\n\nNothing was sent.';
+    const config = graph.nodes[0].config as Record<string, unknown>;
+    config.history = '## 2026-09-28 09:00 · ✨ Code\n\nNothing was sent.';
+    config.batch_mode = 'per_item';
     const running = store().runGraph(graph);
     await polled();
     runs[0].finish({ status: 'success', outputs: {}, node_results: [] });

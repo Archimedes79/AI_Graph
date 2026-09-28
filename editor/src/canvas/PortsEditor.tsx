@@ -199,7 +199,7 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wholeOffered, wire
       </div>
       {problem && <p className="text-xs pl-1" style={{ color: DANGER_TEXT }}>{problem} It is kept as it was until the name is one it can keep.</p>}
       {/* What the node's kind says about the port when it makes it --
-          "What to ask. A list asks once per item." -- and ✨ is told. */}
+          "What to ask." -- and ✨ is told. */}
       {port.description?.trim() && (
         <p className="text-xs pl-1" style={{ color: DIMMER }}>{port.description.trim()}</p>
       )}

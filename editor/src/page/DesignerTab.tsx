@@ -37,7 +37,7 @@ export default function DesignerTab() {
 
   /** Add a block to the page, where it was asked for -- at the end by default. */
   const addWidget = (kind: WidgetKind, mode?: string, at?: number) => {
-    const widget = newBlock(kind, mode, widgets.map((taken) => taken.id));
+    const widget = newBlock(kind, mode, widgets);
     insertBlock(widget, at);
     setSelectedId(widget.id);
   };

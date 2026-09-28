@@ -79,7 +79,7 @@ const pageId = (): string => pageNow().page!.id;
  * designer's own steps (`newBlock`, `insertBlock`, then `patchBlock`).
  */
 function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<GuiWidget>): string {
-  const block = newBlock(kind, mode, pageNow().widgets.map((taken) => taken.id));
+  const block = newBlock(kind, mode, pageNow().widgets);
   insertBlock(block);
   patchBlock(block.id, settings);
   return block.id;
@@ -89,18 +89,15 @@ function addBlock(kind: WidgetKind, mode: string | undefined, settings: Partial<
  * Open a node's panel and do what it asks: its heading and its text, what
  * its inputs are called (its ports, under Advanced), a ✨ pressed for each of
  * its files -- *written*, what came back, written in as the panel writes it:
- * output.js names its outputs -- and "Run once per item", ticked or not, which
- * sets how the node runs and which inputs fan out and which outputs hand on a
- * list, together (`withPerItem`), for the lists that arrive. Port *types* no
- * panel sets, but a wire from a picker ticks "Read the file at this path".
- * *needed* ticks "needed" on those inputs (`PortsEditor`), which sets
- * `required` on the port.
+ * output.js names its outputs. Port *types* no panel sets, but a wire from a
+ * picker ticks "Read the file at this path". *needed* ticks "needed" on those
+ * inputs (`PortsEditor`), which sets `required` on the port.
  *
  * Done through the panel's own `nodePanel`: each change as its ports editor
  * and its fields make it, and written into the graph as it writes -- closed.
  */
 function edit(nodeId: string, changes: {
-  label: string; text: string; input?: string[]; written: Partial<Record<Write, string>>; perItem?: boolean; needed?: string[];
+  label: string; text: string; input?: string[]; written: Partial<Record<Write, string>>; needed?: string[];
 }): void {
   const panel = nodePanel(nodeId);
   // A row renamed in the ports editor; past the last row, one added with + and then named.
@@ -119,14 +116,23 @@ function edit(nodeId: string, changes: {
     if (!result) continue;
     panel.change((now) => writtenInto(now, write, { result, calls: [] }, writeName(now, write)), ONCE);
   }
-  if (changes.perItem !== undefined) {
-    const shown = panel.node()!;
-    const read = definitionExample(String(shown.config.input_definition ?? ''));
-    const lists = listPorts(shown, 'example' in read ? read.example : undefined, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
-    // The box is there only when a list arrives; a new code or ai node's input is declared one.
-    expect(lists.length).toBeGreaterThan(0);
-    panel.change((draft) => withPerItem(draft, changes.perItem!, lists));
-  }
+  panel.write();
+}
+
+/**
+ * Tick "Run once per item" in a node's panel, which sets how the node runs and
+ * which inputs fan out and which outputs hand on a list, together
+ * (`withPerItem`), for the lists that arrive. A new code or ai node runs once,
+ * on what arrives whole, and the box is there only once a list arrives: here
+ * down the wire from a folder, so it is ticked after that is drawn.
+ */
+function tickPerItem(nodeId: string): void {
+  const panel = nodePanel(nodeId);
+  const shown = panel.node()!;
+  const read = definitionExample(String(shown.config.input_definition ?? ''));
+  const lists = listPorts(shown, 'example' in read ? read.example : undefined, store().rfNodes.map((item) => item.data.graphNode), store().rfEdges);
+  expect(lists.length).toBeGreaterThan(0);
+  panel.change((draft) => withPerItem(draft, true, lists));
   panel.write();
 }
 
@@ -200,7 +206,7 @@ describe('population plotter: choose a CSV, see the chart', () => {
     const chart = drop('code', 560);
     edit(chart, {
       label: 'What to plot', text: exampleNode('population_plotter', 'chart').description, input: ['csv'],
-      written: writtenFor('population_plotter', 'chart'), perItem: false,
+      written: writtenFor('population_plotter', 'chart'),
     });
     wire(page, `${file}_out`, chart, 'csv');
     wire(chart, 'figure', page, `${plot}_in`);
@@ -230,9 +236,10 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
     const summarize = drop('ai', 560);
     edit(summarize, {
       label: 'Each file', text: exampleNode('folder_summaries', 'summarize').description, input: ['story'],
-      written: writtenFor('folder_summaries', 'summarize'), perItem: true,
+      written: writtenFor('folder_summaries', 'summarize'),
     });
     wire(page, `${folder}_out`, summarize, 'story');
+    tickPerItem(summarize);
     wire(summarize, 'output', page, `${summaries}_in`);
     return { graph: store().rootGraph(), page, folder, summaries };
   };
@@ -260,7 +267,7 @@ describe('chat: a page with a chat block, and a model', () => {
     const assistant = drop('ai', 560);
     edit(assistant, {
       label: 'Assistant', text: exampleNode('chat', 'assistant').description, input: ['history', 'message'],
-      written: writtenFor('chat', 'assistant'), perItem: false, needed: ['message'],
+      written: writtenFor('chat', 'assistant'), needed: ['message'],
     });
     wire(page, `${chat}_out`, assistant, 'message');
     wire(page, `${chat}_history`, assistant, 'history');

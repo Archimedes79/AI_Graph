@@ -235,19 +235,20 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
     expect(await run(useGraphStore.getState().exportGraph())).toEqual(await run(file));
   });
 
-  it('still starts a node made in the editor per item, and calls a new output "Result" -- which keys its value', () => {
+  it('starts a node made in the editor running once, and calls a new output "Result" -- which keys its value', () => {
     loadTestGraph([]);
     const code = useGraphStore.getState().addNode('code', { x: 0, y: 0 });
     const output = useGraphStore.getState().addNode('output', { x: 0, y: 0 });
     const saved = useGraphStore.getState().exportGraph().nodes;
-    expect(saved.find((node) => node.id === code)!.config.batch_mode).toBe('per_item');
+    // Once, on what arrives: the default, so its file says nothing of it.
+    expect(saved.find((node) => node.id === code)!.config).not.toHaveProperty('batch_mode');
     // The run's result, and nothing else: no window, no name beside its label.
     const made = saved.find((node) => node.id === output)!;
     expect(made.label).toBe('Result');
     expect(made.config).toEqual({});
   });
 
-  it('writes "once per item" only on the kinds that can run so', () => {
+  it('writes "once per item" on no new node: each runs once until "Run once per item" is ticked', () => {
     // It used to be saved on every node, and an output node writing to a file
     // then wrote each item of a list over the last.
     loadTestGraph([]);
@@ -255,7 +256,7 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
       .map((type) => [type, useGraphStore.getState().addNode(type, { x: 0, y: 0 })] as const);
     const saved = useGraphStore.getState().exportGraph().nodes;
     const perItem = ids.filter(([, id]) => 'batch_mode' in saved.find((node) => node.id === id)!.config).map(([type]) => type);
-    expect(perItem).toEqual(['ai', 'code']);
+    expect(perItem).toEqual([]);
   });
 
   it('labels each new output node its own way, as check asks', () => {

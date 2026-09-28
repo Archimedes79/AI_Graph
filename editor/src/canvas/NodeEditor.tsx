@@ -183,6 +183,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
                 generating={generate.busy}
                 message={generate.message}
                 onGenerate={handleGenerate}
+                onStop={generate.stop}
                 shell={shell}
               /></Suspense>}
 

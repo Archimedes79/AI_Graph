@@ -60,9 +60,21 @@ describe('"Run once per item"', () => {
     expect(listPorts(node, { input: 'one', words: 'two' })).toEqual([]);
     expect(listPorts(node, { input: ['one'], words: 'two' })).toEqual(['input']);
 
-    const source = NODE_KINDS.code.create('source');
+    // A node run once per item hands on the list of what its runs gave.
+    const source = withPerItem(NODE_KINDS.code.create('source'), true);
     expect(listPorts(node, undefined, [source, node], [
       { source: 'source', sourceHandle: 'output', target: 'worker', targetHandle: 'words' },
     ])).toEqual(['words']);
+  });
+
+  it('is not ticked on a new code or ai node: it runs once, on what arrives whole', () => {
+    // Made per item, a node split what it was handed: a chart block got a
+    // one-item list, and a sort sorted one item per call.
+    for (const kind of ['code', 'ai'] as const) {
+      const node = NODE_KINDS[kind].create('made');
+      expect(withPerItem(node, false)).toEqual(node);
+      expect(runsPerItem(node)).toBe(false);
+      expect(listPorts(node, undefined)).toEqual([]);
+    }
   });
 });

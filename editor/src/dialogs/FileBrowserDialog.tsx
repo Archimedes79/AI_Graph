@@ -42,6 +42,8 @@ export default function FileBrowserDialog({
   const [parent, setParent] = useState<string | null>(null);
   const [entries, setEntries] = useState<BrowseEntry[]>([]);
   const [roots, setRoots] = useState<string[]>([]);
+  // The folder shown is a project itself (`BrowsePage.project`).
+  const [inProject, setInProject] = useState(false);
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,7 @@ export default function FileBrowserDialog({
       setParent(data.parent);
       setEntries(data.entries);
       setRoots(data.roots);
+      setInProject(!!data.project);
       setSelected('');
     } catch (e) {
       setError(errorText(e, 'Could not read that directory.'));
@@ -83,15 +86,23 @@ export default function FileBrowserDialog({
     return dir.endsWith(sep) ? `${dir}${name}` : `${dir}${sep}${name}`;
   };
 
-  const confirmLabel = mode === 'directory' ? 'Use this folder' : mode === 'save' ? 'Save here' : 'Select';
+  // Opened inside a project with nothing selected, the project shown is what
+  // is chosen: "Select" stood there disabled, and said nothing of why.
+  const openShown = mode === 'file' && !!projects && inProject && !selected;
+  const confirmLabel = mode === 'directory' ? 'Use this folder' : mode === 'save' ? 'Save here' : openShown ? 'Open this project' : 'Select';
   const canConfirm =
-    mode === 'directory' ? !!path : mode === 'save' ? !!path && !!fileName.trim() : !!selected;
+    mode === 'directory' ? !!path : mode === 'save' ? !!path && !!fileName.trim() : !!selected || openShown;
+  const confirmTitle = !canConfirm
+    ? (mode === 'save' ? 'Give it a name first' : projects ? 'Select a graph file or a 📦 project first' : 'Select a file first')
+    : openShown ? `Open the project this folder is: ${path}`
+      : mode === 'directory' ? `Use ${path}` : mode === 'save' ? `Save as ${fileName.trim()} in ${path}` : `Choose ${selected}`;
 
   // Its Enter keys are its own and go no further: opened from "Before
   // running…", an Enter typed here to open a folder also started the run.
   const confirm = () => {
     if (mode === 'directory') return onPick(path);
     if (mode === 'save') return onPick(join(path, fileName.trim()));
+    if (openShown) return onPick(path);
     // A plain folder selected and confirmed is a folder to go into, not a choice.
     const entry = entries.find((candidate) => candidate.path === selected);
     if (entry?.is_dir && !isProject(entry)) return load(entry.path);
@@ -113,6 +124,7 @@ export default function FileBrowserDialog({
             style={{ ...PRIMARY_BUTTON, opacity: canConfirm ? 1 : 0.5 }}
             disabled={!canConfirm}
             onClick={confirm}
+            title={confirmTitle}
           >
             {confirmLabel}
           </button>

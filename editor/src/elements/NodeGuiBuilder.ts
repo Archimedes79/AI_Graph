@@ -51,6 +51,8 @@ export interface NodePanelProps {
    * ("Say what to change", ✨ Fix). Resolves to whether something was written.
    */
   onGenerate: (write: Write, refine?: Refine) => Promise<boolean>;
+  /** Stop the ✨ that is writing: nothing more is waited for, and what it still brings back is dropped. */
+  onStop?: () => void;
   /** What only the side panel has, for a panel of a node ✨ writes for. */
   shell?: {
     /** The graph on the canvas with this node as the side panel shows it: what ▶ Try is asked of is the edit. */

@@ -52,7 +52,9 @@ the file says, parsed when it is JSON).
 first line of what it should do, and after a run how it went; its ports are dots on its
 edges, named while the pointer is on the card. One click opens the node's panel on the
 right, with everything the node is; ✕, Esc or a click on the empty canvas close it, and a
-click on another node shows that one. The page's card opens the Page tab on a double click,
+click on another node shows that one. A node added from the palette -- clicked or dragged
+-- opens its panel at once and is brought into sight; a graph opened or started anew is
+shown whole. The page's card opens the Page tab on a double click,
 or from its panel. The bar under the canvas says what to change, on the node selected or
 on the whole graph ([below](#generating-whole-graphs-with-ai)).
 
@@ -252,9 +254,16 @@ save there comes back by itself; greyed, while the graph is not saved as a proje
 whole node:** the body's ✨ writes what is missing of input.js and output.js first, and
 stops at a definition that does not fit the node -- an example that names an input the
 node does not have, or leaves out an output wired on -- since what came after would be
-written against it. There is no Save and no Cancel: a change is in the graph a moment
-after it is made, one undo step per field typed into, and what ✨ writes is a step of its
-own.
+written against it. While it writes, what it sends shows as it goes, and **Stop** beside it
+ends the wait: what was written stays, what was still on its way is not written (a model
+call is given up by itself after ten minutes). There is no Save and no Cancel: a change is
+in the graph a moment after it is made, one undo step per field typed into, and what ✨
+writes is a step of its own.
+
+**A new node runs once**, on what arrives -- a list whole -- and hands on one value.
+**Run once per item**, under Advanced, is asked once a list arrives (down a wire, or in
+input.js's example): ticked, each item is a call of its own and each output hands on the
+list of what the calls gave.
 
 **The prompts.** Each ✨ is sent a prompt, in sight under its button: the standard one
 until you change it (Reset takes it back; the node keeps only the prompts that differ, in
@@ -332,8 +341,10 @@ decide what to ask, or ask in a loop; for one question, an AI node is the plaine
 
 ### A project is a folder
 
-Save a graph under a name — `my_tool` — and it becomes a folder. The flow is one file,
-and each node is a folder that says everything about that node:
+Save a graph under a name — `my_tool` — and it becomes a folder. (A new graph's Save
+opens the file browser in the folder the last graph was opened from or saved to -- at
+first the folder the server was started in -- with its name filled in.) The flow is one
+file, and each node is a folder that says everything about that node:
 
 ```
 my_tool/
@@ -491,8 +502,10 @@ it.
 ### Writing a file: two editors
 
 The box a file is shown in is a real editor (CodeMirror): syntax colours, line numbers,
-folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢** opens the same
-document across the whole window; Esc comes back.
+folding, bracket matching, search with Ctrl+F, undo and redo of its own (Ctrl+Z,
+Ctrl+Shift+Z or Ctrl+Y). In the panel Tab moves on to the next field and Esc leaves the
+panel open; **⤢** opens the same document across the whole window, where Tab indents, and
+Esc comes back.
 
 For longer work there is your own editor. In a project, a file's chip in the node's
 panel saves the project and opens the file — in VS Code when its `code` command is
@@ -636,7 +649,8 @@ always reflect exactly what its blocks are capable of.**
 
 Each block's ports are named `<id>_in` / `<id>_out`, so a block's `id` must stay stable
 once assigned — that's the only thing keeping existing edges attached across edits of
-the page.
+the page. A new block is called what it is, and numbered beside another of that name
+("Text output 2"), as nodes are: its name is what its row on the page's card says.
 
 Every block has a *tone* (plain, raised, sunken, accent) drawn from the page's scheme,
 and on top of that its own frame toggle and background colour — set in the block's
@@ -728,7 +742,8 @@ block lays it out at the size it really is, in the colours of the page:
 
 A bare list of numbers or of `{label, value}` is the same thing with the two decisions
 left out. Axes, gridlines, category and value labels, a legend and the total are drawn
-for you, and because `kind` is a *value* it can come down a wire — a dropdown on a page
+for you -- with more bars than names have room for, every second or third is named, never
+none -- and because `kind` is a *value* it can come down a wire — a dropdown on a page
 can switch a chart between bars and a donut with no code anywhere. `bars` are horizontal
 and are the right choice when the categories are names, since a name reads along its bar
 instead of being cropped under a column. A value may be a number written as text

@@ -28,12 +28,13 @@ interface CodeFieldProps {
  * textarea.
  *
  * The boxes that hold a node's code and its prompts were `<textarea>`s --
- * no highlighting, no bracket matching, Tab jumped to the next field, and a
- * sixty-line function was read through a slot six lines high. This is
- * CodeMirror: syntax colours, line numbers, bracket matching, search
- * (Ctrl+F), multiple cursors, undo that belongs to the box rather than to the
- * browser -- and ⤢ opens the same document across the whole window, because
- * the honest fix for a small window is a big one.
+ * no highlighting, no bracket matching, and a sixty-line function was read
+ * through a slot six lines high. This is CodeMirror: syntax colours, line
+ * numbers, bracket matching, search (Ctrl+F), multiple cursors, undo that
+ * belongs to the box rather than to the browser -- and ⤢ opens the same
+ * document across the whole window, because the honest fix for a small
+ * window is a big one. Tab indents there; in the box it moves on to the next
+ * field, as everywhere in the panel, and Escape in it leaves the panel open.
  *
  * For anything longer-lived there is still the other way out: the file's
  * chip beside the box opens it in your own editor. The two compose -- this is
@@ -113,7 +114,7 @@ export default function CodeField({
             <Suspense fallback={plain}>
               <Surface
                 value={value} onChange={onChange} language={language} placeholder={placeholder}
-                height={{ min: 200, fill: true }} autoFocus
+                height={{ min: 200, fill: true }} autoFocus tabIndents
               />
             </Suspense>
           </div>

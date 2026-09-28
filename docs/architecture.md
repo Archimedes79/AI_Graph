@@ -318,7 +318,10 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   (`NodeGuiBuilder.color`, a scheme variable), its id, its heading and the first line of its
   text -- and after a run its status and a small picture of what it made (`resultPreviews`).
   Its ports are dots on its edges, named on hover; the page's card lists its ports as rows,
-  each with its dot. The card that is selected wears the accent, and so do its wires
+  each with its dot and what its block showed on the last run, cut to the card -- which,
+  given no size, is no wider than `PAGE_CARD_MAX_WIDTH`, so a run does not spread it over
+  its neighbours; ReactFlow measures a card's handles again when its port ids change, or a
+  renamed port's wire is not drawn. The card that is selected wears the accent, and so do its wires
   (`canvas/wireLook.ts`); the others are soft grey.
 - **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`), in place of
   the modal dialog it was (`canvas/NodeEditor.tsx`): at its top the node's kind and id, as on
@@ -328,7 +331,10 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   Advanced folded under it, with the ports of a node that `definesItself`; what is changed
   is written through, a step of undo at a time (`canvas/nodePanel.ts`). One click opens
   it, another node shows that one, and ✕, Escape or a click on the empty canvas close it,
-  as `graphStore.clearSelection` does; a node's panel opening beside it is kept in view. The
+  as `graphStore.clearSelection` does; a node added from the palette opens its panel too.
+  What the view owes is kept in one place (`canvas/inView.ts` `viewDue`): another document
+  -- New, Open, a level in or out -- is fitted whole, and a node added or whose panel opens
+  is brought into sight; each once its nodes are measured on a canvas that is on screen. The
   page's panel is the way to the Page tab, where the page is built. The node the person is
   on is `editingNodeId`, which the card, its wires and the bar all read. Delete on the canvas
   deletes only as pressed there (`deleteKeys`): a key pressed in the panel is the panel's.
@@ -345,7 +351,9 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   (`app/ViewTabs.tsx`) and what is done to the graph as a whole: Undo and Redo as icons,
   ▶ Run, Generate, Settings, Deploy; the file actions and ✨ AI Graph, which designs a new
   graph, are its File menu (`app/FileMenu.tsx`). Below 1280 pixels its buttons and the
-  palette are their icons, and at 1024 nothing scrolls the page sideways.
+  palette are their icons, and at 1024 nothing scrolls the page sideways. What Generate
+  says stands whole in a line under it until dismissed; what it says of saving and
+  opening is kept with the document it was said of, and goes when another is opened.
 
 ## Five rules
 

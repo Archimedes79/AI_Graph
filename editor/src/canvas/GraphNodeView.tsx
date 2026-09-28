@@ -1,5 +1,5 @@
-import React, { memo, useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Handle, Position, NodeProps, NodeResizer, useUpdateNodeInternals } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
 import type { GraphNode, NodeResult, Port } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
@@ -86,6 +86,14 @@ function PortDot({ port, type, side, top, lit, fires, named }: {
 const spread = (index: number, count: number): string => `${((index + 1) / (count + 1)) * 100}%`;
 
 /**
+ * The widest the page's card grows when it was given no size of its own: what
+ * its blocks showed on the last run is cut to it. It grew to its longest
+ * preview line -- 691 pixels over the card beside it, which, the page being
+ * selected and on top, could not be clicked.
+ */
+export const PAGE_CARD_MAX_WIDTH = 320;
+
+/**
  * The page's ports, one row each, in the page's order: what its blocks hand
  * on -- their dots on the left edge -- and what they show, on the right, with
  * what each showed on the last run under it.
@@ -150,12 +158,27 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
 
   const builder = NODE_BUILDERS[graphNode.node_type];
   const lit = selected || open;
+
+  // ReactFlow finds a wire's ends by the handles it measured when the card was
+  // drawn: a port renamed on a card that kept its size was a handle it did not
+  // know, and the wire, still in the graph, was not drawn. Measured again when
+  // the ports change.
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handles = `${graphNode.inputs.map((port) => port.id).join(',')}|${graphNode.outputs.map((port) => port.id).join(',')}`;
+  const measuredHandles = useRef(handles);
+  useEffect(() => {
+    if (measuredHandles.current === handles) return;
+    measuredHandles.current = handles;
+    updateNodeInternals(id);
+  }, [id, handles, updateNodeInternals]);
   const status = executionResult ? statusStyles[executionResult.held ? 'held' : executionResult.status] : undefined;
   // A node that did not run says why, when the run said.
   const statusTitle = executionResult?.status === 'skipped' && !executionResult.held
     ? executionResult.messages?.[0] ?? status?.title
     : status?.title;
   const page = showsPage(graphNode.node_type);
+  // A size set on the card -- in the file, or with its resizer -- is ReactFlow's style.
+  const sized = useGraphStore((s) => page && typeof s.rfNodes.find((node) => node.id === id)?.style?.width === 'number');
   const summary = builder?.canvasSummary?.(graphNode);
   const said = firstLine(graphNode.description);
   // What it made last, beside the port each value stands at: the element
@@ -229,10 +252,11 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         // The accent, doubled to two pixels without moving anything, and its glow.
         boxShadow: lit ? `0 0 0 1px ${ACCENT}, 0 0 0 6px ${ACCENT_GLOW}` : undefined,
         ...(page
-          // The page is drawn at the size it was given. What does not fit is
-          // cut at its top and bottom, never at its sides: its dots and their
-          // names stand out past the edges.
-          ? { width: '100%', height: '100%', clipPath: 'inset(-8px -240px -8px -240px)' }
+          // The page is drawn at the size it was given -- without one, no
+          // wider than `PAGE_CARD_MAX_WIDTH`. What does not fit is cut at its
+          // top and bottom, never at its sides: its dots and their names
+          // stand out past the edges.
+          ? { width: '100%', height: '100%', ...(sized ? {} : { maxWidth: PAGE_CARD_MAX_WIDTH }), clipPath: 'inset(-8px -240px -8px -240px)' }
           : { minWidth: 200, maxWidth: 260, minHeight: ports * 16 + 16 }),
       }}
     >

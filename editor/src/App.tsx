@@ -28,6 +28,12 @@ import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from '@/ui/theme';
 
+/** The folder *path* is in: all of it before its last part -- '' for a bare name. */
+const folderOf = (path: string): string => {
+  const whole = path.replace(/[\\/]+$/, '');
+  return whole.slice(0, Math.max(0, whole.lastIndexOf('/'), whole.lastIndexOf('\\')));
+};
+
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
   // The node whose panel is open beside the canvas, while it is there...
@@ -79,6 +85,14 @@ export default function App() {
   const [view, setView] = useState<EditorView>('graph');
   const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
   useSchemeOnRoot(guiScheme);
+
+  // What the header says of saving and opening, kept with the graph it was
+  // said of: another one opened or started (`document` moved on) leaves it
+  // unsaid. "✅ Saved to …\capitals-table" stood over three graphs opened after it.
+  const [said, setSaid] = useState({ text: '', document: 0 });
+  const setSaveStatus = useCallback((text: string) => setSaid({ text, document: useGraphStore.getState().document }), []);
+  const documentOpen = useGraphStore((s) => s.document);
+  const saveStatus = said.document === documentOpen ? said.text : '';
 
   // Editing the page means the Page tab -- at the size it will really be, next
   // to the blocks it will really sit beside -- which double-clicking its card
@@ -158,7 +172,7 @@ export default function App() {
     loadGraph(graph);
     setCurrentFilePath(null);
     setSaveStatus(`✅ Loaded ${file.name}`);
-  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
+  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath, setSaveStatus]);
 
   /**
    * A dropped folder: a project, most likely, opened when the editor's server
@@ -174,7 +188,7 @@ export default function App() {
     } catch (error) {
       setSaveStatus(`❌ ${errorText(error, `Could not open ${name}`)}`);
     }
-  }, [confirmDiscard, loadGraph, setCurrentFilePath]);
+  }, [confirmDiscard, loadGraph, setCurrentFilePath, setSaveStatus]);
 
   useEffect(() => {
     const onDragOver = (event: DragEvent) => {
@@ -202,9 +216,14 @@ export default function App() {
     };
   }, [handleGraphFileDrop, handleProjectFolderDrop]);
 
-  // Add a node from a palette click: beside what is already there.
+  // Add a node from a palette click: beside what is already there, with its
+  // panel open -- the next click was always on it. The canvas brings it into
+  // sight (`viewDue`).
   const handleAddNode = useCallback(
-    (nodeType: NodeType) => { addNode(nodeType, besideTheRest(useGraphStore.getState().rfNodes)); },
+    (nodeType: NodeType) => {
+      const { rfNodes, setEditingNode } = useGraphStore.getState();
+      setEditingNode(addNode(nodeType, besideTheRest(rfNodes)));
+    },
     [addNode]
   );
 
@@ -217,13 +236,21 @@ export default function App() {
   // server-side path, so "Save" can later write back to the exact same file
   // a graph was loaded from instead of always downloading to a new location.
   const [filePrompt, setFilePrompt] = useState<{ mode: 'load' | 'save'; path: string; error: string; busy: boolean } | null>(null);
-  const [saveStatus, setSaveStatus] = useState('');
   /** Which file prompt has its browser open ('load' | 'save'), or null. */
   const [browsingFor, setBrowsingFor] = useState<'load' | 'save' | null>(null);
 
   // A project folder by default: a name without .json. Typing .json saves one file instead.
   const suggestedFileName = () =>
     useGraphStore.getState().metadata.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'my_graph';
+
+  // The folder the last graph was opened from or saved to -- '' before one
+  // was: the folder the server was started in. Where the file browser starts
+  // when the path box holds a bare name, a new graph's or one typed, with the
+  // name filled in: it read the name as a folder, and opened on "Directory
+  // not found: …\untitled_graph".
+  const [lastFolder, setLastFolder] = useState('');
+  useEffect(() => { if (currentFilePath) setLastFolder(folderOf(currentFilePath)); }, [currentFilePath]);
+  const typedName = filePrompt && !/[\\/]/.test(filePrompt.path) ? filePrompt.path.trim() : null;
 
   // Open and Save As go straight to the file browser: choosing a file is what
   // they are for, and a path box first -- "/path/to/my_graph" -- asked the
@@ -294,7 +321,7 @@ export default function App() {
     };
     const timer = window.setInterval(look, 1500);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges]);
+  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges, setSaveStatus]);
 
   const handleSave = async () => {
     if (!currentFilePath) {
@@ -512,10 +539,10 @@ export default function App() {
         {filePrompt && browsingFor && (
           <FileBrowserDialog
             mode={browsingFor === 'load' ? 'file' : 'save'}
-            initialPath={filePrompt.path}
+            initialPath={typedName === null ? filePrompt.path : lastFolder}
             extensions=".json"
             projects
-            defaultName={suggestedFileName()}
+            defaultName={typedName || suggestedFileName()}
             onPick={(picked) => {
               // Picking a file is the choice: it is loaded, or saved to, straight away.
               setFilePrompt({ ...filePrompt, path: picked, error: '' });

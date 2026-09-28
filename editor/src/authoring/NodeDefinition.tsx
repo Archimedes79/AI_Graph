@@ -288,7 +288,7 @@ function Row({ node, write, setConfig, onGenerate, generating, preview, before, 
  * node (`pendingChange`), the body is changed here, as said, with what the
  * last try showed.
  */
-export default function NodeDefinition({ node, setConfig, updateNode, setDescription, generating, message, onGenerate, shell, holds }: NodePanelProps & { holds?: ReactNode }) {
+export default function NodeDefinition({ node, setConfig, updateNode, setDescription, generating, message, onGenerate, onStop, shell, holds }: NodePanelProps & { holds?: ReactNode }) {
   const defined = hasDefinitions(node);
   const graph = shell?.graph ?? (() => ({ metadata: useGraphStore.getState().metadata, nodes: [node], edges: [] }));
   const trying = useTryExample(node, graph);
@@ -349,7 +349,15 @@ export default function NodeDefinition({ node, setConfig, updateNode, setDescrip
       <Row node={node} write="body" setConfig={setConfig} onGenerate={onGenerate} generating={generating} preview={shell?.preview} before={before} box={holds} />
       {generating && <LiveGeneration calls={liveCalls} minHeight={80} />}
       {message && (
-        <div className="text-xs px-2 py-1.5 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>{message}</div>
+        <div className="flex items-center gap-2 text-xs px-2 py-1.5 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }} role="status">
+          <span className="flex-1 min-w-0">{message}</span>
+          {generating && onStop && (
+            <button type="button" className="shrink-0 px-2 py-0.5 rounded" style={NEUTRAL_BUTTON} onClick={onStop}
+              title="Stop waiting for it: what it still sends back is not written">
+              Stop
+            </button>
+          )}
+        </div>
       )}
       <GenerationTranscript />
       {defined && (

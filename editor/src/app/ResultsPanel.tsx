@@ -72,6 +72,10 @@ export default function ResultsPanel() {
         <h3 className="text-xs font-medium mb-2" style={{ color: MUTED }}>
           Node Results
         </h3>
+        {/* A run of nothing says "success" and nothing more: said in words instead. */}
+        {!rfNodes.length && (
+          <p className="text-xs" style={{ color: DIM }}>This graph has no nodes yet.</p>
+        )}
         {result.node_results.map((nr) => (
           <div
             key={nr.node_id}

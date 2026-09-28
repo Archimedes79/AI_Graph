@@ -65,8 +65,11 @@ export type Requirement = RuntimeRequirement;
 
 /** `project`: a folder with a `flow.json` in it, which opens rather than being walked into. */
 export interface BrowseEntry { name: string; path: string; is_dir: boolean; project?: boolean }
-/** One directory, for a picker. A deployed tool lists files only: no parent, no drives. */
-export interface BrowsePage { path: string; parent: string | null; entries: BrowseEntry[]; roots: string[] }
+/**
+ * One directory, for a picker. A deployed tool lists files only: no parent, no drives.
+ * `project`: the directory shown is a project itself.
+ */
+export interface BrowsePage { path: string; parent: string | null; entries: BrowseEntry[]; roots: string[]; project?: boolean }
 
 /** Which model a deployed tool calls, and where that is configured. Read-only: see the route. */
 export interface ToolAiSettings {

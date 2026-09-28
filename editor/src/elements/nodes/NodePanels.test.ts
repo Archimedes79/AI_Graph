@@ -23,10 +23,10 @@ import AiNodePanel from './ai/AiNodePanel';
 
 const PANELS: Record<'code' | 'ai', ComponentType<NodePanelProps>> = { code: CodeNodePanel, ai: AiNodePanel };
 
-function panel(node: GraphNode): string {
+function panel(node: GraphNode, props: Partial<NodePanelProps> = {}): string {
   return renderToStaticMarkup(createElement(PANELS[node.node_type as 'code' | 'ai'], {
     builder: NODE_BUILDERS[node.node_type], node, setConfig: () => {}, updateNode: () => {}, setDescription: () => {},
-    generating: false, onGenerate: async () => false,
+    generating: false, onGenerate: async () => false, ...props,
     shell: { graph: () => ({ metadata: {} as never, nodes: [node], edges: [] }), preview: async () => [], graphFile: async () => undefined, flush: () => {} },
   }));
 }
@@ -117,6 +117,13 @@ describe.each([
     // ⟳ takes the file the graph hands the node: an input's, so under ✨ Input alone.
     expect(given.match(/⟳ From the graph/g)).toHaveLength(1);
     expect(given.match(/📂 Add a file…/g)).toHaveLength(2);
+  });
+
+  it('has a Stop beside what ✨ says while it writes, and none once it is done', () => {
+    // A model call that hung held every ✨ and ▶ Try of the node, with nothing to press.
+    const writing = panel(made(type), { generating: true, message: '✨ Input…', onStop: () => {} });
+    expect(writing).toMatch(/✨ Input…<\/span><button[^>]*>Stop<\/button>/);
+    expect(panel(made(type), { message: '✅ ✨ Input: written.', onStop: () => {} })).not.toContain('>Stop</button>');
   });
 
   it('says why ▶ Try waits while there is no input.js, and tries a node that takes nothing in', () => {
