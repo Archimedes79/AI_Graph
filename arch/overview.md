@@ -336,7 +336,6 @@ classDiagram
   }
   class RunBoard {
     start()
-    whole()
     snapshot(id)
     stop(id)
     stopAll()

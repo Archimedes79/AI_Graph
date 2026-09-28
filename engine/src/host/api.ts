@@ -271,8 +271,6 @@ export const API = {
   requirements: route<Graph, Requirement[]>('POST', '/api/execute/requirements', 'tool'),
   /** Start a run in the background: the graph, and beside it the page event that asked, if one did. */
   startRun: route<RunGraph, { run_id: string; total: number }>('POST', '/api/execute/start', 'tool'),
-  /** Run to the end in one call, for a script driving a tool over HTTP rather than a page watching it. */
-  runNow: route<Graph, ExecutionResult>('POST', '/api/execute/', 'tool'),
   run: route<{ id: string }, RunSnapshot>('GET', '/api/execute/runs/:id', 'tool'),
   stopRun: route<{ id: string }, { cancelled: boolean }>('POST', '/api/execute/runs/:id/cancel', 'tool'),
   /** Loopback only: listing directories is for the person at the keyboard. */

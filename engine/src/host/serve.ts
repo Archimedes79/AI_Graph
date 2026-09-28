@@ -247,12 +247,6 @@ function toolRoutes(
       return { run_id: runs.start(graph, trigger, total), total };
     },
 
-    runNow(asked) {
-      const graph = parseGraph(asked);
-      applyRuntimeValues(graph, {}, registry);
-      return runs.whole(graph);
-    },
-
     run(asked) {
       const snapshot = runs.snapshot(asked.id);
       if (!snapshot) throw new Refusal(404, 'No such run.');

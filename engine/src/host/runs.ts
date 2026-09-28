@@ -109,18 +109,6 @@ export class RunBoard {
     return id;
   }
 
-  /**
-   * The whole graph, to its end, for a caller that waits for the answer. A round
-   * like any other: it takes its turn, what it makes is what stands, and a
-   * shutdown stops it and waits for it like every run on the board.
-   */
-  async whole(graph: Graph): Promise<ExecutionResult> {
-    const run = this.runs.get(this.start(graph, null, graph.nodes.length))!;
-    await run.ended;
-    if (run.error !== null) throw new Error(run.error);
-    return run.result!;
-  }
-
   snapshot(id: string): RunSnapshot | null {
     return this.runs.get(id)?.snapshot() ?? null;
   }

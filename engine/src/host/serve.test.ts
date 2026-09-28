@@ -43,16 +43,6 @@ describe('what a deployed tool serves', () => {
     expect(Array.isArray(graph.nodes)).toBe(true);
   });
 
-  it('runs it, in one call, for anything driving it over HTTP', async () => {
-    const { url, graph } = await serveGraph();
-    const result = await asJson(await fetch(`${url}/api/execute/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(graph),
-    }));
-    expect(result.status).toBe('success');
-  }, 60_000);
-
   it('runs it watchably, in the shape the page reads', async () => {
     const { url, graph } = await serveGraph();
     const post = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph) };

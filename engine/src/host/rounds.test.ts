@@ -82,19 +82,4 @@ describe('RunBoard', () => {
     expect(ended(second) - ended(first)).toBeGreaterThanOrEqual(250);
   }, 30_000);
 
-  it('stops a whole run a caller is waiting for, and waits for it, when everything stops', async () => {
-    // What `/api/execute/` starts, and a shutdown must not leave running.
-    const SLOW = 'async function run() { await new Promise((r) => setTimeout(r, 3000)); return { done: "finished anyway" }; }';
-    const runs = new RunBoard();
-    const whole = runs.whole(parseGraph({
-      metadata: { name: 'whole' },
-      nodes: [{ id: 'slow', node_type: 'code', inputs: [], outputs: [{ id: 'done', name: 'done' }], config: { code: SLOW } }],
-      edges: [],
-    }));
-    await wait(300);
-    expect(await runs.stopAll()).toBe(1);
-    const result = await whole;
-    expect(result.status).toBe('cancelled');
-    expect(JSON.stringify(result)).not.toContain('finished anyway');
-  }, 30_000);
 });
