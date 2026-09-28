@@ -80,4 +80,17 @@ describe('shutting a server down', () => {
     expect(existsSync(kept)).toBe(true);
     expect(await readFile(kept, 'utf8')).toBe(before);
   }, 30_000);
+
+  it('does not wait for a scheduled round queued behind a page\'s run: the clock stops first, the run after', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'shutdown-'));
+    const graphPath = join(dir, 'graph.json');
+    const graph = { ...slowGraph(), nodes: [{ id: 'clock', node_type: 'trigger', config: { trigger_on_start: false, trigger_every: '0.2' } }, ...slowGraph().nodes] };
+    await writeFile(graphPath, JSON.stringify(graph));
+    const { url, shutdown } = await serve({ graphPath, port: 0 });
+    await post(`${url}/api/execute/start`, graph);
+    await wait(600);
+    // The clock's round is due, and waits behind the page's.
+    expect(await (await fetch(`${url}/api/runtime/last`)).json()).toMatchObject({ running: true });
+    expect(await shutdown(4000)).toEqual([]);
+  }, 30_000);
 });

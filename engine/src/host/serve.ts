@@ -100,7 +100,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const clock = held.graph
     ? schedule(() => held.graph!, (graph, signal, trigger) => {
       applyRuntimeValues(graph, {}, registry);
-      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }));
+      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }), signal);
     }, lastRunFile(options.graphPath!))
     : null;
   if (clock) lifecycle.own('the schedule', () => clock.stop());
