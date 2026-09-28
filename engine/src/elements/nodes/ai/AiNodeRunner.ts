@@ -156,25 +156,32 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
 /**
  * A model's answer as the JSON object it is: what the node writes out, key by
- * key, with a ```json fence around the whole of it taken off -- and, where the
- * model answered in the output definition's own format, `module.exports = …;`
- * and all, read the way that file is read. An answer that is not a JSON object
- * fails the node, saying how it began -- handed on as text, it reaches the node
- * after it as a string where a record was promised, and fails there, further
- * from why.
+ * key. The object is taken where the answer holds it -- the whole answer, the
+ * first fenced block, or from its first `{` to its last `}`, since a model
+ * asked for JSON and nothing else still says "Here is the result:" around it
+ * -- and, where the model answered in the output definition's own format,
+ * `module.exports = …;` and all, read the way that file is read. An answer
+ * that holds no JSON object fails the node, saying how it began -- handed on
+ * as text, it reaches the node after it as a string where a record was
+ * promised, and fails there, further from why.
  */
 function jsonAnswer(answer: string): Record<string, unknown> {
   const said = answer.trim();
-  const fenced = /^```[^\n`]*\n([\s\S]*?)\n?[ \t]*```$/.exec(said);
-  const body = fenced ? fenced[1] : said;
-  let value: unknown;
-  try {
-    value = JSON.parse(body);
-  } catch {
-    const asFile = definitionExample(body);
-    value = 'example' in asFile ? asFile.example : undefined;
+  const fenced = /```[^\n`]*\n([\s\S]*?)\n?[ \t]*```/.exec(said)?.[1];
+  const braced = said.slice(said.indexOf('{'), said.lastIndexOf('}') + 1);
+  const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+  for (const candidate of [said, fenced, braced]) {
+    if (!candidate?.trim()) continue;
+    try {
+      const value: unknown = JSON.parse(candidate);
+      if (isObject(value)) return value;
+    } catch {
+      // Not this one: the next place the object may be.
+    }
   }
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  const asFile = definitionExample(fenced ?? said);
+  const value = 'example' in asFile ? asFile.example : undefined;
+  if (isObject(value)) return value;
   const start = said.length > 160 ? `${said.slice(0, 160)}…` : said;
   throw new Error(`The model's answer is not the JSON object this node's output.js asks for. It began: "${start}". `
     + 'Say in its prompt that the answer is that JSON and nothing else, or remove its output.js for a plain text answer.');

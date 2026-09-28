@@ -197,9 +197,17 @@ describe('an answer mapped onto an output definition', () => {
     expect(await element.execute(defined(), {}, answering(echoed))).toEqual({ rows: [3], count: 1 });
   });
 
-  it('fails the node when it is not a JSON object, saying how it began', async () => {
-    await expect(element.execute(defined(), {}, answering('Sure! Here are the rows: {"rows": []}')))
-      .rejects.toThrow(/not the JSON object this node's output\.js asks for\. It began: "Sure! Here are the rows/);
+  it('is found where the answer holds it, with a sentence around it', async () => {
+    // A model asked for the JSON object and nothing else still says so first.
+    expect(await element.execute(defined(), {}, answering('Here is the result:\n```json\n{"rows": [4], "count": 1}\n```\nI kept it short.')))
+      .toEqual({ rows: [4], count: 1 });
+    expect(await element.execute(defined(), {}, answering('Sure! Here are the rows: {"rows": [], "count": 0} -- hope it helps.')))
+      .toEqual({ rows: [], count: 0 });
+  });
+
+  it('fails the node when it holds no JSON object, saying how it began', async () => {
+    await expect(element.execute(defined(), {}, answering('Sure! There are no rows.')))
+      .rejects.toThrow(/not the JSON object this node's output\.js asks for\. It began: "Sure! There are no rows/);
     await expect(element.execute(defined(), {}, answering('[1, 2]'))).rejects.toThrow(/not the JSON object/);
   });
 
