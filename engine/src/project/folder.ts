@@ -439,6 +439,14 @@ interface Plan {
 
 /** What writing *graph* into *folder* comes to, this level and every level below it. */
 function planProject(folder: string, copy: Graph, root = folder): Plan[] {
+  // A node whose ports follow from its settings -- the page's from its blocks,
+  // a subgraph's from its graph -- has them written as they follow, so its
+  // interface.json is never a copy that disagrees. Before the graphs a node
+  // holds are taken out below: its ports are read from them.
+  for (const node of copy.nodes) {
+    const derived = registry.node(node.node_type)?.derivedPorts(node, registry);
+    if (derived) Object.assign(node, derived);
+  }
   const deeper: Plan[] = [];
   const untouched = new Set<string>();
   for (const held of nestedGraphs(copy)) {
