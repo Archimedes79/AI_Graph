@@ -83,6 +83,14 @@ export default function App() {
   const guiScheme = useGraphStore((s) => s.metadata.gui_scheme);
   useSchemeOnRoot(guiScheme);
 
+  // What the header says of saving and opening, kept with the graph it was
+  // said of: another one opened or started (`document` moved on) leaves it
+  // unsaid. "✅ Saved to …\capitals-table" stood over three graphs opened after it.
+  const [said, setSaid] = useState({ text: '', document: 0 });
+  const setSaveStatus = useCallback((text: string) => setSaid({ text, document: useGraphStore.getState().document }), []);
+  const documentOpen = useGraphStore((s) => s.document);
+  const saveStatus = said.document === documentOpen ? said.text : '';
+
   // Editing the page means the Page tab -- at the size it will really be, next
   // to the blocks it will really sit beside -- which double-clicking its card
   // and its panel's one button open.
@@ -161,7 +169,7 @@ export default function App() {
     loadGraph(graph);
     setCurrentFilePath(null);
     setSaveStatus(`✅ Loaded ${file.name}`);
-  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath]);
+  }, [confirmDiscard, loadGraph, parseGraphJson, setCurrentFilePath, setSaveStatus]);
 
   /**
    * A dropped folder: a project, most likely, opened when the editor's server
@@ -177,7 +185,7 @@ export default function App() {
     } catch (error) {
       setSaveStatus(`❌ ${errorText(error, `Could not open ${name}`)}`);
     }
-  }, [confirmDiscard, loadGraph, setCurrentFilePath]);
+  }, [confirmDiscard, loadGraph, setCurrentFilePath, setSaveStatus]);
 
   useEffect(() => {
     const onDragOver = (event: DragEvent) => {
@@ -225,7 +233,6 @@ export default function App() {
   // server-side path, so "Save" can later write back to the exact same file
   // a graph was loaded from instead of always downloading to a new location.
   const [filePrompt, setFilePrompt] = useState<{ mode: 'load' | 'save'; path: string; error: string; busy: boolean } | null>(null);
-  const [saveStatus, setSaveStatus] = useState('');
   /** Which file prompt has its browser open ('load' | 'save'), or null. */
   const [browsingFor, setBrowsingFor] = useState<'load' | 'save' | null>(null);
 
@@ -311,7 +318,7 @@ export default function App() {
     };
     const timer = window.setInterval(look, 1500);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges]);
+  }, [isProject, currentFilePath, insideSubgraph, takeDiskChanges, setSaveStatus]);
 
   const handleSave = async () => {
     if (!currentFilePath) {
