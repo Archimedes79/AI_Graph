@@ -22,14 +22,32 @@ export interface RuntimeRequirement {
   direction: 'input' | 'output';
   /** What it holds now, offered as the default. */
   current: string;
+  /**
+   * The outputs the answer leaves its node by, where it is one of several --
+   * a block's, on a page of many: a round that uses none of them does not ask.
+   */
+  ports?: string[];
 }
 
-export function runtimeRequirements(graph: Graph, registry: Runners): RuntimeRequirement[] {
+/**
+ * What *graph* asks before a run -- of everything, or, given *only*, the nodes
+ * one event runs (`triggeredNodes`): pressing "Plot" does not ask for the file
+ * only "Summarize" reads. A block's question counts where what it answers is
+ * wired into a node that runs.
+ */
+export function runtimeRequirements(graph: Graph, registry: Runners, only: Set<string> | null = null): RuntimeRequirement[] {
   const asked: RuntimeRequirement[] = [];
+  const used = (nodeId: string, requirement: RuntimeRequirement): boolean => {
+    if (!only) return true;
+    if (!requirement.ports) return only.has(nodeId);
+    return graph.edges.some((edge) => edge.source_node_id === nodeId && requirement.ports!.includes(edge.source_port_id)
+      && edge.target_node_id !== nodeId && only.has(edge.target_node_id));
+  };
   for (const node of graph.nodes) {
     const element = registry.node(node.node_type);
     if (!element) continue;
     for (const requirement of element.runtimeRequirements(node)) {
+      if (!used(node.id, requirement)) continue;
       asked.push(requirement.kind === 'text' && readAsFile(graph, node.id, registry) ? { ...requirement, kind: 'file' } : requirement);
     }
   }

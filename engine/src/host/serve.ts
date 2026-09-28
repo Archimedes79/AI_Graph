@@ -232,7 +232,13 @@ function toolRoutes(
       };
     },
 
-    requirements: (asked) => runtimeRequirements(parseGraph(asked), registry),
+    requirements(asked) {
+      // Asked for one event, only what that event runs is asked about.
+      const graph = parseGraph(asked);
+      const trigger = asked.trigger?.node_id ? asked.trigger : null;
+      const only = trigger ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry)) : null;
+      return runtimeRequirements(graph, registry, only);
+    },
 
     startRun(asked) {
       const graph = parseGraph(asked);

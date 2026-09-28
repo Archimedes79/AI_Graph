@@ -169,8 +169,12 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   /** What its blocks ask before the graph runs, each under the key of the block it belongs to. */
   override runtimeRequirements(node: GraphNode) {
-    return this.config(node).widgets.flatMap((widget) => (BY_KIND.get(widget.kind)?.runtimeRequirements(widget) ?? [])
-      .map((asked) => ({ key: `${node.id}::${widget.id}`, ...asked })));
+    return this.config(node).widgets.flatMap((widget) => {
+      const element = BY_KIND.get(widget.kind);
+      // Each asked under its block, and used only where what the block hands on is.
+      const ports = element?.ports(widget).outputs.map((port) => port.id) ?? [];
+      return (element?.runtimeRequirements(widget) ?? []).map((asked) => ({ key: `${node.id}::${widget.id}`, ...asked, ports }));
+    });
   }
 
   /** An answer goes to the block it was asked for, which keeps it where it keeps what it holds. */

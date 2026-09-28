@@ -268,7 +268,7 @@ export const API = {
   schedule: route<void, ScheduleState>('GET', '/api/runtime/last', 'tool'),
   /** Which model the tool calls. Read-only: a recipient configures it in a file, not in a page. */
   toolAiSettings: route<void, ToolAiSettings>('GET', '/api/runtime/ai-settings', 'tool'),
-  requirements: route<Graph, Requirement[]>('POST', '/api/execute/requirements', 'tool'),
+  requirements: route<RunGraph, Requirement[]>('POST', '/api/execute/requirements', 'tool'),
   /** Start a run in the background: the graph, and beside it the page event that asked, if one did. */
   startRun: route<RunGraph, { run_id: string; total: number }>('POST', '/api/execute/start', 'tool'),
   run: route<{ id: string }, RunSnapshot>('GET', '/api/execute/runs/:id', 'tool'),

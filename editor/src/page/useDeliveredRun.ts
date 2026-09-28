@@ -34,7 +34,8 @@ export function useDeliveredRun() {
   const run = async (trigger: RunTrigger | null = null) => {
     const graph = exportGraph();
     try {
-      const needed = await call('requirements', graph);
+      // For this event: what it does not run is not asked about.
+      const needed = await call('requirements', trigger ? { ...graph, trigger } : graph);
       if (needed.length > 0) {
         pending.current = trigger;
         setRequirements(needed);
