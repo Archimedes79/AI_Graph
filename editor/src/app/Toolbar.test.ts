@@ -72,18 +72,17 @@ describe('the File menu', () => {
 });
 
 describe('▶ Run', () => {
-  it('is one button that runs the graph, the same with a page as without: never a Start that only opens the page', () => {
-    // A graph with a page had ▶ Start, which switched to the Preview tab, whose
-    // header then had a ▶ Run of its own: three names for starting one graph.
+  it('is one button that runs the application: its page opens and runs the graph, or what starts the graph starts it', () => {
+    const run = () => toolbar().match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*Run<\/button>/)?.[0] ?? '';
+    expect(run()).toContain('what starts the graph starts it');
     const page = { id: 'page', node_type: 'gui', label: 'Page', inputs: [], outputs: [],
       config: { gui_widgets: [{ id: 'go', kind: 'button', label: 'Go', tone: 'plain' }] } };
     const before = open.rfNodes;
     (open as { rfNodes: unknown[] }).rfNodes = [{ id: 'page', data: { graphNode: page } }];
     try {
-      const html = toolbar();
-      const run = html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*Run<\/button>/)?.[0] ?? '';
-      expect(run).toContain('Run the whole graph');
-      expect(html).not.toMatch(/>Start</);
+      expect(run()).toContain('its page opens, and the graph runs when you use it');
+      // No second name for it: no Start, and no tab that previews what ▶ Run runs.
+      expect(toolbar()).not.toMatch(/>(Start|Preview)</);
     } finally {
       (open as { rfNodes: unknown[] }).rfNodes = before;
     }

@@ -1,30 +1,24 @@
 import type { ReactNode } from 'react';
 import { useGraphStore } from '@/store/graphStore';
-import { ACCENT, DANGER_TEXT, DIM, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
+import { DANGER_TEXT, DIM, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 
 /**
  * The bar above the delivered page: what this tool is -- the graph's name and
- * description -- its ▶ Run, and how the last run went.
+ * description -- and how its last round went.
  *
- * ▶ Run here is not a second kind of run. It is the tool's own OK button --
- * what an application offers when its window has nothing of its own to press,
- * and what it still offers when it has: "go, on what is on the page now".
+ * It has no ▶ Run. A tool runs when it is started (`startEvents`: its trigger
+ * nodes, or, with nothing on its page to start it, the whole graph once) and
+ * afterwards when its page is used -- its buttons, and the blocks that say
+ * they start it. A ▶ Run beside a page's own button was a second button for
+ * the same press.
  *
  * Both hosts draw the bar: `runtime/RuntimeApp.tsx` for a tool someone was
- * handed, with its ▶ Run, and the editor's Preview tab, without one -- there
- * the toolbar's ▶ Run is the one, on every tab, and a second beside it was a
- * second name for the same press.
+ * handed, and the editor's running application (`ApplicationView`).
  */
-export default function DeliveredHeader({
-  onRun, ready = true, tools, note,
-}: {
-  /** The tool's ▶ Run; none, and there is no button. */
-  onRun?: () => void;
-  /** False while the graph is still being fetched: a deployed tool's first moment. */
-  ready?: boolean;
-  /** Buttons of the host's own, left of ▶ Run — a deployed tool's ⚙ AI Settings, the preview's pop-out. */
+export default function DeliveredHeader({ tools, note }: {
+  /** Buttons of the host's own -- a deployed tool's ⚙ AI Settings, the editor's pop-out. */
   tools?: ReactNode;
-  /** Said right of ▶ Run: a deployed tool's clock. */
+  /** Said after them: a deployed tool's clock. */
   note?: ReactNode;
 }) {
   const metadata = useGraphStore((s) => s.metadata);
@@ -49,21 +43,6 @@ export default function DeliveredHeader({
       <div className="flex-1" />
 
       {tools}
-      {onRun && (
-        <button
-          onClick={onRun}
-          disabled={!ready || isExecuting}
-          className="px-4 py-1.5 text-xs rounded-lg font-semibold shrink-0"
-          style={{
-            background: !ready || isExecuting ? '#374151' : ACCENT,
-            color: 'white',
-            opacity: !ready || isExecuting ? 0.7 : 1,
-          }}
-          title="Run this tool on what is on the page now. Anything it still needs is asked for first."
-        >
-          {isExecuting ? '⏳ Running…' : '▶ Run'}
-        </button>
-      )}
       {note}
       {statusLabel && (
         <span className="text-xs font-medium whitespace-nowrap" style={{ color: status === 'error' ? DANGER_TEXT : MUTED }}>

@@ -6,7 +6,7 @@ import Toolbar from '@/app/Toolbar';
 import Sidebar from '@/app/Sidebar';
 import GraphCanvas from '@/canvas/GraphCanvas';
 import DesignerTab from '@/page/DesignerTab';
-import PreviewTab from '@/page/PreviewTab';
+import ApplicationView from '@/page/ApplicationView';
 import TopGraphOnly from '@/page/TopGraphOnly';
 import type { EditorView } from '@/app/ViewTabs';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
@@ -471,7 +471,7 @@ export default function App() {
         {/* The page is the top graph's: inside a node's graph there is none to
             build or try, and these would act on the graph in there. */}
         {view === 'design' && <TopGraphOnly><DesignerTab /></TopGraphOnly>}
-        {view === 'preview' && <TopGraphOnly><PreviewTab /></TopGraphOnly>}
+        {view === 'app' && <TopGraphOnly><ApplicationView /></TopGraphOnly>}
 
         {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
 

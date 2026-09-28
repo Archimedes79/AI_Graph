@@ -272,8 +272,8 @@ function WithoutPage() {
         {metadata.description || `${metadata.name} is ready to run.`}
       </p>
       <p className="text-xs" style={{ color: DIM }}>
-        Press <strong>▶ Run</strong> above. Anything the tool still needs — a value to start from,
-        a place to write — is asked for first. Results appear here when it finishes.
+        It runs when it is started. Anything it still needs — a value to start from, a place to
+        write — is asked for first, and what it hands back appears here.
       </p>
       <RunResult result={executionResult} />
     </div>
@@ -282,14 +282,14 @@ function WithoutPage() {
 
 /**
  * The page wired to the graph: what a deployed tool serves, and what the
- * editor's preview tab shows -- or, with no blocks, the tool without a page.
- * One component, so a preview cannot flatter.
+ * editor's running application shows -- or, with no blocks, the tool without a
+ * page. One component, so what is tried in the editor cannot flatter.
  */
 export function GuiSurfacePage({ onRun }: {
   /**
    * Start a run for a page event. The host supplies it because the host is who
    * knows what has to happen first -- asking for a file nobody chose yet, say --
-   * and that must be the same whether ▶ Run or a button on the page asked.
+   * and that must be the same in the editor and in a tool someone was handed.
    * Without one, the store's plain `runGraph` is used.
    */
   onRun?: (trigger: RunTrigger) => void;

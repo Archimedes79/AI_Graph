@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ReactFlowProvider } from 'reactflow';
 import ViewTabs from '@/app/ViewTabs';
 import Sidebar from '@/app/Sidebar';
-import PreviewTab from '@/page/PreviewTab';
+import ApplicationView from '@/page/ApplicationView';
 import PageHeading from '@/page/PageHeading';
 import WidgetEditor from '@/page/WidgetEditor';
 import TopGraphOnly from '@/page/TopGraphOnly';
@@ -59,18 +59,19 @@ const panelOf = (builder: WidgetGuiBuilder): ComponentType<WidgetPanelProps> | u
   ?? (builder instanceof DisplayWidgetGuiBuilder ? PANELS['/src/elements/widgets/DisplayWidgetPanel.tsx'] : undefined);
 
 describe('"block" is the one word for what a page is made of', () => {
-  it('names the tabs Graph, Page and Preview, and counts the page\'s blocks', () => {
-    const html = renderToStaticMarkup(createElement(ViewTabs, { view: 'graph', onChange: () => {} }));
-    const tabs = [...html.matchAll(/<button[^>]*>([^<]*)/g)].map((match) => match[1]);
-    expect(tabs).toEqual(['Graph', 'Page', 'Preview']);
-    expect(html).toMatch(/Page<span[^>]*>2<\/span>/);
+  it('names the tabs Graph and Page -- and App while the application runs -- and counts the page\'s blocks', () => {
+    const drawn = (running: boolean) => renderToStaticMarkup(createElement(ViewTabs, { view: 'graph', onChange: () => {}, running }));
+    const tabs = (running: boolean) => [...drawn(running).matchAll(/<button[^>]*>(?:<span[^>]*>●<\/span>)?([^<]*)/g)].map((match) => match[1]);
+    expect(tabs(false)).toEqual(['Graph', 'Page']);
+    expect(tabs(true)).toEqual(['Graph', 'Page', 'App']);
+    expect(drawn(false)).toMatch(/Page<span[^>]*>2<\/span>/);
   });
 
   it('is all there is in what the page\'s views, its node and its blocks\' editors say', () => {
     const shown: Record<string, string> = {
-      tabs: read(createElement(ViewTabs, { view: 'design', onChange: () => {} })),
+      tabs: read(createElement(ViewTabs, { view: 'design', onChange: () => {}, running: true })),
       palette: read(createElement(Sidebar, { onAddNode: () => {} })),
-      preview: read(createElement(PreviewTab)),
+      application: read(createElement(ApplicationView)),
       heading: read(createElement(PageHeading, { name: 'Plotter', description: '', onChange: () => {} })),
       'the page on the canvas': read(createElement(ReactFlowProvider, null, createElement(GraphNodeView, {
         id: 'page', data: { graphNode: page }, selected: false, type: 'graphNode', zIndex: 0, isConnectable: true,

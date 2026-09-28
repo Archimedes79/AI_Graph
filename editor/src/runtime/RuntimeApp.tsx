@@ -10,6 +10,8 @@ import { watchSchedule } from './watchSchedule';
 import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
+import { graphTriggers, startEvents } from '@engine/execution/triggers.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 /**
  * The deployed graph's front-end.
@@ -47,10 +49,22 @@ export default function RuntimeApp() {
 
   // Anything the graph still needs before it can run (a file to read, a place
   // to write) is asked for in the same window the editor uses -- the deployed
-  // equivalent of the CLI's stdin prompts, but clickable. One path for both
-  // ways a run starts here, ▶ Run and a block on the page, and the same one
-  // the editor's preview uses: see `useDeliveredRun`.
+  // equivalent of the CLI's stdin prompts, but clickable. One path for every
+  // round started here, and the same one the editor's running application
+  // uses: see `useDeliveredRun`.
   const delivered = useDeliveredRun();
+
+  // Opened, the tool is started, as ▶ Run starts it in the editor
+  // (`startEvents`). Its trigger nodes are the server's to fire (below); a
+  // graph with none runs whole once where nothing on its page would start it,
+  // and otherwise waits for its page to be used.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!ready || started.current) return;
+    started.current = true;
+    const graph = useGraphStore.getState().exportGraph();
+    if (!graphTriggers(graph).length && startEvents(graph, engineRegistry).includes(null)) void delivered.run(null);
+  }, [ready, delivered]);
 
   // The graph's own triggers -- when the tool starts, and on its clock -- run in
   // the server, not here: a page is a window, and a window is not always open.
@@ -81,8 +95,6 @@ export default function RuntimeApp() {
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
       <DeliveredHeader
-        onRun={() => { void delivered.run(); }}
-        ready={ready}
         tools={(
           <button
             onClick={() => setShowSettings(true)}
@@ -122,7 +134,7 @@ export default function RuntimeApp() {
         )}
 
         {/* The page -- or, when it has no blocks, what the tool does and what
-            its run hands back: the Preview tab draws the same. */}
+            its run hands back: the editor's running application draws the same. */}
         {ready && <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />}
         <RequirementsDialog
           requirements={delivered.requirements}
