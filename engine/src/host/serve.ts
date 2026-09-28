@@ -24,7 +24,7 @@ import { triggeredNodes } from '../execution/triggers.ts';
 import { aiSetting, candidatePaths } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, foreignRequest, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, foreignRequest, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse } from './browse.ts';
 import { extensionFilter } from '../elements/folderListing.ts';
@@ -84,7 +84,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
   const exchange: Exchange = { loopback: (options.allowBrowse ?? true) && loopback };
   /** Who this server is, for telling its own page from another's: its port is known once it listens. */
-  const self = { loopback, port: 0 };
+  const self = { loopback, port: 0, names: namesFor(host) };
 
   // The graph this server ships is held, not re-read: what a run remembers is
   // settled into it, so the next scheduled round -- and the next page to open --

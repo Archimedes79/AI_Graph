@@ -168,14 +168,32 @@ describe('a web page elsewhere in the same browser', () => {
     expect(await ask(url, '/api/execute/requirements', { Host: host }, JSON.stringify(graph))).toBe(415);
   });
 
-  it('takes any host name when it is served on the network, but still only its own origin', async () => {
+  it('served beyond loopback, answers as this machine on any port, and as no name a page chose', async () => {
+    // A container: bound to every interface, reached as localhost through the
+    // port its host published it on -- and every editor route open to whoever
+    // gets that far, so a page that pointed its own name here must not.
     const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
     started.push(server);
-    const port = new URL(url).port;
     const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
     const json = { 'Content-Type': 'application/json' };
-    expect(await ask(url, '/api/execute/requirements', { ...json, Host: `tool.lan:${port}`, Origin: `http://tool.lan:${port}` }, graph)).toBe(200);
-    expect(await ask(url, '/api/execute/requirements', { ...json, Host: `tool.lan:${port}`, Origin: 'https://evil.example' }, graph)).toBe(403);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'localhost:8000', Origin: 'http://localhost:8000' }, graph)).toBe(200);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'evil.example:8000', Origin: 'http://evil.example:8000' }, graph)).toBe(403);
+    expect(await ask(url, '/', { Host: 'tool.lan' })).toBe(403);
+  });
+
+  it('served beyond loopback, answers as a name it was given, and still only to that origin', async () => {
+    process.env.AI_GRAPH_ALLOWED_HOSTS = 'Tool.lan, other.lan';
+    try {
+      const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
+      started.push(server);
+      const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
+      const json = { 'Content-Type': 'application/json' };
+      expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'tool.lan', Origin: 'http://tool.lan' }, graph)).toBe(200);
+      expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'tool.lan', Origin: 'https://evil.example' }, graph)).toBe(403);
+      expect(await ask(url, '/', { Host: 'evil.example' })).toBe(403);
+    } finally {
+      delete process.env.AI_GRAPH_ALLOWED_HOSTS;
+    }
   });
 });
 

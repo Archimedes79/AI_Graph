@@ -51,7 +51,8 @@ as a tool that runs on their machine: offline, on a local model, with no account
 Nothing leaves the machine unless the graph itself sends it there.
 
 - The editor and a deployed bundle bind to `127.0.0.1` — reachable from the machine
-  itself, not from the network — unless started with `--host` for a container.
+  itself, not from the network — unless started with `--host` for a container, which
+  `docker compose` publishes on the host's `127.0.0.1` in turn.
 - The file browser is tied to that bind: on anything but loopback it switches itself
   off rather than hand the machine's filesystem listing to the network
   (`engine/src/host/serve.ts`).

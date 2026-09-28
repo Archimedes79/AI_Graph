@@ -107,10 +107,11 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
 See [engine/src/cli/bundle.ts](../engine/src/cli/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
 
-A call like this one must say `Content-Type: application/json`, and on a server bound to
-this machine it must be addressed to `localhost`, `127.0.0.1` or `[::1]` with the server's
-own port: the server answers its own page and scripts on this machine, not a web page
-elsewhere in the browser that found the port.
+A call like this one must say `Content-Type: application/json`, and it must be addressed
+to `localhost`, `127.0.0.1` or `[::1]` — with the server's own port on a server bound to
+this machine — or, on one bound wider, by a name `AI_GRAPH_ALLOWED_HOSTS` lists: the
+server answers its own page and scripts on this machine, not a web page elsewhere in the
+browser that found the port.
 
 ### What a bundle carries
 

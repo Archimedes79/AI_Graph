@@ -662,10 +662,15 @@ or a page that has them can do the same.
 
 ## Security boundaries
 
-- Everything binds to loopback; file browsing and a file chip's opening of a node's file in
-  the person's own editor switch off otherwise.
-- The server answers its own page, not every page in the browser: on loopback a request must
-  name 127.0.0.1, localhost or [::1] with the server's port (no DNS rebinding); an API call
+- Everything binds to loopback. Nothing asks who is calling: bound wider -- a container's
+  `0.0.0.0` -- every route of the table is open to whoever reaches the port, which is why
+  the container is published on the host's loopback only (`docker-compose.yml`). File
+  browsing and a file chip's opening of a node's file in the person's own editor switch off
+  on such a bind.
+- The server answers its own page, not every page in the browser: a request must name
+  127.0.0.1, localhost or [::1] (no DNS rebinding) -- on loopback with the server's port;
+  bound wider, on any port, or as the address it was bound to or a name
+  `AI_GRAPH_ALLOWED_HOSTS` lists; an API call
   that says where it comes from must come from the server's own origin, one the browser
   marks cross-site is refused, and a body is read only when it is sent as `application/json`
   (`foreignRequest` and `readJson` in `host/http.ts`).
