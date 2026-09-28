@@ -41,6 +41,7 @@
 // as having happened, which is what "run everything" means.
 
 import type { Graph, GraphEdge } from '../graph.ts';
+import type { Runners } from '../elements/NodeRunner.ts';
 
 /** The input every node has and nobody declares: the ◆, a gate. What arrives opens it or does not, and is never handed on. */
 export const RUN_PORT = '__run';
@@ -74,6 +75,29 @@ export function graphTriggers(graph: Graph): GraphTrigger[] {
     on_start: node.config.trigger_on_start !== false,
     every: String(node.config.trigger_every ?? '').trim(),
   }));
+}
+
+/**
+ * Whether something on the graph's page starts it when somebody uses it: a
+ * block that does -- a button, a chat, a box ticked "Using this starts the
+ * graph" -- on a node that is not a trigger node.
+ */
+export function pageStarts(graph: Graph, elements: Runners): boolean {
+  const triggers = new Set(graphTriggers(graph).map((trigger) => trigger.event.node_id));
+  return graph.nodes.some((node) => !triggers.has(node.id) && (elements.node(node.node_type)?.eventPorts(node).length ?? 0) > 0);
+}
+
+/**
+ * What starting the application runs before anybody uses it -- ▶ Run in the
+ * editor, a delivered tool opened: each trigger node set to fire at start.
+ * A graph with no trigger node starts where its page says, when somebody uses
+ * it -- and, with nothing on a page to start it, it runs whole once, as a
+ * program runs when it is started (`null` is "everything").
+ */
+export function startEvents(graph: Graph, elements: Runners): (Trigger | null)[] {
+  const triggers = graphTriggers(graph);
+  if (triggers.length) return triggers.filter((trigger) => trigger.on_start).map((trigger) => trigger.event);
+  return pageStarts(graph, elements) ? [] : [null];
 }
 
 /**

@@ -410,8 +410,8 @@ describe('what a folder could write and not read back', () => {
       nodes: [{
         id: 'page', node_type: 'gui', label: 'Page', position: { x: 0, y: 0 }, inputs: [], outputs: [],
         config: { gui_widgets: [
-          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'first' },
-          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'second' },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'first', run_on_change: true },
+          { id: 'chart', kind: 'input_picker', mode: 'directory', value: 'second', run_on_change: true },
         ] },
       }],
       edges: [],
