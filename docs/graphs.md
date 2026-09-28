@@ -726,7 +726,8 @@ block lays it out at the size it really is, in the colours of the page:
 
 A bare list of numbers or of `{label, value}` is the same thing with the two decisions
 left out. Axes, gridlines, category and value labels, a legend and the total are drawn
-for you, and because `kind` is a *value* it can come down a wire — a dropdown on a page
+for you -- with more bars than names have room for, every second or third is named, never
+none -- and because `kind` is a *value* it can come down a wire — a dropdown on a page
 can switch a chart between bars and a donut with no code anywhere. `bars` are horizontal
 and are the right choice when the categories are names, since a name reads along its bar
 instead of being cropped under a column. A value may be a number written as text
