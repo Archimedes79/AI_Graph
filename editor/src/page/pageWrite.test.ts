@@ -32,6 +32,8 @@ describe('the page', () => {
   it('is one node: its first block makes it, and every block after lands on it', () => {
     insertBlock({ ...WIDGET_BUILDERS.text.create('Title', 'heading'), id: 'title' });
     const made = page().page!;
+    // Called what it is, as in the examples' flow.json -- not the file format's `gui`.
+    expect(made.id).toBe('page');
     expect(store().rfNodes).toHaveLength(1);
     insertBlock({ ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer' });
     expect(store().rfNodes).toHaveLength(1);

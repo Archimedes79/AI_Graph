@@ -503,8 +503,8 @@ export const useGraphStore = create<GraphStore>()(
 
     addNode: (nodeType, position, fill) => {
       get().commit();
-      const id = freeId(nodeType, get().rfNodes.map((existing) => existing.id));
       const kind = NODE_KINDS[nodeType];
+      const id = freeId(kind.idBase ?? nodeType, get().rfNodes.map((existing) => existing.id));
       const made = kind.create(id);
       const defaults = kind.placedAmong?.(made, get().rfNodes.map((existing: RFNode) => existing.data.graphNode)) ?? made;
       const rfNode: Node<RFNodeData> = {

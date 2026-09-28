@@ -416,7 +416,8 @@ anybody opening the project looks for. Settings — the model, the temperature, 
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
 renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
-then `code_2` — and a new block's its kind, so `flow.json` reads as what it joins.
+then `code_2` — but for the page, which is `page`, and a new block's id is its kind, so
+`flow.json` reads as what it joins: `page.input_picker_out -> chart.csv`.
 
 The files are what runs. `node engine/src/main.ts my_tool` runs the folder, a served
 tool reads it, the MCP server reads and writes it; `git diff` shows code as code.
