@@ -49,7 +49,9 @@ export interface ServeOptions {
    * The graph this server ships, for a deployed tool.
    *
    * Optional, because the editor posts the graph being edited with every
-   * request, so there is nothing stored to serve. Only the `graph` route needs it.
+   * request, so there is nothing stored to serve unless it is given one. With
+   * it come the `graph` route, the graph's clock and the file its last round is
+   * kept in, and the folder the file picker opens in.
    */
   graphPath?: string;
   /** Where the built page lives, if this bundle carries one. */

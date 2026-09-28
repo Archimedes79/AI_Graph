@@ -687,8 +687,9 @@ or a page that has them can do the same.
   you is never run in the trusted process.
 - A graph can *name* an MCP tool server; only `ai-settings.json` can say which program a
   name starts. A URL is called directly.
-- The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root, writes
-  only `.json` graphs, never reads settings, and filters keys out of everything it returns.
+- The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root and takes
+  only a `.json` path -- a graph file, or a project's `flow.json`, whose nodes' files are
+  written with it --, never reads settings, and filters keys out of everything it returns.
 
 ## Keeping it clean
 

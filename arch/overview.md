@@ -423,7 +423,6 @@ flowchart TD
   Generate --> Api
   Settings --> Api
   Mcp --> Generate
-  Mcp --> Settings
   Mcp --> Node
 ```
 
