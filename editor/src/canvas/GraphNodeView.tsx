@@ -86,6 +86,14 @@ function PortDot({ port, type, side, top, lit, fires, named }: {
 const spread = (index: number, count: number): string => `${((index + 1) / (count + 1)) * 100}%`;
 
 /**
+ * The widest the page's card grows when it was given no size of its own: what
+ * its blocks showed on the last run is cut to it. It grew to its longest
+ * preview line -- 691 pixels over the card beside it, which, the page being
+ * selected and on top, could not be clicked.
+ */
+export const PAGE_CARD_MAX_WIDTH = 320;
+
+/**
  * The page's ports, one row each, in the page's order: what its blocks hand
  * on -- their dots on the left edge -- and what they show, on the right, with
  * what each showed on the last run under it.
@@ -169,6 +177,8 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     ? executionResult.messages?.[0] ?? status?.title
     : status?.title;
   const page = showsPage(graphNode.node_type);
+  // A size set on the card -- in the file, or with its resizer -- is ReactFlow's style.
+  const sized = useGraphStore((s) => page && typeof s.rfNodes.find((node) => node.id === id)?.style?.width === 'number');
   const summary = builder?.canvasSummary?.(graphNode);
   const said = firstLine(graphNode.description);
   // What it made last, beside the port each value stands at: the element
@@ -242,10 +252,11 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
         // The accent, doubled to two pixels without moving anything, and its glow.
         boxShadow: lit ? `0 0 0 1px ${ACCENT}, 0 0 0 6px ${ACCENT_GLOW}` : undefined,
         ...(page
-          // The page is drawn at the size it was given. What does not fit is
-          // cut at its top and bottom, never at its sides: its dots and their
-          // names stand out past the edges.
-          ? { width: '100%', height: '100%', clipPath: 'inset(-8px -240px -8px -240px)' }
+          // The page is drawn at the size it was given -- without one, no
+          // wider than `PAGE_CARD_MAX_WIDTH`. What does not fit is cut at its
+          // top and bottom, never at its sides: its dots and their names
+          // stand out past the edges.
+          ? { width: '100%', height: '100%', ...(sized ? {} : { maxWidth: PAGE_CARD_MAX_WIDTH }), clipPath: 'inset(-8px -240px -8px -240px)' }
           : { minWidth: 200, maxWidth: 260, minHeight: ports * 16 + 16 }),
       }}
     >

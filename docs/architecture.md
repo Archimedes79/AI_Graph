@@ -318,7 +318,10 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   (`NodeGuiBuilder.color`, a scheme variable), its id, its heading and the first line of its
   text -- and after a run its status and a small picture of what it made (`resultPreviews`).
   Its ports are dots on its edges, named on hover; the page's card lists its ports as rows,
-  each with its dot. The card that is selected wears the accent, and so do its wires
+  each with its dot and what its block showed on the last run, cut to the card -- which,
+  given no size, is no wider than `PAGE_CARD_MAX_WIDTH`, so a run does not spread it over
+  its neighbours; ReactFlow measures a card's handles again when its port ids change, or a
+  renamed port's wire is not drawn. The card that is selected wears the accent, and so do its wires
   (`canvas/wireLook.ts`); the others are soft grey.
 - **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`), in place of
   the modal dialog it was (`canvas/NodeEditor.tsx`): at its top the node's kind and id, as on

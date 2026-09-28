@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReactFlowProvider } from 'reactflow';
-import GraphNodeView, { firstLine } from './GraphNodeView';
+import GraphNodeView, { firstLine, PAGE_CARD_MAX_WIDTH } from './GraphNodeView';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import { syncGuiNodePorts } from '@/document/guiWidgets';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -13,7 +13,7 @@ import type { GraphNode } from '@/graph';
 // answered here. (Vitest lifts both of these above the imports.)
 const open = vi.hoisted(() => ({
   executionResult: null, editingNodeId: null as string | null,
-  rfEdges: [], deleteNode: () => {},
+  rfNodes: [] as { id: string; style?: { width?: number } }[], rfEdges: [], deleteNode: () => {},
 }));
 vi.mock('@/store/graphStore', () => ({
   useGraphStore: (select: (state: typeof open) => unknown) => select(open),
@@ -89,5 +89,17 @@ describe('a node\'s card', () => {
     expect(html).toMatch(/title="[^"]*using this block starts the graph, from whatever this is wired to\."/);
     // No ◆ of its own: the page is where events come from.
     expect(html).not.toContain('Start here.');
+  });
+
+  it('on the page keeps to a card\'s width when it was given none, and to its own size when it was', () => {
+    // After a run it grew to its longest preview line, over the card beside it.
+    const page = NODE_KINDS.gui.create('page');
+    expect(card(page)).toContain(`max-width:${PAGE_CARD_MAX_WIDTH}px`);
+    open.rfNodes = [{ id: 'page', style: { width: 480 } }];
+    try {
+      expect(card(page)).not.toContain('max-width');
+    } finally {
+      open.rfNodes = [];
+    }
   });
 });
