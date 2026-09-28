@@ -47,13 +47,22 @@ describe('a node described', () => {
 });
 
 describe('an ai node\'s standard instructions', () => {
-  it('ask for JSON mapped onto its output definition while it has one', () => {
-    const text = standardRunPrompt(true);
+  it('ask for JSON mapped onto its output definition where that names several outputs, or a value that is not text', () => {
+    for (const definition of ['module.exports = { "mood": "calm", "reason": "It says so." };', 'module.exports = { "count": 2 };']) {
+      const text = standardRunPrompt(definition);
+      expect(named(text)).toEqual(['Node Description', 'Output Definition']);
+      expect(text).toMatch(/only a JSON object, keyed and shaped as its example after module\.exports -- not the file itself/);
+    }
+  });
+
+  it('ask for the text itself where it names one output that holds text', () => {
+    const text = standardRunPrompt('module.exports = { "summary": "Two sentences." };');
     expect(named(text)).toEqual(['Node Description', 'Output Definition']);
-    expect(text).toMatch(/only a JSON object, keyed and shaped as its example after module\.exports -- not the file itself/);
+    expect(text).toMatch(/Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file\./);
+    expect(text).not.toMatch(/JSON object/);
   });
 
   it('ask for plain text without one', () => {
-    expect(standardRunPrompt(false)).toBe('{Node Description}\n\nDo this with the input below. Answer in plain text.');
+    expect(standardRunPrompt('')).toBe('{Node Description}\n\nDo this with the input below. Answer in plain text.');
   });
 });

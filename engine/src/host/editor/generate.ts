@@ -32,7 +32,7 @@ import { runBody } from '../../elements/body.ts';
 import { PLAIN_ASK } from '../../elements/nodes/ai/ask.ts';
 import type { Generation } from '../../authoring/generation.ts';
 import { STANDARD_PROMPTS, fillPrompt, type PromptKind } from '../../authoring/prompts.ts';
-import { definitionExample, misfits, type Definitions } from '../../authoring/definition.ts';
+import { definitionExample, misfits, textOutput, type Definitions } from '../../authoring/definition.ts';
 import { filePorts } from '../../execution/fileInputs.ts';
 import { runsPerItem } from '../../execution/batching.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
@@ -212,14 +212,17 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
       break;
     }
     case 'prompt': {
-      const json = !!shape.definitions?.output.trim();
+      // As the node runs: text on its one output, JSON only where the definition names more than one text (`textOutput`).
+      const output = shape.definitions?.output.trim() ?? '';
+      const text = output ? textOutput(output) : 'output';
       lines.push('Answer with the whole file prompt.md, in one ```md block and nothing else: the instructions the model is given every time this node runs.',
         inputs.length > 1 ? `What arrives is sent after them, each input under its port id: ${quoted(inputs)}.`
           : inputs.length ? 'What arrives is sent after them, as it is.' : 'Nothing is wired in: the instructions are the whole question.',
         'Put {Node Description} and {Output Definition} where they belong in the instructions: they are filled in when the node runs -- '
-          + `the node description as above, and ${json ? 'its output definition, output.js, as above' : '"None: answer in plain text."'}.`,
-        json ? 'The answer is parsed as a JSON object keyed as the output definition\'s example is, and each key handed on its own output: ask for that JSON object and nothing else -- not the file around the example.'
-          : 'The answer is plain text, handed on as it is.');
+          + `the node description as above, and ${output ? 'its output definition, output.js, as above' : '"None: answer in plain text."'}.`,
+        text === undefined
+          ? 'The answer is parsed as a JSON object keyed as the output definition\'s example is, and each key handed on its own output: ask for that JSON object and nothing else -- not the file around the example.'
+          : `The answer is plain text, handed on as it is on "${text}": ask for the text itself${output ? ', as the output definition describes it -- not JSON, and not the file' : ''}.`);
       if (inputs.length) lines.push(`Say in the instructions how to answer an input that is missing or empty. ${EMPTY_INPUT}`);
       break;
     }

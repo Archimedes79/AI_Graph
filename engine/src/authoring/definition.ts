@@ -153,6 +153,20 @@ export function definitionKeys(text: string): string[] {
   return 'example' in read ? Object.keys(read.example) : [];
 }
 
+/**
+ * The one output the output definition *text* names, where it names exactly
+ * one and that holds text: a model asked for it answers with the text itself,
+ * and that is the output. Undefined where it names several, or a value that
+ * is not text, or cannot be read -- then the answer is JSON keyed as its
+ * example is.
+ */
+export function textOutput(text: string): string | undefined {
+  const read = definitionExample(text);
+  if (!('example' in read)) return undefined;
+  const [key, ...more] = Object.keys(read.example);
+  return key !== undefined && !more.length && typeof read.example[key] === 'string' ? key : undefined;
+}
+
 /** The shape of what one call returns, as an output definition's example has it; none when it cannot be read. */
 export function definitionShape(text: string): Schema | undefined {
   const read = definitionExample(text);

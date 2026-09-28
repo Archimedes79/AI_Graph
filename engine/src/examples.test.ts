@@ -38,9 +38,9 @@ const EXAMPLES = readdirSync(resolve(REPO, 'examples'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && entry.name !== 'data').map((entry) => entry.name).sort();
 
 /**
- * An endpoint that answers with a summary of what it was sent -- as the JSON
- * object an ai node with an output definition asks for: every example's ai
- * nodes hand their answer on as "output".
+ * An endpoint that answers with a summary of what it was sent, in plain text:
+ * every example's ai node has one output that holds text, and its answer is
+ * that text.
  */
 function startModel(): Promise<{ url: string; server: Server; asked: string[] }> {
   const asked: string[] = [];
@@ -55,7 +55,7 @@ function startModel(): Promise<{ url: string; server: Server; asked: string[] }>
       // as different text rather than passing unnoticed.
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({
-        choices: [{ message: { content: JSON.stringify({ output: `summary(${String(user).length} chars)` }) } }],
+        choices: [{ message: { content: `summary(${String(user).length} chars)` } }],
       }));
     });
   });

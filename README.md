@@ -109,8 +109,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   button, a chat message or a dropdown starts the graph *at the node it is wired to*, so
   one page can hold several tools.
 - **A prompt you can see** — every ✨ shows the prompt it is written with, and what it
-  sends, word for word; an AI node's instructions are its `prompt.md`, and with an
-  `output.js` it answers in JSON, each key on its own output.
+  sends, word for word; an AI node's instructions are its `prompt.md`. It answers in
+  plain text -- in JSON, each key on its own output, only where its `output.js` names
+  several outputs or a value that is not text.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor, and your own** — each file is shown and edited in its row
   (CodeMirror, full-window on ⤢), or opened in your own editor with one click; what you

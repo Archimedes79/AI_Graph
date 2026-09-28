@@ -18,6 +18,8 @@
 // variable nothing fills stays as written too -- an ai node's prompt.md is
 // filled at run time with the two that mean something then.
 
+import { textOutput } from './definition.ts';
+
 /** What a prompt may name, and what each is filled with: what the node and the graph hold. */
 export const VARIABLES = {
   'Node Description': 'Its heading, id and kind as "# <heading> (ID <id>, <kind> node)", then its text',
@@ -117,12 +119,17 @@ export function nodeDescription(node: { id: string; label: string; description: 
 
 /**
  * The instructions an ai node runs with while its prompt.md says nothing of
- * its own: its description, and what to answer with. With an output
- * definition the answer is JSON keyed as its example is, which the node hands
- * on key by key; without one it is plain text, on the one output.
+ * its own, for its output definition *definition* ('' while it has none): its
+ * description, and how to answer. In plain text without a definition, and
+ * where it names one output that holds text (`textOutput`): the answer is that
+ * text. Where it names several, or a value that is not text, the answer is
+ * JSON keyed as its example is, which the node hands on key by key.
  */
-export function standardRunPrompt(answersJson: boolean): string {
-  return answersJson
-    ? '{Node Description}\n\nDo this with the input below, and answer with the data mapped onto this output definition: only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n{Output Definition}'
-    : '{Node Description}\n\nDo this with the input below. Answer in plain text.';
+export function standardRunPrompt(definition: string): string {
+  const start = '{Node Description}\n\nDo this with the input below';
+  if (!definition.trim()) return `${start}. Answer in plain text.`;
+  if (textOutput(definition) !== undefined) {
+    return `${start}. Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file.\n{Output Definition}`;
+  }
+  return `${start}, and answer with the data mapped onto this output definition: only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n{Output Definition}`;
 }

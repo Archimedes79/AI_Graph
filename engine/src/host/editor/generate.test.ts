@@ -227,7 +227,7 @@ describe('an output definition', () => {
 });
 
 describe('an ai node\'s instructions', () => {
-  it('are prompt.md, with the placeholders filled when it runs, and the answer JSON where it has an output.js', async () => {
+  it('are prompt.md, with the placeholders filled when it runs, and the answer JSON where its output.js names a value that is not text', async () => {
     const ai = scripted(['```md\n{Node Description}\n\nAnswer with {Output Definition}\n```']);
     const reply = await generate({ node: node('ai', { output_definition: OUTPUT }, { inputs: ['text', 'topic'] }) }, deps(ai));
     expect(reply.result).toBe('{Node Description}\n\nAnswer with {Output Definition}');
@@ -238,10 +238,13 @@ describe('an ai node\'s instructions', () => {
     expect(ai.asked[0].system).toMatch(/prompt engineer/);
   });
 
-  it('are plain text without an output.js', async () => {
-    const ai = scripted(['```md\nSay it.\n```']);
+  it('are plain text without an output.js, and where it names one output that holds text', async () => {
+    const ai = scripted(['```md\nSay it.\n```', '```md\nSum it up.\n```']);
     await generate({ node: node('ai') }, deps(ai));
-    expect(ai.asked[0].prompt).toContain('The answer is plain text, handed on as it is.');
+    expect(ai.asked[0].prompt).toContain('The answer is plain text, handed on as it is on "output": ask for the text itself.');
+    await generate({ node: node('ai', { output_definition: 'module.exports = { "summary": "Two sentences." };' }, { outputs: ['summary'] }) }, deps(ai));
+    expect(ai.asked[1].prompt).toContain('The answer is plain text, handed on as it is on "summary": ask for the text itself, as the output definition describes it -- not JSON');
+    expect(ai.asked[1].prompt).not.toContain('parsed as a JSON object');
   });
 });
 

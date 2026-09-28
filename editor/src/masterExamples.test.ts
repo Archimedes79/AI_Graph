@@ -172,8 +172,8 @@ function runtime(asked: string[]): Runtime {
       write: async () => {}, list: async (path) => Object.keys(FILES).filter((file) => file.startsWith(`${path}/`)).sort(),
     },
     code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) as Record<string, unknown> },
-    // Its answer as the ai node's output.js asks for it: a JSON object keyed by output.
-    ai: { complete: async (request) => { asked.push(request.prompt); return JSON.stringify({ output: `answer ${asked.length}` }); } },
+    // Its answer as the ai node's output.js asks for it: one output that holds text, answered in plain text.
+    ai: { complete: async (request) => { asked.push(request.prompt); return `answer ${asked.length}`; } },
   };
 }
 

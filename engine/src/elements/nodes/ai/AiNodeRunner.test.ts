@@ -174,8 +174,9 @@ describe('a call that fails', () => {
 
 /**
  * A node that maps whatever arrives onto a fixed format: with an output
- * definition, the answer is the JSON it defines, and each key goes out on its
- * own port -- not a text of it.
+ * definition that names several outputs, or a value that is not text, the
+ * answer is the JSON it defines, and each key goes out on its own port -- not
+ * a text of it. One output that holds text is the answer itself.
  */
 describe('an answer mapped onto an output definition', () => {
   const element = new AiNodeRunner();
@@ -213,5 +214,20 @@ describe('an answer mapped onto an output definition', () => {
 
   it('is the answer as it came, on "output", without one', async () => {
     expect(await element.execute(aiNode(), {}, answering('{"rows": []}'))).toEqual({ output: '{"rows": []}' });
+  });
+
+  it('is the answer as it came, in plain text, where the definition names one output that holds text -- on that output', async () => {
+    const summary = { ...aiNode({ prompt: '', output_definition: '/** @typedef {Object} Output */\nmodule.exports = { "summary": "Two sentences." };' }), description: 'Sum it up.' };
+    const asked: AiRequest[] = [];
+    const runtime: Runtime = { ...answering(''), ai: { complete: async (request) => { asked.push(request); return 'It rains. Then it stops.'; } } };
+    expect(await element.execute(summary, { text: 'a' }, runtime)).toEqual({ summary: 'It rains. Then it stops.' });
+    expect(asked[0].system).toMatch(/Answer in plain text: the text itself, as this output definition describes it -- not JSON/);
+    // Nothing is parsed: an answer that looks like JSON is the text it is.
+    expect(await element.execute(summary, {}, answering('{"summary": "x"}'))).toEqual({ summary: '{"summary": "x"}' });
+  });
+
+  it('is JSON where the definition names one output that is not text', async () => {
+    const counted = aiNode({ output_definition: 'module.exports = { "count": 1 };' });
+    expect(await element.execute(counted, {}, answering('```json\n{"count": 3}\n```'))).toEqual({ count: 3 });
   });
 });

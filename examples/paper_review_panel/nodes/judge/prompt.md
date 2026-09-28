@@ -14,5 +14,4 @@ Reviewers disagree on:
 
 This is advice for the authors, who make the final decision. Do not invent problems no reviewer raised.
 
-Answer with only a JSON object -- the whole advice, in that form, as the text under "output" -- shaped as the example after module.exports in this output definition, not the file itself:
-{Output Definition}
+Answer with the whole advice, in that form, alone, in plain text.

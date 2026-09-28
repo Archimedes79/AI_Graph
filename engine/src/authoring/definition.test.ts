@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { definitionExample, definitionKeys, definitionShape, misfits } from './definition.ts';
+import { definitionExample, definitionKeys, definitionShape, misfits, textOutput } from './definition.ts';
 
 const INPUT = `/**
  * @typedef {Object} Input
@@ -42,6 +42,15 @@ describe('a definition\'s example', () => {
     expect(definitionKeys('module.exports = { "summary": "", "count": 2 };')).toEqual(['summary', 'count']);
     expect(definitionKeys('')).toEqual([]);
     expect(definitionKeys('module.exports = { oops };')).toEqual([]);
+  });
+
+  it('names the one output an answer in plain text is, where it names one that holds text', () => {
+    expect(textOutput('/** @typedef {Object} Output */\nmodule.exports = { "summary": "Two sentences." };')).toBe('summary');
+    // Several outputs, or one that is not text: the answer is JSON.
+    expect(textOutput('module.exports = { "summary": "", "count": 2 };')).toBeUndefined();
+    expect(textOutput('module.exports = { "count": 2 };')).toBeUndefined();
+    expect(textOutput('module.exports = { "rows": ["a"] };')).toBeUndefined();
+    expect(textOutput('module.exports = { oops };')).toBeUndefined();
   });
 });
 

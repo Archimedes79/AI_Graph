@@ -4,7 +4,7 @@ import { Logic, logicFrom } from '../../../authoring/logic.ts';
 import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
-import { DEFINITION_TEXTS, definitionExample, definitionsIn, type Definitions } from '../../../authoring/definition.ts';
+import { DEFINITION_TEXTS, definitionExample, definitionsIn, textOutput, type Definitions } from '../../../authoring/definition.ts';
 import { fillPrompt, nodeDescription, standardRunPrompt } from '../../../authoring/prompts.ts';
 import { askModel, type AskSettings } from './ask.ts';
 
@@ -18,8 +18,13 @@ const ANSWER = 'output';
 const NO_DEFINITION = 'None: answer in plain text.';
 
 export interface AiConfig extends AskSettings {
-  /** It has an output definition: the answer is JSON, keyed as its example is, and handed on key by key. */
-  answersJson: boolean;
+  /**
+   * The output the answer goes out on as it came, as text: "output" without
+   * an output definition, its one output where it names one that holds text.
+   * Null where it names several outputs, or a value that is not text: the
+   * answer is JSON then, keyed as its example is, and handed on key by key.
+   */
+  textOn: string | null;
 }
 
 /** One per line, or a list: both are what a person would write. */
@@ -57,9 +62,12 @@ says nothing but this, the node runs with the standard instructions.
  * nodes should send both, and naming one of them would make the second
  * silently disappear.
  *
- * With an output definition it maps whatever arrives onto a fixed format: the
- * answer is JSON keyed as the definition's example is, and each key goes out on
- * the output port of that name. Without one the answer is text, on "output".
+ * Its answer is text -- on "output" without an output definition, on the one
+ * output a definition names where that holds text -- or, where the definition
+ * names several outputs or a value that is not text, it maps whatever arrives
+ * onto that format: the answer is JSON keyed as the definition's example is,
+ * and each key goes out on the output port of that name. A model is asked for
+ * JSON only where nothing less says what goes out.
  *
  * Running once per item is not here. A node that fans out does so the same way
  * a code node does, in the executor, because "run this once per element" is a
@@ -81,11 +89,11 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
     const output = definitionsIn(node).output.trim();
     const own = String(c.prompt ?? '');
     return {
-      instructions: fillPrompt(own.trim() ? own : standardRunPrompt(!!output), {
+      instructions: fillPrompt(own.trim() ? own : standardRunPrompt(output), {
         'Node Description': nodeDescription(node),
         'Output Definition': output || NO_DEFINITION,
       }),
-      answersJson: !!output,
+      textOn: output ? textOutput(output) ?? null : ANSWER,
       provider: String(c.ai_provider ?? ''),
       model: String(c.ai_model ?? ''),
       ...(typeof c.temperature === 'number' ? { temperature: c.temperature } : {}),
@@ -111,15 +119,16 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   }
 
   /**
-   * One call, made here: the process that holds the keys makes it. An answer
-   * to a node with an output definition is the JSON it writes out, each key on
-   * its own port (`jsonAnswer`): a node that maps whatever arrives onto a fixed
-   * format hands on that format, not a text of it.
+   * One call, made here: the process that holds the keys makes it. The answer
+   * is text on its one output -- or, to a node whose output definition names
+   * several outputs or a value that is not text, the JSON it writes out, each
+   * key on its own port (`jsonAnswer`): a node that maps whatever arrives onto
+   * a fixed format hands on that format, not a text of it.
    */
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
     const answer = await askModel(settings, inputs, runtime, node.inputs.map((port) => port.id));
-    return settings.answersJson ? jsonAnswer(answer) : { [ANSWER]: answer };
+    return settings.textOn ? { [settings.textOn]: answer } : jsonAnswer(answer);
   }
 
   // ── Build time ────────────────────────────────────────────────────────────
@@ -129,14 +138,16 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
       + 'under its port id where there are several. config.prompt may hold instructions of its own, with {Node Description} and '
       + '{Output Definition} where the description and the output definition are to go; without it, the node is told its '
       + 'description and to answer. config.output_definition -- a JSDoc typedef, then "module.exports = <one example as plain '
-      + 'JSON>;" -- makes the answer JSON keyed as that example is, each key handed on the output port of the same id: declare '
-      + 'one output port per key. Without one, the answer is plain text on its one output port, "output".';
+      + 'JSON>;" -- says what goes out, one output port per key: one key holding text is answered in plain text on that port; '
+      + 'several keys, or a value that is not text, make the answer JSON keyed as that example is, each key handed on the '
+      + 'output port of the same id. Without one, the answer is plain text on its one output port, "output".';
   }
 
   override whatRuns(): WhatRuns {
     return this.engineRuns('Sends prompt.md -- or the standard instructions, while it says nothing of its own -- with its description '
-      + 'and output.js filled in, then what arrived, each input under its port id where there are several; with an output.js '
-      + 'the answer is parsed as JSON and each key handed on its output port, without one it is text on "output".');
+      + 'and output.js filled in, then what arrived, each input under its port id where there are several. The answer is text on '
+      + 'its one output; where output.js names several outputs or a value that is not text, it is parsed as JSON and each key '
+      + 'handed on its output port.');
   }
 
   /** Its instructions, written from its description and definitions. */
@@ -156,10 +167,10 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
 
 /**
  * A model's answer as the JSON object it is: what the node writes out, key by
- * key. The object is taken where the answer holds it -- the whole answer, the
- * first fenced block, or from its first `{` to its last `}`, since a model
- * asked for JSON and nothing else still says "Here is the result:" around it
- * -- and, where the model answered in the output definition's own format,
+ * key. The object is taken where the answer holds it -- its first fenced
+ * block, else from its first `{` to its last `}`, since a model asked for JSON
+ * and nothing else still says "Here is the result:" around it -- and, where
+ * the model answered in the output definition's own format,
  * `module.exports = …;` and all, read the way that file is read. An answer
  * that holds no JSON object fails the node, saying how it began -- handed on
  * as text, it reaches the node after it as a string where a record was
@@ -170,7 +181,7 @@ function jsonAnswer(answer: string): Record<string, unknown> {
   const fenced = /```[^\n`]*\n([\s\S]*?)\n?[ \t]*```/.exec(said)?.[1];
   const braced = said.slice(said.indexOf('{'), said.lastIndexOf('}') + 1);
   const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
-  for (const candidate of [said, fenced, braced]) {
+  for (const candidate of [fenced, braced]) {
     if (!candidate?.trim()) continue;
     try {
       const value: unknown = JSON.parse(candidate);
@@ -184,5 +195,5 @@ function jsonAnswer(answer: string): Record<string, unknown> {
   if (isObject(value)) return value;
   const start = said.length > 160 ? `${said.slice(0, 160)}…` : said;
   throw new Error(`The model's answer is not the JSON object this node's output.js asks for. It began: "${start}". `
-    + 'Say in its prompt that the answer is that JSON and nothing else, or remove its output.js for a plain text answer.');
+    + 'Say in its prompt that the answer is that JSON and nothing else -- or, for a plain text answer, give its output.js one output that holds text.');
 }

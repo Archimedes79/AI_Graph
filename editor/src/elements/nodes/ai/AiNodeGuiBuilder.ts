@@ -34,7 +34,7 @@ export class AiNodeGuiBuilder extends NodeGuiBuilder {
   override portHint(side: 'inputs' | 'outputs'): string {
     return side === 'inputs'
       ? 'Sent to the model after its prompt -- each under its id where there are several.'
-      : 'One per key of output.js: the answer is that JSON, each key handed on here. Without output.js, the answer as text on "output".';
+      : 'One per key of output.js. One that holds text is the answer, as text; with several, or a value that is not text, the answer is that JSON, each key handed on here. Without output.js, the answer as text on "output".';
   }
 
   /** What it hands on is what its output definition says: the nodes it feeds are told that. */

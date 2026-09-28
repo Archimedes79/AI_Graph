@@ -286,9 +286,12 @@ to match.
 the standard instructions -- with `{Node Description}` and `{Output Definition}` filled in,
 and after it everything wired in: one input as it is, several each under its port id. A
 list becomes paragraphs, not `["…","…"]`. **Nothing wired in is ever dropped**, and a node
-nobody has written anything for still works: its text is the question. With an output.js
-the answer is JSON keyed as its example is, and each key goes out on the output of that
-name; without one it is text, on `output`. Everything else -- model, temperature, tools,
+nobody has written anything for still works: its text is the question. The answer is plain
+text: on `output` without an output.js, on its one output where output.js names one that
+holds text. Only where output.js names several outputs, or a value that is not text, is the
+model asked for JSON keyed as its example is -- taken from the first fenced block, else from
+the outermost `{…}` of the answer -- and each key goes out on the output of that name.
+Everything else -- model, temperature, tools,
 vision, batching, failures -- has a default that is right for most nodes and sits folded
 under **Advanced**. For tools, see
 [ai-providers.md](ai-providers.md#tools-connecting-a-prompt-to-an-mcp-server).
@@ -434,7 +437,7 @@ Every node's panel ends with *What this node runs*. There are two answers:
 | Node | What runs | In one sentence |
 |---|---|---|
 | Code | `code.js`, sandboxed | Calls `run(inputs, node)` and hands on what it returns. |
-| AI | `AiNodeRunner.execute` | Sends prompt.md -- or the standard instructions -- with its text and output.js filled in, then what arrived; with an output.js the answer is JSON, each key on its own output. |
+| AI | `AiNodeRunner.execute` | Sends prompt.md -- or the standard instructions -- with its text and output.js filled in, then what arrived; the answer is text on its one output, or JSON, each key on its own output, where output.js names several outputs or a value that is not text. |
 | Input | `InputNodeRunner.execute` | Hands on its text; or lists the folder on `path` — its file types, and its subfolders when it looks into them. |
 | Data | `DataNodeRunner.execute` | Hands on what arrives this round, or else what it kept; keeps what arrives. |
 | GUI | `GuiNodeRunner.execute` | Hands on what each block holds and shows what arrives. |
