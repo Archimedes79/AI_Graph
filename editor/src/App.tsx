@@ -28,8 +28,11 @@ import { errorText } from '@/api/errorText';
 import type { NodeType, Graph } from '@/graph';
 import { DANGER_TEXT, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, TEXT, WELL } from '@/ui/theme';
 
-/** The folder *path* is in: all of it before its last part. */
-const folderOf = (path: string): string => path.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '');
+/** The folder *path* is in: all of it before its last part -- '' for a bare name. */
+const folderOf = (path: string): string => {
+  const whole = path.replace(/[\\/]+$/, '');
+  return whole.slice(0, Math.max(0, whole.lastIndexOf('/'), whole.lastIndexOf('\\')));
+};
 
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
