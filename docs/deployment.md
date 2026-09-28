@@ -68,7 +68,10 @@ so a run there still lights up the graph canvas.)
 From the toolbar, **🚀 Deploy** gives you a zip holding the vendored
 engine, your graph as `graph.json`, and a `run.sh` / `run.cmd` that starts it. Nothing in
 it is generated: the engine is a verbatim copy of the one the graph was built and tested
-on, so a bundle runs what was tested rather than a second implementation of it.
+on, so a bundle runs what was tested rather than a second implementation of it. The graph
+carries what runs, and not how each node was written: its history.md, the ✨ prompts it
+changed and the files ✨ was given stay with the project -- a history holds every prompt and
+reply, and the start of those files -- and a served tool's page is not handed them either.
 
 ```bash
 ./run.sh          # or run.cmd on Windows

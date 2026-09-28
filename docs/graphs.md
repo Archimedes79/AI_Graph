@@ -222,18 +222,22 @@ Code 1                      its heading -- never empty: a new node is its kind a
                             and while nobody changed that, it is written from the text
 CODE  code                  its kind and its id
 What should it do?          a sentence or two, in your words
-✨ Input    input.js ↗      the prompt it is written with; the files it is written from --
-                            examples, a spec: ⟳ from the graph, 📂, or dropped here
-✨ Output   output.js ↗     the prompt, and the files it may be given
-✨ Code     code.js ↗       the prompt (an AI node: ✨ Prompt, prompt.md)
+✨ Input                    the prompt it is written with; input.js ↗ and its content, in a
+                            box; the files it is written from -- examples, a spec:
+                            ⟳ from the graph, 📂, or dropped here
+✨ Output                   the prompt; output.js ↗ and its content; the files it may be given
+✨ Code                     the prompt; code.js ↗ and its content (an AI node: ✨ Prompt,
+                            prompt.md)
 ▶ Try                       one call on input.js's example, held to output.js
 history.md ↗
 Advanced                    its ports, once per item, failures -- an AI node's model too
 ```
 
-Each file is a chip that opens it in your own editor -- the project is saved first, and
-what you save there comes back by itself -- shown before it is written, saying so ("not
-written yet"; greyed, while the graph is not saved as a project). **One press does the
+Each file is in sight in its row, written or not: its content in a box, edited there as
+in the file -- a few lines high until it holds more, its stub while it is empty -- and a
+chip beside it that opens it in your own editor (the project is saved first, and what you
+save there comes back by itself; greyed, while the graph is not saved as a project).
+**One press does the
 whole node:** the body's ✨ writes what is missing of input.js and output.js first, and
 stops at a definition that does not fit the node -- an example that names an input the
 node does not have, or leaves out an output wired on -- since what came after would be
@@ -390,11 +394,12 @@ nodes after it are written against it: it is what ✨ tells them it hands on.
 **Without the editor.** Every file in a node's folder is plain text named for what it is,
 so a node can be read, changed and run with nothing but the engine.
 `node engine/src/main.ts test my_tool` runs each code and AI node once on the example in
-its input.js and holds what comes out to its output.js; `--offline` asks no model and skips
-what needs one, which is how CI runs this repository's examples.
+its input.js and holds what comes out to its output.js -- one that takes something in and
+has no input.js yet is listed as skipped; `--offline` asks no model and skips what needs
+one, which is how CI runs this repository's examples.
 `node engine/src/main.ts run-node my_tool count` runs one node by itself on its input.js --
 or on inputs given as JSON (`run-node my_tool count '{"csv": "data/rows.csv"}'`) -- and
-prints what came out. A node with no example says so, and what to do.
+prints what came out. A node of another kind runs on what the nodes feeding it produce.
 
 **Checking a project.** `node engine/src/main.ts check my_tool other_tool` says what is
 wrong without running anything: edges to ports that do not exist, cycles, a code node
@@ -455,13 +460,17 @@ chart, a table or an image shows what arrives, and its dialog says in one senten
 that should be; whatever has to be shaped into it first is a code node wired in before
 it.
 
-### Your own editor
+### Writing a file: two editors
 
-A node's files are edited where you edit code. In a project, a file's chip in the node's
+The box a file is shown in is a real editor (CodeMirror): syntax colours, line numbers,
+folding, bracket matching, search with Ctrl+F, Tab that indents. **⤢** opens the same
+document across the whole window; Esc comes back.
+
+For longer work there is your own editor. In a project, a file's chip in the node's
 dialog saves the project and opens the file — in VS Code when its `code` command is
-installed, otherwise in whatever the system opens that file type with — and what you save
-there appears in the graph by itself. Only a project's own files under `nodes/` can be
-opened this way, and only from the machine the editor runs on.
+installed, otherwise in a text editor, never run — and what you save there appears in the
+graph by itself. Only a project's own files under `nodes/` can be opened this way, and
+only from the machine the editor runs on.
 
 **Packages.** A code node runs against the standard library of its language and nothing
 else. There is no install step and nothing is fetched while a graph runs, which is what

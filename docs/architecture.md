@@ -455,6 +455,13 @@ holds what comes back to output.js (`runExample`, `testGraph` at every depth). `
 runs a node on given inputs as a run does (`run-node` with inputs), and `inputsFor` runs
 what feeds a node, not the node: ⟳ From the graph.
 
+**Every file in sight.** Each row shows its file's content in a box -- `authoring/CodeField`,
+CodeMirror loaded when first drawn (`CodeSurface`), JavaScript for the definitions and
+code.js, Markdown for prompt.md; a data node's own box for what it holds -- edited there as
+in the file, with a chip beside it that opens the file in the person's own editor
+(`FileChip`, `openExternal`: VS Code, else a text editor -- never the system's "open",
+which runs a .js on Windows).
+
 **No Save.** What a node's dialog changes is written into the graph a moment later
 (`canvas/nodeDialog.ts`), one undo step per field typed into (`graphStore.commit`'s
 coalescing) -- the field on screen, not the setting it writes: two prompt boxes are two

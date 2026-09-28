@@ -112,8 +112,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   sends, word for word; an AI node's instructions are its `prompt.md`, and with an
   `output.js` it answers in JSON, each key on its own output.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
-- **Your own editor** — a node's files open in it with one click, and what you save
-  there comes back by itself.
+- **A real editor, and your own** — each file is shown and edited in its row
+  (CodeMirror, full-window on ⤢), or opened in your own editor with one click; what you
+  save there comes back by itself.
 - **The same way everywhere** — an AI node and a code node are built alike: its text,
   then ✨ Input, ✨ Output and ✨ Code (or ✨ Prompt), each with its prompt and its file.
   Give ✨ Input real files to write from — from the graph (⟳), a file (📂), or drop one
