@@ -12,6 +12,7 @@ import { problemsIn } from './check.ts';
 import { RUN_ON_ITS_OWN } from '../elements/nodes/code/CodeNodeRunner.ts';
 import { DEFINITION_TEXTS, definitionExample } from '../authoring/definition.ts';
 import { DataNodeRunner } from '../elements/nodes/data/DataNodeRunner.ts';
+import { registry } from '../elements/registry.ts';
 import {
   FileChanged, changesOnDisk, forgetSeen, isProjectFolder, loadGraph, nodeFileOf, projectFolderOf, readProject, saveGraph, writeProject,
 } from './folder.ts';
@@ -93,7 +94,8 @@ describe('a project folder', () => {
     await writeProject(dir, sample());
     expect(existsSync(join(dir, 'nodes/page'))).toBe(false);
     expect(JSON.parse(await text('page/node.json'))).toEqual({ label: 'Page', config: {} });
-    expect(JSON.parse(await text('page/interface.json')).inputs).toEqual([{ port: 'chart_in', type: 'any' }]);
+    // Its ports as its blocks give them, whatever the document said.
+    expect(JSON.parse(await text('page/interface.json')).inputs).toEqual([{ port: 'chart_in', name: 'Chart', type: 'any', list: true }]);
     // Every block's keys in one order, whatever order they came in.
     const graph = sample();
     graph.nodes[3].id = 'screen';
@@ -154,6 +156,8 @@ describe('a project folder', () => {
     await writeProject(dir, original);
     const read = await readProject(dir);
     original.nodes[1].position.x = 300; // stored rounded
+    // A node whose ports follow from its settings is written with them as they follow.
+    for (const node of original.nodes) Object.assign(node, registry.node(node.node_type)?.derivedPorts(node, registry) ?? {});
     const sortedKeys = (value: unknown): unknown => (Array.isArray(value) ? value.map(sortedKeys)
       : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedKeys((value as Record<string, unknown>)[key])])) : value);
     expect(sortedKeys(read.nodes)).toEqual(sortedKeys(original.nodes.map((node) => ({ ...node, width: node.width ?? null, height: node.height ?? null }))));
