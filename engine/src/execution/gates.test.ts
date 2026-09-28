@@ -230,6 +230,32 @@ describe('what stood still is not news', () => {
     expect(result(second, 'answer')).toMatchObject({ held: true });
     expect(second.memory).toEqual([]);
   });
+
+  it('does not show the page again what reached it only from nodes that stood still', async () => {
+    // Not around a loop: the clock's reader feeds the page, and nothing on the
+    // page feeds the reader. The page runs for its own button, and its picture
+    // was read and shown again from the value the reader was left holding.
+    let reads = 0;
+    const pictures = quietRuntime({
+      code: runtime.code,
+      files: { read: async () => { reads += 1; return 'cGljdHVyZQ=='; } },
+    });
+    const latch = new Latch();
+    const graph = graphOf(
+      [
+        node('clock', 'trigger', { trigger_every: '5m' }, { out: ['fired'] }),
+        node('reader', 'code', { code: 'function run() { return { pic: "cover.png" }; }' }, { out: ['pic'] }),
+        node('page', 'gui', { gui_widgets: [{ id: 'go', kind: 'button' }, { id: 'img', kind: 'image_view' }] }),
+      ],
+      [edge('t', 'clock', 'fired', 'reader', RUN_PORT), edge('p', 'reader', 'pic', 'page', 'img_in')],
+    );
+    const first = await executeGraph(graph, { runtime: pictures, registry, latch });
+    expect(result(first, 'page')!.display).toEqual({ img: 'data:image/png;base64,cGljdHVyZQ==' });
+    const pressed = await executeGraph(graph, { runtime: pictures, registry, latch, trigger: { node_id: 'page', port_id: 'go_out' } });
+    expect(result(pressed, 'reader')).toMatchObject({ held: true });
+    expect(result(pressed, 'page')!.display).toEqual({});
+    expect(reads).toBe(1);
+  });
 });
 
 describe('a node that keeps something of its own', () => {

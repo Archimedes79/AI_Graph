@@ -459,7 +459,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   const memory = settleMemory(graph, feedback, outputs, results, registry);
   // What finished before a Stop is drawn as it is: showing asks no model and
   // runs no body, so there is nothing in it for Stop to end.
-  await showDisplays(graph, results, registry, runtime);
+  await showDisplays(graph, results, registry, runtime, held);
 
   const status: ExecutionResult['status'] = signal?.aborted
     ? 'cancelled'
@@ -965,20 +965,30 @@ function settleMemory(
  * holds the file picker is fed across a feedback edge, so while the page runs
  * its chart has nothing yet -- on every page with both an input and a display,
  * which is most of them.
+ *
+ * What stood still is shown as it was: the editor and the page keep the
+ * display they have, and an image is not read again for nothing. That is a
+ * page that stood still, and a port of one that ran which only nodes in *held*
+ * are wired to -- over a wire that closes no loop, what they were left
+ * holding reached it as it runs.
  */
 async function showDisplays(
   graph: Graph,
   results: NodeResult[],
   registry: Runners,
   runtime: Runtime,
+  held: Set<string>,
 ): Promise<void> {
   for (const result of results) {
     const node = graph.nodes.find((n) => n.id === result.node_id);
     const element = node && registry.node(node.node_type);
-    // What stood still is shown as it was: the editor and the page keep the
-    // display they have, and an image is not read again for nothing.
     if (!node || !element?.hasInterface || result.status === 'error' || result.held) continue;
-    result.display = await element.display(node, result.inputs, runtime);
+    const stale = (port: string): boolean => {
+      const wires = graph.edges.filter((edge) => edge.target_node_id === node.id && edge.target_port_id === port);
+      return wires.length > 0 && wires.every((edge) => held.has(edge.source_node_id));
+    };
+    const fresh = Object.fromEntries(Object.entries(result.inputs).filter(([port]) => !stale(port)));
+    result.display = await element.display(node, fresh, runtime);
   }
 }
 
