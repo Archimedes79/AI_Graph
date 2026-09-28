@@ -16,16 +16,22 @@ export function isNumberedHeading(heading: string): boolean {
   return /^\S+ \d+$/.test(heading.trim());
 }
 
+/** Words a heading does not end on: they lead on to what was left out. */
+const LEADS_ON = new Set(['a', 'an', 'the', 'its', 'their', 'and', 'or', 'but', 'then', 'of', 'to', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'into', 'as', 'what', 'which', 'that']);
+
 /**
  * A short heading written from *text*: the start of its first sentence, up to
- * where the thought turns (a colon, a comma, a dash, " and "), at most six
- * words -- "Reads the CSV and says what the chart should show" is "Reads the
- * CSV". Undefined for a text that says nothing.
+ * where the thought turns (a colon, a comma, a dash), at most seven words, not
+ * ending on one that leads on ("its", "the", "and"). Not cut at " and ": what
+ * a node is for often comes after it -- "Read the text and say its mood in one
+ * word" is "Read the text and say its mood", where "Read the text" said
+ * nothing of the mood. Undefined for a text that says nothing.
  */
 export function headingFromText(text: string): string | undefined {
   const sentence = text.trim().split('\n')[0].split(/(?<=[.!?])\s/)[0];
-  const clause = sentence.split(/\s+--\s+|[:;,(]|\s+and\s+/)[0].replace(/[.!?]+$/, '').trim();
-  const words = clause.split(/\s+/).filter(Boolean).slice(0, 6);
+  const clause = sentence.split(/\s+--\s+|[:;,(]/)[0].replace(/[.!?]+$/, '').trim();
+  const words = clause.split(/\s+/).filter(Boolean).slice(0, 7);
+  while (words.length > 1 && LEADS_ON.has(words[words.length - 1].toLowerCase())) words.pop();
   if (!words.length) return undefined;
   const heading = words.join(' ');
   return heading.charAt(0).toUpperCase() + heading.slice(1);
