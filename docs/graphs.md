@@ -283,11 +283,16 @@ points and a title saying what to choose).
 a model asked where it asks one -- and holds what comes out to output.js: **✓ fits
 output.js**, or where it does not -- each output named once: *output "output" is a number;
 output.js says a list*. An output.js that cannot be read fits nothing: ▶ Try, `test` and
-✨ Code say *output.js cannot be read* and why. **✨ Fix** repairs the body from that. ✨ Code does the
+✨ Code say *output.js cannot be read* and why. **✨ Fix** repairs the body from that --
+and an output.js that cannot be read, which comes back corrected -- and says what the repair
+came to (*✨ Fix: repaired*, or *still does not fit*). ✨ Code does the
 same by itself: what it writes is tried on the example, and sent back once to be repaired
 when it fails or does not fit. To change what a node does, say so in the bar under the
 canvas: its body is changed as said, with what the last try showed, and its text restated
-to match.
+to match. Where the change needs other outputs than output.js describes -- a figure where
+it returned a table -- the new output.js comes back with the body and is written with it;
+without one, the changed body is kept and what does not fit the old output.js is said
+(✨ Output then writes output.js from the restated text), never "repaired" back.
 
 **An AI node at run time** sends its prompt.md -- or, while that says nothing of its own,
 the standard instructions -- with `{Node Description}` and `{Output Definition}` filled in,

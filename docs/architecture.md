@@ -496,10 +496,17 @@ whole, in the order the graph runs (`graphSweep.ts`, `useGraphSweep.ts`).
 **Generation** is: write → try once on input.js's example → hold it to the keys it must
 return and to output.js (`misfits`) → repair once with the evidence. A definition is asked
 again once when it cannot be read or names ports the node does not have. "Say what to
-change" and ✨ Fix go through the same path with `refine`: the body as it is, what came of
-the last try, and the words -- none for a fix. The answer brings the node's text back
-restated, and the panel writes both as one step. Every model call is recorded (`AICall`)
-and can be watched while it runs.
+change" and ✨ Fix go through the same path with `refine`: the body as it is, its output.js,
+what came of the last try, and the words -- none for a fix. The answer brings the node's
+text back restated and, where the change needs other outputs than output.js describes, the
+new output.js in a second block (`GenerateResponse.output_definition`): the body is held to
+that one, and the panel writes body, output.js (and so the outputs) and text as one step
+(`writtenInto`). **A change keeps its word:** without an output.js of its own it is held to
+running and to returning every output, never repaired toward the output.js from before it
+-- which turned a chart's new figure back into the old config under the restated text --
+so the attempt that holds the change is kept, and what does not fit is said. ✨ Fix where
+output.js cannot be read asks for it corrected the same way. Every model call is recorded
+(`AICall`) and can be watched while it runs.
 
 **▶ Try, `test` and `run-node` are one call.** `callNode` runs a node's body once on the
 example in its input.js -- no file read, nothing fanned out: the example is one item, as

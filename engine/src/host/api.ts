@@ -182,6 +182,13 @@ export interface GenerateResponse {
    * (`GenerateRequest.refine` with a change): what the node says it does now.
    */
   description?: string;
+  /**
+   * The node's output definition, written anew with a body changed or fixed
+   * (`refine`): the output.js a change needed where it outgrew the one there
+   * was, or one that could not be read, corrected. The body was held to it;
+   * it is written with the body, and the node's outputs are its keys.
+   */
+  output_definition?: string;
   probe: ProbeReport;
   /** Every model call this generation made, in order: what the node's history.md keeps. For a preview, the one request, unsent. */
   calls: AICall[];

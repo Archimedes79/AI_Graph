@@ -4,6 +4,7 @@ import { registry } from '../../elements/registry.ts';
 import { parseWidget } from '../../elements/nodes/gui/GuiNodeRunner.ts';
 import { parseGraph, type GraphNode } from '../../graph.ts';
 import { STANDARD_PROMPTS } from '../../authoring/prompts.ts';
+import { unreadableOutput } from '../../authoring/definition.ts';
 import { GenerationFailed, GenerationRefused, firstCodeBlock, generate, generateGraph } from './generate.ts';
 import { nodeCode } from '../node.ts';
 import type { GenerateRequest } from '../api.ts';
@@ -357,10 +358,31 @@ describe('changing a body there is (refine)', () => {
     const reply = await generate({ node: node('ai', { prompt: 'Be brief.' }), refine: { change: 'Be kind too.', outcome: 'ok.' } }, deps(ai));
     expect(ai.asked[0].prompt).toContain('## The instructions (prompt.md) as it is now\n\nBe brief.');
     expect(ai.asked[0].prompt).toContain('## What to change\n\nBe kind too.');
-    // Asked for the restated text after the block, and not also for the block "and nothing else".
-    expect(ai.asked[0].prompt).toContain('in one ```md block, then the node\'s text restated as asked above, and nothing else');
+    // Asked for the restated text after the block -- and output.js where the change outgrows it -- not for the block "and nothing else".
+    expect(ai.asked[0].prompt).toContain('in one ```md block, then -- where the change needs other outputs -- the new output.js in a ```js block, '
+      + 'then the node\'s text restated as asked above, and nothing else');
     expect(`${ai.asked[0].system} ${ai.asked[0].prompt}`).not.toMatch(/block and nothing else|Output only/);
     expect(reply).toMatchObject({ result: 'Be brief, and kind.', description: 'Answers briefly and kindly.' });
+    expect(reply.output_definition).toBeUndefined();
+  });
+
+  it('brings an ai node\'s new output.js back with its instructions, where the change outgrows the one there is', async () => {
+    const ai = scripted(['```md\n{Node Description}\nSay the mood and the reason.\n{Output Definition}\n```\n'
+      + '```js\n/** @typedef {Object} Output @property {string} mood … @property {string} reason … */\nmodule.exports = { "mood": "calm", "reason": "It says so." };\n```\n'
+      + '<description>Says the mood of the text, and the reason.</description>']);
+    const reply = await generate({
+      node: node('ai', { prompt: 'Say the mood.', output_definition: 'module.exports = { "mood": "calm" };' }, { inputs: ['text'], outputs: ['mood'] }),
+      refine: { change: 'Say the reason too, on an output of its own.' },
+      output_targets: { mood: '"Page" (port "Mood")' },
+    }, deps(ai));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain('## output.js, what it answers with now\n\nmodule.exports = { "mood": "calm" };');
+    expect(sent).toContain('return the new output.js, the whole file, in a second ```js block after the instructions.');
+    expect(reply).toMatchObject({
+      result: '{Node Description}\nSay the mood and the reason.\n{Output Definition}',
+      output_definition: '/** @typedef {Object} Output @property {string} mood … @property {string} reason … */\nmodule.exports = { "mood": "calm", "reason": "It says so." };',
+      description: 'Says the mood of the text, and the reason.',
+    });
   });
 
   it('writes what a data node holds again whole, changed as said, with the text restated -- the bar\'s change of a data node', async () => {
@@ -379,6 +401,72 @@ describe('changing a body there is (refine)', () => {
     await generate({ node: held }, deps(fresh));
     expect(fresh.asked[0].prompt).toContain('in one ```json block, as plain JSON, and nothing else.');
   });
+});
+
+describe('a change that needs another output -- the review\'s tool 1: a chart\'s figure', () => {
+  const CSV = 'module.exports = { "input": "Country,Population\\nIndia,1450\\nChina,1419" };';
+  const CONFIG = 'module.exports = { "output": { "data": [1450, 1419], "labels": ["India", "China"], "type": "bar" } };';
+  const FIGURE = '/** @typedef {Object} Output @property {Object} output the figure */\n'
+    + 'module.exports = { "output": { "kind": "bars", "title": "Population", "points": [{ "label": "India", "value": 1450 }] } };';
+  const rows = 'const rows = i.input.split("\\n").slice(1).map((r) => r.split(","));';
+  const configCode = `function run(i) { ${rows} return { output: { data: rows.map((r) => Number(r[1])), labels: rows.map((r) => r[0]), type: "bar" } }; }`;
+  const figureCode = `function run(i) { ${rows} return { output: { kind: "bars", title: "Population", points: rows.map((r) => ({ label: r[0], value: Number(r[1]) })) } }; }`;
+  const chart = (config: Record<string, unknown> = {}) => node('code', { input_definition: CSV, output_definition: CONFIG, code: configCode, ...config }, { inputs: ['input'], outputs: ['output'] });
+  const CHANGE = 'Hand the chart block a figure it can draw: {"kind": "bars", "title": "Population", "points": [{"label": country, "value": population}]}';
+  const RESTATED = '<description>Reads the CSV and hands the chart a bar figure of the population by country.</description>';
+
+  it('shows output.js, and takes the new one the answer brings: written with the body, which is held to it', async () => {
+    const ai = scripted([`${js(figureCode)}\n${js(FIGURE)}\n${RESTATED}`]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE }, output_targets: { output: '"Page" (port "Chart")' } }, deps(ai, nodeCode));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain(`--- output.js, the output definition it returns now ---\n${CONFIG}`);
+    expect(sent).toContain('If the change needs other outputs than output.js describes -- other keys, or another shape -- return the new output.js, the whole file, in a second ```js block after the function.');
+    expect(sent).toContain('Where the change needs other outputs than output.js describes, the new output.js follows the function, whole, in a second ```js block.');
+    expect(reply).toMatchObject({ result: figureCode, output_definition: FIGURE, description: expect.stringContaining('bar figure'), probe: { status: 'ok' } });
+    expect(ai.asked).toHaveLength(1);
+  }, 30_000);
+
+  it('keeps the attempt that holds the change where it brings no output.js, and says what does not fit -- not the old body under the new text', async () => {
+    // Asked to repair against the old output.js, the model the review used turned the figure back into the config.
+    const ai = scripted([`${js(figureCode)}\n${RESTATED}`, js(configCode)]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE } }, deps(ai, nodeCode));
+    expect(ai.asked).toHaveLength(1);
+    expect(reply).toMatchObject({ result: figureCode, description: expect.stringContaining('bar figure'), probe: { status: 'failed' } });
+    expect(reply.output_definition).toBeUndefined();
+    expect(reply.probe.problems).toEqual(expect.arrayContaining(['output "output" at data is missing', 'output "output" at labels is missing']));
+    expect(reply.probe.problems.at(-1)).toBe('if the change needs other outputs, ✨ Output writes output.js for it from the node\'s text');
+  }, 30_000);
+
+  it('repairs a change that does not run, keeping the change -- not held to the output.js from before it', async () => {
+    const broken = 'function run(i) { return { output: { kind: "bars", title: "Population", points: i.nothing.map((r) => r) } }; }';
+    const ai = scripted([`${js(broken)}\n${RESTATED}`, js(figureCode)]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE } }, deps(ai, nodeCode));
+    expect(ai.asked).toHaveLength(2);
+    expect(ai.asked[1].prompt).toContain('--- the change it was written to make, which the fix keeps ---');
+    expect(ai.asked[1].prompt).not.toContain('--- what is wrong with what it returned ---');
+    expect(reply).toMatchObject({ result: figureCode, description: expect.stringContaining('bar figure'), probe: { status: 'failed' } });
+  }, 30_000);
+
+  it('does not take an output.js that leaves out an output other nodes are wired to', async () => {
+    const dropping = 'module.exports = { "figure": { "kind": "bars", "title": "t", "points": [] } };';
+    const ai = scripted([`${js(figureCode)}\n${js(dropping)}\n${RESTATED}`]);
+    const reply = await generate({ node: chart(), refine: { change: CHANGE }, output_targets: { output: '"Page" (port "Chart")' } }, deps(ai, nodeCode));
+    expect(reply.output_definition).toBeUndefined();
+    expect(reply.result).toBe(figureCode);
+  }, 30_000);
+
+  it('mends an output.js that cannot be read where ✨ Fix is asked: it comes back corrected after the code, which is held to it', async () => {
+    const unreadable = 'module.exports = { "output": { "kind": "bars", "title": "Population", "points": [] }, };';
+    const why = unreadableOutput(unreadable)!;
+    const ai = scripted([`${js(figureCode)}\n${js(FIGURE)}`]);
+    const reply = await generate({ node: chart({ output_definition: unreadable, code: figureCode }), refine: { outcome: '{}', problems: [why] } }, deps(ai, nodeCode));
+    const sent = ai.asked[0].prompt;
+    expect(sent).toContain(`The output definition this function is held to cannot be read -- ${why}.`);
+    expect(sent).toContain(`--- output.js as it is ---\n${unreadable}`);
+    expect(sent).toContain('then output.js corrected: the whole file, its example as plain JSON: double-quoted keys and strings, no comments, no trailing commas, in a second ```js block.');
+    expect(sent).toContain('Then output.js, corrected, in a second ```js block.');
+    expect(reply).toMatchObject({ result: figureCode, output_definition: FIGURE, probe: { status: 'ok' } });
+  }, 30_000);
 });
 
 describe('the code in a model\'s answer', () => {

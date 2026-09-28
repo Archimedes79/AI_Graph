@@ -111,6 +111,20 @@ describe('what comes back, written in', () => {
     expect(writtenInto(node, 'body', answer('x', '  '), '✨ Code', at).description).toBe('Count the words.');
   });
 
+  it('writes the output.js a changed body came back with together with it, as one step: its keys are the outputs', () => {
+    const node = { ...made('code', { input_definition: INPUT, output_definition: OUTPUT, code: 'function run() { return { output: 1 }; }' }), description: 'Count.' };
+    const figure = 'module.exports = { "figure": { "kind": "bars", "points": [] }, "count": 2 };';
+    const changed = writtenInto(node, 'body', { result: 'function run() { return { figure: {}, count: 2 }; }', output_definition: figure, description: 'Counts, as a figure.', calls: [] }, 'Change: a figure', at);
+    expect(changed.config).toMatchObject({ code: 'function run() { return { figure: {}, count: 2 }; }', output_definition: figure });
+    expect(changed.outputs.map((port) => port.id)).toEqual(['figure', 'count']);
+    expect(changed.description).toBe('Counts, as a figure.');
+    expect(changed.config.history).toMatch(/^## 2026-09-28 09:30 · Change: a figure/);
+    // Without one, output.js and the outputs stay as they were.
+    const kept = writtenInto(node, 'body', answer('function run() { return { output: 2 }; }'), '✨ Code', at);
+    expect(kept.config.output_definition).toBe(OUTPUT);
+    expect(kept.outputs).toBe(node.outputs);
+  });
+
   it('says whether the file is written: its stub is not', () => {
     expect(isWritten(made('code'), 'input')).toBe(false);
     expect(isWritten(made('code', { input_definition: 'module.exports = null;' }), 'input')).toBe(false);
@@ -164,6 +178,16 @@ describe('what is said once ✨ is done', () => {
       .toBe('⚠️ ✨ Fix: still does not fit -- output "output" is a number; output.js says a list');
     expect(resultMessage('✨ Code', probe('failed', 'boom'), fix)).toBe('⚠️ ✨ Fix: it still fails on the example in input.js: boom');
     expect(resultMessage('✨ Prompt', probe('skipped'), fix)).toBe('✅ ✨ Fix: written again. ▶ Try tries it.');
+    // An output.js that could not be read, corrected with it.
+    expect(resultMessage('✨ Code', { ...probe('ok'), output_definition: 'module.exports = { "output": 1 };' }, fix))
+      .toBe('✅ ✨ Fix: repaired, output.js corrected, and it fits output.js on the example in input.js.');
+  });
+
+  it('says so where a change came back with a new output.js', () => {
+    const figure = 'module.exports = { "figure": {} };';
+    expect(resultMessage('✨ Code', { ...probe('ok'), output_definition: figure }, { change: 'A figure.' }))
+      .toBe('✅ ✨ Code: changed, with a new output.js, and it fits output.js on the example in input.js.');
+    expect(resultMessage('✨ Prompt', { ...probe('skipped'), output_definition: figure }, { change: 'The reason too.' })).toBe('✅ ✨ Prompt: changed, with a new output.js.');
   });
 
   it('stops a press at a definition that does not fit the node: what comes after would be written against it', () => {

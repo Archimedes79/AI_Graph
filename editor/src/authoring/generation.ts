@@ -167,21 +167,28 @@ export function outputsFrom(node: GraphNode, definition: string): Port[] {
 }
 
 /**
- * *node* with what *write*'s ✨ brought back written in: the file it wrote --
- * an output definition setting the outputs too -- the text restated where a
- * change was asked, and the exchange at the end of its history.
+ * *node* with what *write*'s ✨ brought back written in, as one step: the file
+ * it wrote -- an output definition setting the outputs too, and so the one a
+ * changed or fixed body came back with (`output_definition`), which the body
+ * was held to -- the text restated where a change was asked, and the exchange
+ * at the end of its history.
  */
-export function writtenInto(node: GraphNode, write: Write, response: Pick<GenerateResponse, 'result' | 'description' | 'calls'>, name: string, at = new Date()): GraphNode {
+export function writtenInto(
+  node: GraphNode, write: Write, response: Pick<GenerateResponse, 'result' | 'description' | 'output_definition' | 'calls'>, name: string, at = new Date(),
+): GraphNode {
   const config = { ...node.config } as Record<string, unknown>;
   let outputs = node.outputs;
+  const definesOutputs = (definition: string) => {
+    config.output_definition = definition;
+    if (definitionKeys(definition).length) outputs = outputsFrom(node, definition);
+  };
   if (write === 'input') config.input_definition = response.result;
-  else if (write === 'output') {
-    config.output_definition = response.result;
-    if (definitionKeys(response.result).length) outputs = outputsFrom(node, response.result);
-  } else {
+  else if (write === 'output') definesOutputs(response.result);
+  else {
     const body = bodyOf(node);
     if (body?.kind === 'data') Object.assign(config, heldFrom(node, body.field, response.result));
     else if (body) config[body.field] = response.result;
+    if (response.output_definition?.trim()) definesOutputs(response.output_definition);
   }
   config.history = withHistory(node, name, response.calls, at);
   return {
@@ -221,10 +228,11 @@ export function withHistory(node: GraphNode, name: string, calls: AICall[], at =
  * so a body that does not fit its output.js is said now rather than by the
  * next run. ✨ Fix (a *refine* with no change) says what the repair came to.
  */
-export function resultMessage(name: string, response: Pick<GenerateResponse, 'probe'>, refine?: Refine): string {
+export function resultMessage(name: string, response: Pick<GenerateResponse, 'probe' | 'output_definition'>, refine?: Refine): string {
   const { probe } = response;
-  if (refine && !refine.change?.trim()) return fixMessage(probe);
-  const done = refine ? `${name}: changed` : `${name}: written`;
+  const withOutput = !!response.output_definition?.trim();
+  if (refine && !refine.change?.trim()) return fixMessage(probe, withOutput);
+  const done = `${name}: ${refine ? 'changed' : 'written'}${withOutput ? ', with a new output.js' : ''}`;
   switch (probe?.status) {
     case 'ok':
       return `✅ ${done}, and it fits output.js on the example in input.js.`;
@@ -238,12 +246,15 @@ export function resultMessage(name: string, response: Pick<GenerateResponse, 'pr
   }
 }
 
-/** ✨ Fix is a repair: what it came to -- repaired, or still not -- not that a body was written. */
-function fixMessage(probe: ProbeReport | undefined): string {
+/**
+ * ✨ Fix is a repair: what it came to -- repaired, or still not -- not that a
+ * body was written. *mended*: output.js came back corrected with it.
+ */
+function fixMessage(probe: ProbeReport | undefined, mended: boolean): string {
   switch (probe?.status) {
     case 'ok':
     case 'repaired':
-      return '✅ ✨ Fix: repaired, and it fits output.js on the example in input.js.';
+      return `✅ ✨ Fix: repaired${mended ? ', output.js corrected' : ''}, and it fits output.js on the example in input.js.`;
     case 'failed':
       if (probe.error) return `⚠️ ✨ Fix: it still fails on the example in input.js: ${probe.error}`;
       return `⚠️ ✨ Fix: still does not fit -- ${lowerFirst(probe.problems.join('; '))}`;

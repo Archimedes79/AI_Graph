@@ -59,12 +59,13 @@ export function useTryExample(node: GraphNode, graph: () => Graph): { tried: Tri
 /**
  * What a try came to, in one line: ✓ only where it was held to an output.js
  * and fits it. A failure held to none is one whose output.js cannot be read --
- * its details say why -- and ✨ Output writes it again.
+ * its details say why -- and ✨ Fix (asked for it with the body) or ✨ Output
+ * writes it again.
  */
 export function triedLine(run: ExampleRun): string {
   if (run.status === 'pass') return run.held ? '✓ fits output.js' : 'It runs. There is no output.js yet to hold it to.';
   if (run.status === 'fail') {
-    return run.held ? `✗ Does not fit output.js: ${run.details.join('; ')}` : `✗ ${run.details.join('; ')}. ✨ Output writes it again.`;
+    return run.held ? `✗ Does not fit output.js: ${run.details.join('; ')}` : `✗ ${run.details.join('; ')}. ✨ Fix or ✨ Output writes it again.`;
   }
   return run.status === 'skipped' ? run.details.join(' ') : `It failed: ${run.details.join('\n')}`;
 }
