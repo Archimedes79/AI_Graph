@@ -11,7 +11,7 @@ const open = vi.hoisted(() => ({
   metadata: { name: 'Graph', description: '', gui_scheme: 'night' },
   rfNodes: [], rfEdges: [], past: [], future: [], subgraphStack: [],
   isExecuting: false, isProject: true, runProgress: null, executionResult: null,
-  isDirty: () => false,
+  isDirty: (): boolean => false,
   setMetadata: () => {}, stopRun: () => {}, undo: () => {}, redo: () => {}, loadGraph: () => {},
   exportGraph: () => ({}), updateNode: () => {}, runGraph: async () => {}, closeSubgraphsTo: () => {},
 }));
