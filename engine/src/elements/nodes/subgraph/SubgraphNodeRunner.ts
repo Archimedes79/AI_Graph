@@ -65,12 +65,24 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
     // where an unreadable graph is reported; a node drawn on a canvas is not.
     if (!graph) return { inputs: [], outputs: [] };
     const ports = boundaryPorts(graph, elements);
-    if (!this.catchesErrors(node)) return ports;
-    return {
-      inputs: ports.inputs,
-      outputs: [...ports.outputs, errorOutput('Set when the graph inside failed')],
-    };
+    // Run once per item, the ports say so as a code node's do: an input the
+    // node declares a list is taken an item at a time, and every output hands
+    // on the list of what the runs gave. Which inputs those are is this node's
+    // setting, not the graph inside's, so it is kept from what it declares.
+    const perItem = this.batchMode(node) === 'per_item';
+    const lists = new Set(node.inputs.filter((port) => port.multi).map((port) => port.id));
+    const inputs = ports.inputs.map((port) => (perItem && lists.has(port.id) ? { ...port, multi: true } : port));
+    const outputs = perItem ? ports.outputs.map((port) => ({ ...port, multi: true })) : ports.outputs;
+    return { inputs, outputs: this.catchesErrors(node) ? [...outputs, errorOutput('Set when the graph inside failed')] : outputs };
   }
+
+  /**
+   * "Run once per item" runs the graph inside once for each item of a list
+   * that arrives -- one run of it is one call, as a code node's `run` is --
+   * and the executor fans out and collects, as it does for every kind that
+   * says so.
+   */
+  override readonly fansOut = true;
 
   /** One run of the graph this node holds, on *inputs* keyed by its input nodes: what reached its output nodes. */
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {

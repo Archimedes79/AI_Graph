@@ -581,7 +581,10 @@ shut. A Trigger node inside counts as fired whenever the part runs; one with an 
 reported, because nothing in there keeps time.
 
 A page belongs to the graph at the top, so a `gui` node inside is reported as a mistake.
-A list crosses a port as one value: the graph inside runs once, on all of it.
+A list crosses a port as one value: the graph inside runs once, on all of it -- or, with
+**Run once per item** ticked in the node's panel (it is asked when a list arrives), once
+for each item, and each output hands on the list of what the runs gave, as a code node's
+does.
 
 ### What it does not do yet
 

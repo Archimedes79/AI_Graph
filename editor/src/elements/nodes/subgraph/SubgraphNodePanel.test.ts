@@ -27,7 +27,7 @@ function openButton(node: GraphNode): ReactElement<{ onClick: () => void; disabl
 }
 
 describe('a node that holds a graph', () => {
-  it('waits while a run is going, and says so, rather than close the dialog and open nothing (B36)', () => {
+  it('waits while a run is going, and says so, rather than close the panel and open nothing (B36)', () => {
     const node: GraphNode = {
       id: 'part', node_type: 'subgraph', label: 'Part', description: '', position: { x: 0, y: 0 },
       inputs: [], outputs: [], config: { ...baseNodeConfig(), subgraph: { metadata: {}, nodes: [], edges: [] } },

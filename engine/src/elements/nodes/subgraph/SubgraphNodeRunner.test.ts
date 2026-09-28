@@ -92,6 +92,28 @@ describe('a node that holds a graph', () => {
     expect(result.node_results.find((r) => r.node_id === 'part')?.outputs).toEqual({ loud: 'FROM OUTSIDE' });
   });
 
+  it('runs the graph inside once per item where it is set to: a list in, one result per item out', async () => {
+    // What nested_statistics does for one paragraph, done for each of a list of them.
+    const listing: Runtime = {
+      ...shouting,
+      code: { run: async (_body, inputs) => ('value' in inputs ? { output: String(inputs.value).toUpperCase() } : { output: ['one', 'two', 'three'] }) },
+    };
+    const run = async (part: GraphNode) => {
+      const outer = graph([node('paragraphs', 'code', { code: 'x' }, { outputs: ['output'] }), part, node('show', 'output', {}, { inputs: ['value'] })],
+        [edge('in', 'paragraphs', 'output', 'part', 'subject'), edge('out', 'part', 'loud', 'show', 'value')]);
+      const result = await executeGraph(outer, { runtime: listing, registry });
+      expect(result.status).toBe('success');
+      return result.node_results.find((r) => r.node_id === 'part')?.outputs;
+    };
+    const each = { ...holder({ batch_mode: 'per_item' }), inputs: [{ ...port('subject', 'input'), multi: true }] };
+    expect(await run(each)).toEqual({ loud: ['ONE', 'TWO', 'THREE'] });
+    // Its ports say so: the input it runs over is a list, and so is what it hands on.
+    const ports = registry.node('subgraph')!.derivedPorts(each, registry)!;
+    expect([ports.inputs[0].multi, ports.outputs[0].multi]).toEqual([true, true]);
+    // Not set to: one run, on the whole list.
+    expect(await run(holder())).toEqual({ loud: 'ONE,TWO,THREE' });
+  });
+
   it('carries a value the boundary cannot spell as text', async () => {
     // A port is not a text field: what the wire carries is what arrives inside.
     const passing: Runtime = { ...shouting, code: { run: async (_b, inputs) => ({ output: inputs.value }) } };
