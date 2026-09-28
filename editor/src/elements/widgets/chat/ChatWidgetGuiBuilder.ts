@@ -3,8 +3,8 @@ import { WidgetGuiBuilder } from '../../WidgetGuiBuilder';
 /**
  * A conversation. Nothing to set: what it is wired to is the whole of what it
  * does. Its value is the conversation, which the widget clears turn by turn
- * itself (the engine's `ChatWidgetRunner.settle`), so there is no
- * `clearValueAfterRun`.
+ * itself (the engine's `ChatWidgetRunner.settle`), not as a box a run empties
+ * (`WidgetRunner.clearsValueAfterRun`).
  */
 export class ChatWidgetGuiBuilder extends WidgetGuiBuilder {
   readonly widgetKind = 'chat';

@@ -8,7 +8,7 @@
 // a page shows what each of its blocks shows (`NodeGuiBuilder.resultPreviews`),
 // and a chart block reads a list of points as a chart (`WidgetGuiBuilder.preview`).
 
-import { asDrawing, toFigure, type Figure } from './widgets/plot_window/PlotChart';
+import { asDrawing, drawingSource, toFigure, type Figure } from './widgets/plot_window/PlotChart';
 
 export type Preview =
   /** A text on one line: a text, a number, a record's first fields. */
@@ -58,7 +58,7 @@ function pictureOf(text: string): string | undefined {
   const value = text.trim();
   if (/^data:image\//i.test(value) || /^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg|avif)(\?\S*)?$/i.test(value)) return value;
   const drawing = asDrawing(value);
-  return drawing ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawing)}` : undefined;
+  return drawing ? drawingSource(drawing) : undefined;
 }
 
 /** A chart's figure, as the sketch of its values -- or, with none yet, its title, which says why. */

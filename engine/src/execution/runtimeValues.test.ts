@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { parseGraph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements } from './runtimeValues.ts';
+import { memoryFeedbackEdges } from './executor.ts';
+import { triggeredNodes } from './triggers.ts';
 
 /**
  * A question's key is the whole address of its answer. The server used to
@@ -30,6 +32,32 @@ describe('what a graph asks before it runs', () => {
     ]);
     expect((asked.nodes[1].config.gui_widgets as Array<{ value: string }>)[0].value).toBe('data');
     expect(asked.nodes[2].config.value).toBe('kept');
+  });
+
+  it('asks for one event only what that event runs: pressing "Plot" does not ask for the file only "Summarize" reads', () => {
+    const port = (id: string) => ({ id, name: id, kind: 'input', data_type: 'any', multi: false, required: false, description: '' });
+    const block = (id: string) => ({ id, kind: 'input_picker', mode: 'file', label: id, value: '' });
+    const tools = parseGraph({
+      nodes: [
+        { id: 'page', node_type: 'gui', config: { gui_widgets: [block('text'), block('csv'), { id: 'summarize', kind: 'button', label: 'Summarize' }, { id: 'plot', kind: 'button', label: 'Plot' }] } },
+        { id: 'summary', node_type: 'code', inputs: [port('file')], config: { code: 'function run() { return {}; }' } },
+        { id: 'chart', node_type: 'code', inputs: [port('file')], config: { code: 'function run() { return {}; }' } },
+      ],
+      edges: [
+        { id: 'a', source_node_id: 'page', source_port_id: 'text_out', target_node_id: 'summary', target_port_id: 'file' },
+        { id: 'b', source_node_id: 'page', source_port_id: 'summarize_out', target_node_id: 'summary', target_port_id: '__run' },
+        { id: 'c', source_node_id: 'page', source_port_id: 'csv_out', target_node_id: 'chart', target_port_id: 'file' },
+        { id: 'd', source_node_id: 'page', source_port_id: 'plot_out', target_node_id: 'chart', target_port_id: '__run' },
+      ],
+    });
+    const feedback = memoryFeedbackEdges(tools.nodes, tools.edges, registry);
+    const askedFor = (event: string | null) => runtimeRequirements(
+      tools, registry, event ? triggeredNodes(tools, { node_id: 'page', port_id: event }, feedback) : null,
+    ).map((requirement) => requirement.key);
+    expect(askedFor('plot_out')).toEqual(['page::csv']);
+    expect(askedFor('summarize_out')).toEqual(['page::text']);
+    // A run of everything asks everything.
+    expect(askedFor(null)).toEqual(['page::text', 'page::csv']);
   });
 
   it('asks for a text wired into an input that reads its file as a file, to be browsed for', () => {

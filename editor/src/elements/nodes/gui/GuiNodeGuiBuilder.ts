@@ -4,7 +4,7 @@ import { WIDGET_BUILDERS } from '../../widgets/roster';
 import type { PortPreviews } from '../../resultPreview';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
-import { blockShows, widgetOfPort } from '@/document/guiWidgets';
+import { blockPort, blockShows, widgetOfPort } from '@/document/guiWidgets';
 import { blockSize } from '@/document/layout';
 
 /** What *widget* wants handed to it, asked of the engine's element with the block as the engine holds one. */
@@ -35,6 +35,10 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
   readonly icon = '🖥️';
 
   readonly color = 'var(--ui-node-gui, #4a1d3a)';
+
+  // No paletteGroup: a graph has one page, and the Page tab makes it with its
+  // first block. Dropped from the node palette it was a second way to make it,
+  // and a second page, one nobody would ever see.
 
   // No Panel: the page is edited on the Page tab, under the graph's name and
   // description (`PageHeading`), and no panel is opened for it
@@ -77,7 +81,7 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
    */
   override restingValue(node: GraphNode, port: string): unknown {
     const widget = widgetOfPort(node, port);
-    if (!widget || widget.mode === 'directory' || port !== `${widget.id}_out`) return undefined;
+    if (!widget || widget.mode === 'directory' || port !== blockPort(widget, 'out')) return undefined;
     return typeof widget.value === 'string' && widget.value.trim() ? widget.value : undefined;
   }
 
@@ -94,7 +98,7 @@ export class GuiNodeGuiBuilder extends NodeGuiBuilder {
     const inputs: PortPreviews['inputs'] = {};
     for (const port of node.inputs) {
       const block = widgetOfPort(node, port.id);
-      const preview = block && WIDGET_BUILDERS[block.kind]?.preview(blockShows(result, block.id));
+      const preview = block && WIDGET_BUILDERS[block.kind]?.preview(blockShows(result, block));
       if (preview) inputs[port.id] = preview;
     }
     return { inputs, outputs: {} };

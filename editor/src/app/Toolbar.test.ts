@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import Toolbar, { graphBusy, lastAsked } from './Toolbar';
+import Toolbar, { graphBusy } from './Toolbar';
 import { fileActions } from './FileMenu';
 
 // Rendered to a string, a component reads the store's first state, not the
@@ -11,7 +11,7 @@ const open = vi.hoisted(() => ({
   metadata: { name: 'Graph', description: '', gui_scheme: 'night' },
   rfNodes: [], rfEdges: [], past: [], future: [], subgraphStack: [],
   isExecuting: false, isProject: true, runProgress: null, executionResult: null,
-  isDirty: () => false,
+  isDirty: (): boolean => false,
   setMetadata: () => {}, stopRun: () => {}, undo: () => {}, redo: () => {}, loadGraph: () => {},
   exportGraph: () => ({}), updateNode: () => {}, runGraph: async () => {}, closeSubgraphsTo: () => {},
 }));
@@ -112,19 +112,17 @@ describe('the header', () => {
     // Each is still named, for a tooltip and a screen reader -- Undo and Redo only ever as icons.
     for (const name of ['Generate', 'Settings', 'Deploy', 'Undo (Ctrl+Z)', 'Redo (Ctrl+Shift+Z)']) expect(button(html, name.replace(/[()+]/g, '\\$&'))).toContain('title=');
   });
-});
 
-describe('✨ AI Graph\'s Cancel', () => {
-  it('leaves the design on its way unwanted, and a new one wanted (B36)', () => {
-    // Cancel closed the dialog and let the request run on: opened again, the
-    // dialog offered the old design as the answer to a new, empty description.
-    const asked = lastAsked();
-    const first = asked.ask();
-    expect(first()).toBe(true);
-    asked.cancel();
-    expect(first()).toBe(false);
-    const second = asked.ask();
-    expect(second()).toBe(true);
-    expect(first()).toBe(false);
+  it('marks the document unsaved beside its name, with nothing on the level shown too', () => {
+    // Every node deleted since the last save -- or a node's empty graph gone
+    // into -- hid the dot: it asked for nodes or wires on the canvas as well.
+    const clean = open.isDirty;
+    open.isDirty = () => true;
+    try {
+      expect(toolbar()).toContain('aria-label="Unsaved changes"');
+    } finally {
+      open.isDirty = clean;
+    }
+    expect(toolbar()).not.toContain('aria-label="Unsaved changes"');
   });
 });

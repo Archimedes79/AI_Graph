@@ -32,6 +32,7 @@ engine/src/elements/                            editor/src/elements/
   WidgetRunner.ts                                 WidgetGuiBuilder.ts
   registry.ts                                     registry.ts
   Runtime.ts  port.ts  folderListing.ts           fields/  (settings several panels share)
+  images.ts
   nodes/                                          nodes/
     ai/     AiNodeRunner.ts  prompt.ts  ask.ts      ai/   AiNodeGuiBuilder.ts  AiNodePanel.tsx
                                                           AiNodeAdvancedPanel.tsx
@@ -107,7 +108,7 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
 │   └── GuiNodeRunner            a composite: holds widgets, its ports are theirs
-└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue ┊ receives · graphAuthorNote
+└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue · runtimeRequirements · applyRuntimeValue ┊ receives · graphAuthorNote · referencedPaths
     ├── InputPickerWidgetRunner   TextIoWidgetRunner   SelectWidgetRunner
     ├── SliderWidgetRunner        ButtonWidgetRunner   ChatWidgetRunner
     ├── StaticWidgetRunner       no ports: part of the page, not the graph
@@ -116,13 +117,13 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
 ElementGuiBuilder<PanelProps>                    Panel
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
+├── NodeGuiBuilder                        label · icon · color · hint · paletteGroup · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + definesItself · ownsDescription · portEditing/portHint · wantsOn · restingValue
 │                                           dropPort/withDropped (what a file dropped on the node gives it)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
-└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
+└── WidgetGuiBuilder                      create(id, label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
     ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
@@ -167,7 +168,7 @@ turned out there was nothing to keep apart — see below.)
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
 | `ElementRunner` | `config` | `catchesErrors` | — |
 | `NodeRunner` | `nodeType` · `texts` · `logic` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `definitions` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `generation` · `deployNeeds` · `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
-| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` | `receives` · `graphAuthorNote` |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` · `runtimeRequirements` · `applyRuntimeValue` | `receives` · `graphAuthorNote` · `referencedPaths` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, its panel |
 
@@ -266,12 +267,14 @@ engine/src                               editor/src
   authoring/         what ✨ writes, and   authoring/          a node's text and what ✨ writes from it:
     definition.ts    how it is read          NodeDefinition      its rows, ▶ Try, the live transcript,
     prompts.ts  history.ts  generation.ts    generation.ts …     the request, the page-wide sweep
+    examples.ts      its example, tried
   execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
     triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
+    clock.ts         when a trigger is due
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
-    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the running app, layout, schemes
-    reuse.ts  interface.ts  examples.ts
+    runtimeValues.ts  wiring.ts              DesignerTab …       Page tab, the running app, layout, schemes
+    reuse.ts  latch.ts  interface.ts
   project/           a graph on disk
     folder.ts        read · write · watch
     flow.ts          flow.json: nodes and wires
@@ -338,7 +341,9 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   node whose panel opens is; each once its nodes are measured on a canvas that is on screen. The
   page's panel is the way to the Page tab, where the page is built. The node the person is
   on is `editingNodeId`, which the card, its wires and the bar all read. Delete on the canvas
-  deletes only as pressed there (`deleteKeys`): a key pressed in the panel is the panel's.
+  deletes only as pressed there (`deletes`): a key pressed in the panel is the panel's. It asks
+  one question first where something goes with the nodes -- a page's blocks, their wires -- as
+  a card's ✕ does, and takes them with their wires as one undo step (`askToDelete`).
 - **The bar under the canvas** (`app/ChangeBar.tsx`) says what to change, on the node that is
   selected or on the whole graph. On a node whose body ✨ writes, the words wait for its
   panel in the store (`pendingChange`, `askChange`, `clearChange`); the panel takes them up.
@@ -356,9 +361,14 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   it -- `page/ApplicationView.tsx`, the delivered page attached to the document -- and the
   graph runs when the page is used; without one, what starts the graph starts it
   (`startEvents`: the trigger nodes set to fire at start, or, with no trigger node and
-  nothing on a page to start it, the whole graph once), and each clock keeps its time. It
-  is ■ Stop while it runs, and ends by itself where nothing is left to happen. A delivered
-  tool starts the same way when it is opened, and has no ▶ Run of its own. Below 1280 pixels its buttons and the
+  nothing on a page to start it, the whole graph once), and each clock keeps its time --
+  the one clock the served tool keeps too (`execution/clock.ts`), so a round comes due in
+  the editor when it would there, and asks nobody anything. It is the document that runs:
+  it is ended by another document opened (`graphStore.opened`), not by a step into a
+  node's graph, and a round waits while the canvas shows one. It is ■ Stop while it runs,
+  and ends by itself where nothing is left to happen. A delivered tool starts the same way
+  when it is opened, and has no ▶ Run of its own; one whose server keeps no time for it --
+  ⧉ Open as a tool -- keeps its clock in its own window. Below 1280 pixels its buttons and the
   palette are their icons, and at 1024 nothing scrolls the page sideways. What Generate
   says stands whole in a line under it until dismissed; what it says of saving and
   opening is kept with the document it was said of, and goes when another is opened.
@@ -441,8 +451,10 @@ other knows, it imports it or replays its result:
    it, and `shutdown()` stops them in that order — what makes work before what carries it:
    the schedule, the runs (`RunBoard.stopAll`), then HTTP, which meanwhile still answers a
    page watching its run and refuses anything new with 503. Each step gets what is left of
-   eight seconds; what would not stop is named. A scheduled round that was cut off is not
-   recorded, so `<graph>.last-run.json` keeps the last round that finished. The CLI maps
+   eight seconds; what would not stop is named. A round of the clock still waiting behind a
+   page's run goes at once (`Rounds.turn` is handed its signal). A scheduled round that was
+   cut off is not recorded, so the file the last round is kept in keeps the last one that
+   finished. The CLI maps
    Ctrl+C, SIGTERM, SIGHUP and Ctrl+Break to it (`untilStopped`); a second signal exits at
    once. `serve()` itself installs no signal handler: it is a library function.
 
@@ -526,7 +538,7 @@ output.js cannot be read asks for it corrected the same way. Every model call is
 
 **▶ Try, `test` and `run-node` are one call.** `callNode` runs a node's body once on the
 example in its input.js -- no file read, nothing fanned out: the example is one item, as
-a read file gives it -- and [`execution/examples.ts`](../engine/src/execution/examples.ts)
+a read file gives it -- and [`authoring/examples.ts`](../engine/src/authoring/examples.ts)
 holds what comes back to output.js (`runExample`, `testGraph` at every depth). `executeNode`
 runs a node on given inputs as a run does (`run-node` with inputs), and `inputsFor` runs
 what feeds a node, not the node: ⟳ From the graph.
@@ -584,8 +596,12 @@ A graph is a folder, and **each fact is in one place**:
   Nothing about its neighbours: a node that needs to know what arrives follows the wire and
   reads the other node's output.js.
 - Every piece of writing is a file of its own beside them. Which fields become which files
-  is element knowledge, so each element declares it (`NodeRunner.texts`, `TextFile`). A
-  page's blocks write nothing: they are settings, in its `node.json`.
+  is element knowledge, so each element declares it (`NodeRunner.texts`, `TextFile`).
+- `page/` — the page: the first node that carries the interface keeps its folder beside
+  `nodes/`, not in it, whatever its id (`nodeFolders`), and its blocks in `page.json`. A
+  graph has one page and it is what a person using the tool sees, so it is the one folder
+  anybody opening the project looks for; a second page is a node like any other, and a
+  problem `check` names.
 
   ```
   nodes/<id>/
@@ -595,6 +611,8 @@ A graph is a folder, and **each fact is in one place**:
     prompt.md     the instructions its model is given            (AI node)
     data.json     what it holds -- data.txt, for a text          (data node)
     history.md    every exchange with the model about it
+  page/
+    page.json     its blocks, in order -- beside node.json and interface.json
   ```
 
   **Every file is there from the start.** A text nothing has been written into is written
@@ -613,7 +631,7 @@ in memory is the same document it always was; only the folder is laid out this w
 or a page that has them can do the same.
 
 - **The file wins over the inline value.** A text is read from its file when there is one.
-  That is why a deploy bundle (one `graph.json` carrying everything inline) and a plain
+  That is why a download (one `.json` carrying everything inline) and a plain
   `.json` file open the same way. A folder is a project only when it has a `flow.json`.
 - **Structure and writing never share a file**, and keys are sorted, so an unchanged
   save changes nothing and a moved node changes only `layout.json`.
@@ -645,7 +663,7 @@ or a page that has them can do the same.
 
 | State | Lives in | Travels as |
 |---|---|---|
-| the graph | a project folder: `flow.json`, `layout.json`, `nodes/<id>/` (`node.json`, `interface.json`, writing) — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
+| the graph | a project folder: `flow.json`, `layout.json`, `page/` (`page.json`), `nodes/<id>/` (`node.json`, `interface.json`, writing) — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
 | a widget's value, a conversation, a data node's value | inside the graph, in the element's own config | `result.memory` → `applyMemory` |
 | a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
 | what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
@@ -656,25 +674,34 @@ or a page that has them can do the same.
 
 ## Security boundaries
 
-- Everything binds to loopback; file browsing and a file chip's opening of a node's file in
-  the person's own editor switch off otherwise.
-- The server answers its own page, not every page in the browser: on loopback a request must
-  name 127.0.0.1, localhost or [::1] with the server's port (no DNS rebinding); an API call
-  that says where it comes from must come from the server's own origin, one the browser
-  marks cross-site is refused, and a body is read only when it is sent as `application/json`
-  (`foreignRequest` and `readJson` in `host/http.ts`).
+- Everything binds to loopback. Nothing asks who is calling: bound wider -- a container's
+  `0.0.0.0` -- every route of the table is open to whoever reaches the port, which is why
+  the container is published on the host's loopback only (`docker-compose.yml`). File
+  browsing and a file chip's opening of a node's file in the person's own editor switch off
+  on such a bind.
+- The server answers its own page, not every page in the browser: a request must name
+  127.0.0.1, localhost or [::1] (no DNS rebinding) -- with the server's port on loopback;
+  bound wider, with any port, or the address it was bound to, or a name
+  `AI_GRAPH_ALLOWED_HOSTS` lists. An API call that says where it comes from must come
+  from the server's own origin, one the browser marks cross-site is refused, and a body is
+  read only when it is sent as `application/json` (`foreignRequest` and `readJson` in
+  `host/http.ts`).
 - The `for` column of the contract is the line between a deployed tool and the editor: a
   deployed tool answers its graph, run/watch/stop, a file picker and a read-only view of
   its AI settings — no generation, no editing, no writing settings.
 - A code body runs in a separate Node process under `--permission`: files yes; child
   processes, addons, workers no. The network is **not** closed (Node has no flag for it).
-  It never holds a key: a model call is *asked for* (`node.llm`) and made by the process
-  that started it, at most 25 times each time it runs. A `code.js` from a folder somebody
-  handed you is never run in the trusted process.
+  Its process is handed no key: its environment is the engine's without a provider's
+  credential or anything named like one (`bodyEnvironment` in `host/node.ts`), and a model
+  call is *asked for* (`node.llm`) and made by the process that started it, at most 25
+  times each time it runs. That is the process, not the disk: a body reads files, and
+  `ai-settings.json`, keys and all, is a file. A `code.js` from a folder somebody handed
+  you is never run in the trusted process.
 - A graph can *name* an MCP tool server; only `ai-settings.json` can say which program a
   name starts. A URL is called directly.
-- The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root, writes
-  only `.json` graphs, never reads settings, and filters keys out of everything it returns.
+- The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root and takes
+  only a `.json` path -- a graph file, or a project's `flow.json`, whose nodes' files are
+  written with it --, never reads settings, and filters keys out of everything it returns.
 
 ## Keeping it clean
 
@@ -744,6 +771,7 @@ There are no import cycles through values, and none between the engine and the e
   context, hands back its last outputs when its definition and every input (files already
   read) are unchanged ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)). A node with
   nothing wired in reads the outside world and always runs; a whole-graph Run reuses nothing.
-- **A scheduled tool remembers its last round across restarts**, in
-  `<graph>.last-run.json` beside the graph. It is still a clock around a run: no history
+- **A scheduled tool remembers its last round across restarts**, in `flow.last-run.json`
+  inside a project folder, or `<file>.last-run.json` beside a graph file -- a bundle's
+  `graph.json.last-run.json`. It is still a clock around a run: no history
   and no ingest endpoint, because a monitoring system is a different product.

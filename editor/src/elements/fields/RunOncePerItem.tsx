@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { GraphNode } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { listPorts, runsPerItem, withPerItem } from '@/authoring/perItem';
@@ -22,7 +23,8 @@ function exampleOf(node: GraphNode): Record<string, unknown> | undefined {
  * an input can then be taken whole beside it ("whole list", in the ports).
  */
 export default function RunOncePerItem({ node, updateNode, subject }: Pick<NodeAdvancedPanelProps, 'node' | 'updateNode'> & { subject: string }) {
-  const nodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
+  // Compared node by node: a fresh list is a new one on every change of the store (`NodeEditor`).
+  const nodes = useGraphStore(useShallow((s) => s.rfNodes.map((item) => item.data.graphNode)));
   const edges = useGraphStore((s) => s.rfEdges);
   const lists = listPorts(node, exampleOf(node), nodes, edges);
   // Once asked, the question stays while the panel is open: unticked, no input

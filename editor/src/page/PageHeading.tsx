@@ -2,7 +2,7 @@ import type { GraphMetadata } from '@/graph';
 import { FIELD_ON_SURFACE, LINE, MUTED, SURFACE } from '@/ui/theme';
 
 /** A change to what the tool is called, or to what it does. */
-export type ToolWords = Partial<Pick<GraphMetadata, 'name' | 'description'>>;
+type ToolWords = Partial<Pick<GraphMetadata, 'name' | 'description'>>;
 
 /**
  * Above the page being built: the tool's name and what it does -- the graph's

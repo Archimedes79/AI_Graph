@@ -7,7 +7,9 @@
 //
 // - `inputs` is what arrived, keyed by port.
 // - `node` holds `node.llm(...)`, a question put to the process that holds
-//   the graph. Every body may ask; none ever holds a key.
+//   the graph. Every body may ask, and its process is handed no key: the
+//   environment it starts with has none (`host/node.ts`). What it can read on
+//   disk it can read -- ai-settings.json included.
 // - It runs in a process of its own (`host/node.ts`: no child processes, no
 //   addons, no workers), and what it returns is the element's output.
 //

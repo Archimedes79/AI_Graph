@@ -1,35 +1,27 @@
 import type { NodeType } from '@/graph';
 import { NODE_BUILDERS } from '@/elements/registry';
+import type { NodeGuiBuilder } from '@/elements/NodeGuiBuilder';
 import { ACCENT, DIMMER, LINE, SURFACE, TEXT } from '@/ui/theme';
 
 /**
- * What the palette offers. Not the page: a graph has one, and the Page tab
- * makes it with its first block -- a page node dropped on the canvas was a
- * second way to make it, and a second page one nobody would ever see.
+ * What the palette offers: each kind under the heading it says it goes under
+ * (`paletteGroup`), headings and kinds in the order of *builders* -- and
+ * not a kind that says none, as the page does. A table of kinds here was one
+ * more place a new kind had to be written into.
  */
-const CATEGORIES: { label: string; types: NodeType[] }[] = [
-  {
-    // `input` had no palette entry at all: the node type existed, the editor
-    // could load one, and there was no way to create one by hand. Every graph
-    // that reads a file or a folder headlessly starts with it.
-    label: 'Input',
-    types: ['input', 'trigger'],
-  },
-  {
-    label: 'Processing',
-    types: ['data', 'ai', 'code'],
-  },
-  {
-    label: 'Output',
-    types: ['output'],
-  },
-  {
-    // A graph of its own, one node wide from out here: the way a graph grows
-    // in depth rather than in width.
-    label: 'Structure',
-    types: ['subgraph'],
-  },
-];
+export function paletteGroups(builders: NodeGuiBuilder[]): { label: string; types: NodeType[] }[] {
+  const groups: { label: string; types: NodeType[] }[] = [];
+  for (const builder of builders) {
+    const label = builder.paletteGroup;
+    if (!label) continue;
+    const group = groups.find((one) => one.label === label);
+    if (group) group.types.push(builder.nodeType);
+    else groups.push({ label, types: [builder.nodeType] });
+  }
+  return groups;
+}
+
+const CATEGORIES = paletteGroups(Object.values(NODE_BUILDERS));
 
 interface SidebarProps {
   onAddNode: (nodeType: NodeType) => void;

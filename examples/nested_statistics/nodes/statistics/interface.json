@@ -4,15 +4,14 @@
       "port": "text",
       "name": "Text",
       "type": "any",
-      "description": "The text to measure"
+      "description": "Handed in by the node above; on its own run, this value"
     }
   ],
   "outputs": [
     {
       "port": "numbers",
       "name": "Numbers",
-      "type": "any",
-      "description": "What was counted"
+      "type": "any"
     }
   ]
 }

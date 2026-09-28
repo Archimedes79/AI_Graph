@@ -27,6 +27,10 @@ export class SubgraphNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-subgraph, #2a2a4a)';
 
+  // A graph of its own, one node wide from out here: the way a graph grows
+  // in depth rather than in width.
+  override readonly paletteGroup = 'Structure';
+
   override readonly ownsDescription = true;
 
   override readonly Panel = lazy(() => import('./SubgraphNodePanel'));

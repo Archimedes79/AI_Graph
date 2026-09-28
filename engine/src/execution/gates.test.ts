@@ -163,6 +163,27 @@ describe('a code node that returns booleans is a filter', () => {
     expect(result(run, 'n')).toMatchObject({ status: 'success', outputs: { got: 'from a' } });
   });
 
+  it('is computed in an event round when what computes it has a ◆ of its own', async () => {
+    // `y` hangs on `r`, and `r` on `q`: the press ran `r` but not `q`, so
+    // neither `r` nor `y` was ever opened.
+    const graph = graphOf(
+      [
+        node('page', 'gui', { gui_widgets: [{ id: 'go', kind: 'button' }] }),
+        node('x', 'code', { code: 'function run() { return { out: "from x" }; }' }, { in: ['p'], out: ['out'] }),
+        node('q', 'code', { code: 'function run() { return { ok: true }; }' }, { out: ['ok'] }),
+        node('r', 'code', { code: 'function run() { return { open: true }; }' }, { out: ['open'] }),
+        node('y', 'code', { code: 'function run(i) { return { got: i.v }; }' }, { in: ['v'], out: ['got'] }),
+      ],
+      [
+        edge('p', 'page', 'go_out', 'x', 'p'), edge('xy', 'x', 'out', 'y', 'v'),
+        edge('ry', 'r', 'open', 'y', RUN_PORT), edge('qr', 'q', 'ok', 'r', RUN_PORT),
+      ],
+    );
+    const run = await executeGraph(graph, { runtime, registry, latch: new Latch(), trigger: { node_id: 'page', port_id: 'go_out' } });
+    expect(result(run, 'r')).toMatchObject({ status: 'success', outputs: { open: true } });
+    expect(result(run, 'y')).toMatchObject({ status: 'success', outputs: { got: 'from x' } });
+  });
+
   it('opens a gate with true and with nothing else', async () => {
     ran = [];
     const truthy = 'function run() { return { draw: "yes", refresh: 1 }; }';
@@ -208,6 +229,32 @@ describe('what stood still is not news', () => {
     const second = await executeGraph(graph(), { runtime, registry, trigger: { node_id: 'page', port_id: 'other_out' }, latch });
     expect(result(second, 'answer')).toMatchObject({ held: true });
     expect(second.memory).toEqual([]);
+  });
+
+  it('does not show the page again what reached it only from nodes that stood still', async () => {
+    // Not around a loop: the clock's reader feeds the page, and nothing on the
+    // page feeds the reader. The page runs for its own button, and its picture
+    // was read and shown again from the value the reader was left holding.
+    let reads = 0;
+    const pictures = quietRuntime({
+      code: runtime.code,
+      files: { read: async () => { reads += 1; return 'cGljdHVyZQ=='; } },
+    });
+    const latch = new Latch();
+    const graph = graphOf(
+      [
+        node('clock', 'trigger', { trigger_every: '5m' }, { out: ['fired'] }),
+        node('reader', 'code', { code: 'function run() { return { pic: "cover.png" }; }' }, { out: ['pic'] }),
+        node('page', 'gui', { gui_widgets: [{ id: 'go', kind: 'button' }, { id: 'img', kind: 'image_view' }] }),
+      ],
+      [edge('t', 'clock', 'fired', 'reader', RUN_PORT), edge('p', 'reader', 'pic', 'page', 'img_in')],
+    );
+    const first = await executeGraph(graph, { runtime: pictures, registry, latch });
+    expect(result(first, 'page')!.display).toEqual({ img: 'data:image/png;base64,cGljdHVyZQ==' });
+    const pressed = await executeGraph(graph, { runtime: pictures, registry, latch, trigger: { node_id: 'page', port_id: 'go_out' } });
+    expect(result(pressed, 'reader')).toMatchObject({ held: true });
+    expect(result(pressed, 'page')!.display).toEqual({});
+    expect(reads).toBe(1);
   });
 });
 

@@ -45,8 +45,8 @@ export default function App() {
   });
   const clearSelection = useGraphStore((s) => s.clearSelection);
   const loadGraph = useGraphStore((s) => s.loadGraph);
-  // Saving and exporting are about the whole document, whichever level of it
-  // the canvas is showing; running is about the level you are looking at.
+  // Saving, exporting and running are about the whole document, whichever
+  // level of it the canvas is showing.
   const rootGraph = useGraphStore((s) => s.rootGraph);
   const newGraph = useGraphStore((s) => s.newGraph);
   const setMetadata = useGraphStore((s) => s.setMetadata);
@@ -306,9 +306,9 @@ export default function App() {
         if (!alive) return;
         const changes = disk.current.due(currentFilePath);
         if (!changes.length) return;
-        const refused = takeDiskChanges(changes);
-        const what = changes.filter((c) => !refused.includes(c.node_id)).map((c) => c.node_id);
-        if (what.length) setSaveStatus(`↻ From disk: ${[...new Set(what)].join(', ')}`);
+        // Named: the nodes whose change was taken -- not one gone since, or one that held it already.
+        const { taken, refused } = takeDiskChanges(changes);
+        if (taken.length) setSaveStatus(`↻ From disk: ${taken.join(', ')}`);
         // A graph inside a node changed on disk while there is unsaved work
         // here. Taking it would replace that graph whole, so it waits.
         if (refused.length) {

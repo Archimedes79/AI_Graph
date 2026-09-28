@@ -22,6 +22,8 @@ export class DataNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-data, #183b3b)';
 
+  override readonly paletteGroup = 'Processing';
+
   // A data node IS the graph's register: it holds its value between runs,
   // which is what lets a feedback edge into it close a cycle. Its panel is its
   // text, that value -- its kind and what it holds -- and ✨ Data, which writes

@@ -21,8 +21,6 @@ import { SliderWidgetRunner } from './slider/SliderWidgetRunner.ts';
 import { ButtonWidgetRunner } from './button/ButtonWidgetRunner.ts';
 import { ChatWidgetRunner } from './chat/ChatWidgetRunner.ts';
 
-export { InputPickerWidgetRunner };
-
 export const WIDGETS = [
   new TextWidgetRunner(),
   new DividerWidgetRunner(),

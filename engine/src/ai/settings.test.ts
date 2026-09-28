@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { candidatePaths, configuredMcpServers, configuredSettings, fromFile } from './settings.ts';
+import { aiSetting, candidatePaths, configuredMcpServers, configuredSettings, fromFile } from './settings.ts';
 
 /**
  * A key belongs in a file, not in a terminal on every run — and not in the
@@ -24,10 +24,8 @@ describe('ai-settings.json', () => {
     await withSettings(
       JSON.stringify({ ai: { provider: 'google', model: 'gemini-2.5-flash' }, api_keys: { google: 'k' } }),
       async (dir) => {
-        const settings = fromFile(dir);
-        expect(settings.provider).toBe('google');
-        expect(settings.model).toBe('gemini-2.5-flash');
-        expect(settings.apiKeys).toEqual({ google: 'k' });
+        expect(await aiSetting(dir, {})).toEqual({ provider: 'google', model: 'gemini-2.5-flash' });
+        expect(fromFile(dir, {}).apiKeys).toEqual({ google: 'k' });
       },
     );
   });
@@ -36,8 +34,9 @@ describe('ai-settings.json', () => {
     await withSettings(
       JSON.stringify({ ai: { provider: 'google', model: 'gemini-2.5-flash' }, api_keys: { google: 'k' } }),
       async (dir) => {
-        const settings = configuredSettings({ AI_GRAPH_AI_MODEL: 'gemini-2.5-pro' }, dir);
-        expect(settings.model).toBe('gemini-2.5-pro');
+        const env = { AI_GRAPH_AI_MODEL: 'gemini-2.5-pro' };
+        expect(await aiSetting(dir, env)).toEqual({ provider: 'google', model: 'gemini-2.5-pro' });
+        const settings = configuredSettings(env, dir);
         // and the key from the file survives, rather than the variable
         // replacing the whole configuration
         expect(settings.apiKeys).toEqual({ google: 'k' });

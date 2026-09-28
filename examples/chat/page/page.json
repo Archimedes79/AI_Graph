@@ -1,0 +1,13 @@
+[
+  {
+    "h": 10,
+    "id": "chat",
+    "kind": "chat",
+    "tone": "plain",
+    "value": {
+      "messages": [],
+      "pending": ""
+    },
+    "w": 16
+  }
+]

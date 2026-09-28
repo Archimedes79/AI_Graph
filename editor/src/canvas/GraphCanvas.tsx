@@ -18,7 +18,7 @@ import 'reactflow/dist/style.css';
 
 import { useGraphStore } from '@/store/graphStore';
 import GraphNodeView from './GraphNodeView';
-import { deleteKeys, removalsToApply } from './nodeRemoval';
+import { deleteSelected, deletes } from './nodeRemoval';
 import { drawnWire } from './wireLook';
 import { allInView, panToShow, READABLE_ZOOM, viewDue, type ViewDue } from './inView';
 import { showsPage } from '@/document/guiWidgets';
@@ -39,7 +39,7 @@ const nodeTypes = { graphNode: GraphNodeView };
  * looked like it deleted everything. Keys belong to the view you are looking
  * at.
  */
-export default function GraphCanvas({ active = true, onOpenPage }: { active?: boolean; onOpenPage?: () => void }) {
+export default function GraphCanvas({ active, onOpenPage }: { active: boolean; onOpenPage: () => void }) {
   const rfNodes = useGraphStore((s) => s.rfNodes);
   const rfEdges = useGraphStore((s) => s.rfEdges);
   const setRFNodes = useGraphStore((s) => s.setRFNodes);
@@ -59,8 +59,6 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
-  // Whether a key pressed now is pressed on the canvas (`deleteKeys`).
-  const [focused, setFocused] = React.useState(false);
 
   // What the view owes (`viewDue`): another graph fitted whole; a node added
   // shown with the rest where they fit readably; one whose panel opens brought
@@ -169,34 +167,27 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
 
   return (
     // Focusable, so a click on the empty canvas puts the keys here: Delete
-    // deletes what is selected only when it was pressed on the canvas.
+    // deletes what is selected only when it was pressed on the canvas
+    // (`deletes`), and asks first what is worth asking (`askToDelete`).
     <div
       ref={reactFlowWrapper}
       className="flex-1 min-h-0 outline-none"
       tabIndex={-1}
-      onFocus={() => setFocused(true)}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}
+      onKeyDown={(event) => { if (deletes(event.key, active)) deleteSelected(window.confirm); }}
     >
       <ReactFlow
         nodes={rfNodes}
         edges={edges}
-        onNodesChange={(changes: NodeChange[]) => {
-          // A drag reports a position change per frame, so history points come
-          // from onNodeDragStart instead; removals have no such event and are
-          // committed here, before they are applied.
-          const kept = removalsToApply(
-            changes,
-            (id) => rfNodes.find((n) => n.id === id)?.data.graphNode,
-            window.confirm,
-          );
-          if (kept.some((c) => c.type === 'remove')) commit();
-          setRFNodes(applyNodeChanges(kept, rfNodes) as typeof rfNodes);
-        }}
+        // A drag reports a position change per frame, so its undo step comes
+        // from onNodeDragStart instead. Nothing is removed through here: the
+        // canvas's Delete is its own (`deleteKeyCode` below).
+        onNodesChange={(changes: NodeChange[]) => setRFNodes(applyNodeChanges(changes, rfNodes) as typeof rfNodes)}
         onNodeDragStart={() => commit()}
-        onEdgesChange={(changes: EdgeChange[]) => {
-          if (changes.some((c) => c.type === 'remove')) commit();
-          setRFEdges(applyEdgeChanges(changes, rfEdges));
-        }}
+        // A drag begins once the node moves, not when the button goes down:
+        // at ReactFlow's 0 every click on a node began one, and so was an
+        // undo step -- Redo thrown away, and the next Ctrl+Z undoing nothing.
+        nodeDragThreshold={1}
+        onEdgesChange={(changes: EdgeChange[]) => setRFEdges(applyEdgeChanges(changes, rfEdges))}
         onConnect={onConnect}
         // One click on a node is the node the person is on: its panel opens
         // beside the canvas, and the bar under it speaks of it. With Shift or
@@ -206,7 +197,7 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
           setEditingNode(node.id);
         }}
         onNodeDoubleClick={(_, node) => {
-          if (showsPage(node.data.graphNode.node_type)) onOpenPage?.();
+          if (showsPage(node.data.graphNode.node_type)) onOpenPage();
         }}
         onPaneClick={clearSelection}
         nodeTypes={nodeTypes}
@@ -220,7 +211,9 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
         onInit={setRfInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        deleteKeyCode={deleteKeys(active, focused)}
+        // ReactFlow's Delete took a node's wires before it asked about the
+        // node, one undo step each: the wrapper above handles the key instead.
+        deleteKeyCode={null}
         style={{ background: SUNKEN }}
       >
         <Background

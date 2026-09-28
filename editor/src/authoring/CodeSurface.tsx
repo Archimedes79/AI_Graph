@@ -12,10 +12,10 @@ import { scheme } from '@/ui/scheme';
 import type { CodeLanguage } from './CodeField';
 
 // CodeMirror, and nothing else: this is the one module that imports it, and it
-// is only ever reached through `React.lazy` in CodeField. The element registry
-// is shared with the deployed page, so an ordinary import here would put a
-// code editor into every tool anyone is handed -- the import graph decides
-// what ships, and this file is where that graph is cut.
+// is only ever reached through `React.lazy` in CodeField. So a code editor is
+// a chunk of its own, fetched when the first box is drawn and not with the
+// editor's first page -- the import graph decides what loads, and this file is
+// where that graph is cut.
 
 const FONT = {
   '&': { fontSize: '12.5px', borderRadius: '8px', border: `1px solid ${LINE}`, overflow: 'hidden' },

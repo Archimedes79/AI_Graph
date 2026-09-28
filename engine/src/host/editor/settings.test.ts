@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { providerStatus, save, settingsPath, setupLines, status } from './settings.ts';
-import { aiSetting, configuredSettings, probeLocal, readSettingsFile } from '../../ai/settings.ts';
+import { providerStatus, save, setupLines, status } from './settings.ts';
+import { aiSetting, configuredSettings, probeLocal, readSettingsFile, settingsPath } from '../../ai/settings.ts';
 
 /**
  * The settings dialog's contract: what it may see, what a save may change, and

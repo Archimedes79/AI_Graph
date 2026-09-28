@@ -1,5 +1,7 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { createElement } from 'react';
+import { act, createElement, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Port } from '@/graph';
 import { port } from '@engine/elements/port.ts';
@@ -7,12 +9,19 @@ import PortsEditor from './PortsEditor';
 
 const needed = (input: Port): Port => ({ ...input, required: true });
 
+/** What the node's panel hands the editor besides its ports: both sides the person's, nothing wired, nothing ticked. */
+const panel = {
+  editing: { inputs: 'edit', outputs: 'edit' } as const, hints: {}, wiring: { inputs: {}, outputs: {} },
+  readsFiles: false, compact: false, perItem: false, caught: false,
+};
+
 describe('the ports editor', () => {
   it('offers "needed" on each input, of a code or an ai node too', () => {
     // The chat example's model is not asked with the history alone because
     // nobody typed a message: its `message` input is needed. Nothing in the
     // editor could say so, so the example could not be built by hand.
     const html = renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs: [port('history', 'history', 'input', 'text'), needed(port('message', 'message', 'input', 'text'))],
       outputs: [port('output', 'output', 'output', 'text')],
       onChange: () => {},
@@ -29,6 +38,7 @@ describe('the ports editor', () => {
     // box as well, folded away under Advanced, which did nothing on a port
     // that did not say `file_path`.
     const drawn = (readsFiles: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs: [port('csv', 'csv', 'input', 'file_path'), port('name', 'name', 'input', 'text')],
       outputs: [], onChange: () => {}, readsFiles,
     }));
@@ -41,6 +51,7 @@ describe('the ports editor', () => {
 
   it('has no type and no "list" per port for a code or an ai node -- its input.js and output.js say them', () => {
     const drawn = (compact: boolean) => renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs: [port('csv', 'csv', 'input', 'file_path')], outputs: [port('rows', 'rows', 'output', 'json')], onChange: () => {}, compact,
     }));
     expect(drawn(true)).not.toContain('aria-label="input type"');
@@ -56,6 +67,7 @@ describe('the ports editor', () => {
     const words = { ...port('words', 'words', 'input', 'any'), multi: true };
     const stop = port('stop', 'stop', 'input', 'any');
     const drawn = (perItem: boolean, inputs: Port[]) => renderToStaticMarkup(createElement(PortsEditor, {
+      ...panel,
       inputs, outputs: [], onChange: () => {}, compact: true, perItem,
     }));
     const ticks = drawn(true, [words, stop]).match(/<input type="checkbox"[^>]*aria-label="whole list"[^>]*>/g) ?? [];
@@ -65,5 +77,41 @@ describe('the ports editor', () => {
     expect(drawn(true, [words, { ...stop, multi: true }]).match(/aria-label="whole list"/g)).toHaveLength(2);
     expect(drawn(false, [words, stop])).not.toContain('whole list');
     expect(drawn(true, [words])).not.toContain('whole list');
+  });
+});
+
+describe('a port renamed in the ports editor', () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  it('takes a name another port had, kept back until then, once that port is gone', async () => {
+    // Typed "b" over "a" while there was a "b": said, and kept back. "b" then
+    // removed, the row still showed "b" with nothing wrong -- and the port was "a".
+    let ports = { inputs: [] as Port[], outputs: [port('a', 'a', 'output', 'any'), port('b', 'b', 'output', 'any')] };
+    function Held() {
+      const [now, setNow] = useState(ports);
+      ports = now;
+      return createElement(PortsEditor, { ...panel, compact: true, inputs: now.inputs, outputs: now.outputs, onChange: setNow });
+    }
+    const screen = document.createElement('div');
+    document.body.appendChild(screen);
+    const root = createRoot(screen);
+    await act(async () => { root.render(createElement(Held)); });
+
+    const field = screen.querySelector<HTMLInputElement>('[aria-label="output name"]')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setter.call(field, 'b');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(screen.textContent).toContain('Two outputs are both called "b".');
+    expect(ports.outputs.map((one) => one.id)).toEqual(['a', 'b']);
+
+    await act(async () => { screen.querySelector<HTMLButtonElement>('[aria-label="Remove output b"]')!.click(); });
+    expect(ports.outputs.map((one) => one.id)).toEqual(['b']);
+    expect(screen.querySelector<HTMLInputElement>('[aria-label="output name"]')!.value).toBe('b');
+    expect(screen.textContent).not.toContain('both called');
+
+    await act(async () => { root.unmount(); });
+    screen.remove();
   });
 });

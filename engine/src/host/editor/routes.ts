@@ -10,20 +10,17 @@
 // `project/folder.ts`, generation by `generate.ts`, settings by `settings.ts`.
 
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseGraph, type Graph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
-import { runExample } from '../../execution/examples.ts';
+import { runExample } from '../../authoring/examples.ts';
 import { registry } from '../../elements/registry.ts';
-import { writeBundle } from '../../cli/bundle.ts';
+import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
-import { applyRuntimeValues } from '../../execution/runtimeValues.ts';
 import { nodeRuntime } from '../node.ts';
-import { aiSetting } from '../../ai/settings.ts';
+import { aiSetting, settingsPath } from '../../ai/settings.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
 import * as files from './files.ts';
@@ -32,9 +29,6 @@ import * as settings from './settings.ts';
 import * as project from '../../project/folder.ts';
 import * as gen from './generate.ts';
 import { zip } from './zip.ts';
-
-/** The built editor, when this checkout has one: a bundle from the editor carries the same page `--bundle` does. */
-const BUILT_PAGE = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', '..', 'editor', 'dist');
 
 /**
  * @param held the graph this server serves as a tool — see `holdGraph`. The
@@ -96,7 +90,6 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
 
     async nodeInputs(asked) {
       const graph = parseGraph(asked);
-      applyRuntimeValues(graph, {}, registry);
       const { inputs, upstream } = await inputsFor(graph, String(asked.node_id ?? ''), { runtime: nodeRuntime(), registry, reuse });
       const failed = upstream.node_results.find((result) => result.status === 'error');
       return { inputs, error: failed ? `${failed.node_id}: ${failed.error}` : null };
@@ -160,8 +153,8 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       const graph = parseGraph(asked);
       const work = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
       try {
-        const pageDir = existsSync(join(BUILT_PAGE, 'runtime.html')) ? BUILT_PAGE : undefined;
-        await writeBundle(graph, work, { pageDir });
+        // The page `--bundle` carries: a bundle from the editor is the same bundle.
+        await writeBundle(graph, work, { pageDir: builtPage() });
         const entries = [];
         for (const file of await allFiles(work)) {
           const path = file.slice(work.length + 1);
@@ -190,7 +183,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       try {
         return await settings.save(asked);
       } catch (error) {
-        throw new Refusal(500, `Could not write ${settings.settingsPath()}: ${message(error)}`);
+        throw new Refusal(500, `Could not write ${settingsPath()}: ${message(error)}`);
       }
     },
 
@@ -202,8 +195,8 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       try {
         const folder = project.projectFolderOf(resolve(expandHome(asked.graph_path)));
         if (!folder) throw new Refusal(400, 'Only a project folder keeps files to open: save the graph as one first.');
-        const file = await project.nodeFileOf(folder, asked.node_id, asked.file || undefined);
-        return await files.openExternal(join(folder, project.NODES_DIR), file);
+        const file = await project.nodeFileOf(folder, asked.node_id, asked.file || undefined, asked.inside ?? []);
+        return await files.openExternal(folder, file);
       } catch (error) {
         if (error instanceof Refusal) throw error;
         throw new Refusal(error instanceof NotFound ? 404 : 400, message(error));

@@ -19,9 +19,9 @@ export abstract class DisplayWidgetRunner extends WidgetRunner<Record<string, ne
         name: widget.label || widget.id,
         kind: 'input',
         data_type: 'any',
-        // Multi: several sources can feed one display, and the executor then
-        // collects them as a list. A single-valued port would take the last
-        // edge and drop the rest without saying so.
+        // Multi: it takes a list, and says so where it is drawn and checked. The
+        // run collects what several wires bring into a list on any port
+        // (`collectInputs`); several sources feeding one display is that.
         multi: true,
         required: false,
         description: '',

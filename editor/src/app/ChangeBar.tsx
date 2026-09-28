@@ -7,7 +7,7 @@ import { errorText } from '@/api/errorText';
 import LiveGeneration from '@/authoring/LiveGeneration';
 import { hasDefinitions } from '@/authoring/generation';
 import GraphProblems from './GraphProblems';
-import { lastAsked } from './Toolbar';
+import { lastAsked } from './lastAsked';
 import { changeGoesTo, changeTarget, describeChange, graphChange, graphRequest, targetName } from './graphChange';
 import { ACCENT_TEXT, DANGER_TEXT, DIM, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
@@ -18,8 +18,13 @@ type Change =
   /** *sent*: the graph as it was asked about, to tell whether it changed since. */
   | { phase: 'ready'; said: string; graph: Graph; explanation: string; sent: string }
   | { phase: 'failed'; said: string; error: string; calls: AICall[] }
-  /** *step*: how many undo steps there were once it was applied -- while there still are, Undo is the change. */
-  | { phase: 'applied'; step: number };
+  /**
+   * *step*: the undo step it was applied as -- while that is still the last
+   * one, Undo is the change. Not how many steps there were: the history is
+   * kept to fifty, and once full the next edit left the count as it was, and
+   * the note offered to undo that edit as the change.
+   */
+  | { phase: 'applied'; step: string };
 
 /**
  * The bar under the canvas, always there: say what to change, on the node the
@@ -35,7 +40,7 @@ type Change =
 export default function ChangeBar() {
   const target = useGraphStore((s) => changeTarget(s.rfNodes.map((n) => n.data.graphNode), s.editingNodeId));
   const clearSelection = useGraphStore((s) => s.clearSelection);
-  const steps = useGraphStore((s) => s.past.length);
+  const lastStep = useGraphStore((s) => s.past[s.past.length - 1]);
   const [text, setText] = useState('');
   const [change, setChange] = useState<Change>({ phase: 'idle' });
   // Only the last change asked for is still wanted: Stop leaves the one on its way unwanted.
@@ -94,7 +99,8 @@ export default function ChangeBar() {
   const apply = () => {
     if (change.phase !== 'ready') return;
     useGraphStore.getState().changeGraph(change.graph);
-    setChange({ phase: 'applied', step: useGraphStore.getState().past.length });
+    const { past } = useGraphStore.getState();
+    setChange({ phase: 'applied', step: past[past.length - 1] });
   };
 
   const discard = () => {
@@ -131,7 +137,7 @@ export default function ChangeBar() {
           )}
         </Note>
       )}
-      {change.phase === 'applied' && steps === change.step && (
+      {change.phase === 'applied' && lastStep === change.step && (
         <Note>
           <div className="flex items-center gap-3">
             <span className="flex-1 min-w-0" style={{ color: TEXT }}>✓ The graph was changed as said.</span>

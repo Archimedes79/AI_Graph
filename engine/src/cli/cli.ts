@@ -22,24 +22,26 @@
 // "Text for 'Greeting': " in front of the JSON and nobody could parse it.
 
 import { createInterface } from 'node:readline/promises';
+import type { Graph } from '../graph.ts';
 import { loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
-import { runExample, testGraph } from '../execution/examples.ts';
+import { runExample, testGraph } from '../authoring/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
 import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
-import { writeBundle } from './bundle.ts';
+import { builtPage, WEB_DIR, writeBundle } from './bundle.ts';
 import { portTaken, serve } from '../host/serve.ts';
 import { untilStopped } from '../host/lifecycle.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
+  /** Whether the graph was named, rather than taken to be the project in this folder, the way a bundle is laid out. */
+  graphNamed: boolean;
   inputs: Record<string, string>;
   /** Seconds between the end of one run and the start of the next. */
   every?: number;
@@ -60,17 +62,13 @@ export interface CliOptions {
   mcpRoot?: string;
 }
 
-// The interval spelling lives with the triggers now: a graph can name its own
-// clock, and the page that serves it reads the same `5m` this flag does.
-export { parseInterval };
-
 /** Where a served tool looks first. Nothing addresses it from outside, so this is a habit, not a contract. */
 const DEFAULT_PORT = 8000;
 /** How many in a row to try before a busy machine is the user's problem to sort out. */
 const PORTS_TRIED = 10;
 
 export function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = { graphPath: '', inputs: {} };
+  const options: CliOptions = { graphPath: '', graphNamed: false, inputs: {} };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--inputs') {
@@ -118,7 +116,8 @@ export function parseArgs(argv: string[]): CliOptions {
       options.graphPath = arg;
     }
   }
-  if (!options.graphPath) options.graphPath = 'graph.json';
+  options.graphNamed = options.graphPath !== '';
+  if (!options.graphNamed) options.graphPath = '.';
   return options;
 }
 
@@ -154,10 +153,7 @@ async function answer(
   return resolved;
 }
 
-async function runOnce(options: CliOptions): Promise<number> {
-  const graph = await loadGraph(options.graphPath);
-  applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
-
+async function runOnce(graph: Graph): Promise<number> {
   const runtime = nodeRuntime({
     report: (event) => {
       if (event.type === 'batch') process.stderr.write(`\r  ${event.done}/${event.total}`);
@@ -174,13 +170,18 @@ async function runOnce(options: CliOptions): Promise<number> {
 }
 
 /**
- * Run repeatedly, *interval* seconds apart.
+ * Run *graph* repeatedly, *interval* seconds apart.
  *
  * Measured between the end of one run and the start of the next, not between
  * starts: a graph that takes longer than its interval would otherwise pile
  * runs on top of each other until something gives.
+ *
+ * One graph for every round, as a served tool's clock holds one: what a round
+ * leaves in a data node is what the next starts from. Read again each round,
+ * a counter counted to one for ever. And a round that could not even start is
+ * said, and the next one is tried: the next may be fine.
  */
-async function runEvery(options: CliOptions): Promise<number> {
+async function runEvery(graph: Graph, options: CliOptions): Promise<number> {
   const seconds = options.every ?? 0;
   let code = 0;
   for (let round = 0; options.limit === undefined || round < options.limit; round += 1) {
@@ -188,7 +189,10 @@ async function runEvery(options: CliOptions): Promise<number> {
       process.stderr.write(`\nWaiting ${seconds}s…\n`);
       await new Promise<void>((wake) => { after(seconds * 1000, wake); });
     }
-    code = await runOnce(options);
+    code = await runOnce(graph).catch((error: unknown) => {
+      process.stderr.write(`\nThis run failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    });
   }
   return code;
 }
@@ -196,14 +200,9 @@ async function runEvery(options: CliOptions): Promise<number> {
 /** Write the graph and the engine somewhere someone else can run them. */
 async function makeBundle(options: CliOptions): Promise<number> {
   const graph = await loadGraph(options.graphPath);
-  // The built page, when this checkout has one. A bundle without it still
-  // runs on the terminal; with it, the recipient gets the tool they were
-  // shown. Looked up rather than passed, because the person writing a bundle
-  // should not have to know where a build lands.
-  const built = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'editor', 'dist');
-  const written = await writeBundle(graph, options.bundle!, {
-    pageDir: existsSync(join(built, 'runtime.html')) ? built : undefined,
-  });
+  // A bundle without the built page still runs on the terminal; with it, the
+  // recipient gets the tool they were shown.
+  const written = await writeBundle(graph, options.bundle!, { pageDir: builtPage() });
   process.stderr.write(
     `Wrote ${written.length} files to ${options.bundle}
 `
@@ -216,8 +215,9 @@ async function makeBundle(options: CliOptions): Promise<number> {
 /**
  * Serve the page and wait.
  *
- * The page directory is `page/` beside the graph — where a bundle puts it —
- * and its absence is not an error: a graph with no interface, or a bundle
+ * The page is the one a bundle carries beside its graph (`web/`), else the
+ * one this checkout built -- a project run with `--serve` has none of its own
+ * -- and its absence is not an error: a graph with no interface, or a bundle
  * written without a build at hand, still serves its few endpoints, which is
  * enough for anything driving it over HTTP.
  *
@@ -227,17 +227,20 @@ async function makeBundle(options: CliOptions): Promise<number> {
  * to know about, let alone read a Node stack trace about.
  */
 async function runServer(options: CliOptions): Promise<number> {
-  // No graph file is a legitimate way to run this. The editor starts it beside
-  // itself purely to execute, and posts the graph being edited with every
-  // request; a bundle is the other case, and there the graph is right here.
-  const hasGraph = existsSync(resolve(options.graphPath));
-  // Beside the graph file, or inside the project folder: where a bundle puts it.
-  const folder = projectFolderOf(options.graphPath);
-  const pageDir = folder ? join(folder, 'page') : resolve(dirname(resolve(options.graphPath)), 'page');
+  // No graph file is a legitimate way to run this: the editor posts the graph
+  // being edited with every request, and serves one only when it is named --
+  // started in a folder that happened to hold a graph.json, it shipped that
+  // one and kept its clock. A bundle is the other case, and there the graph is
+  // right here. A graph that was named and is not there is a mistake to say,
+  // not an empty server: `serve` says it, where it reads the graph.
+  const hasGraph = options.graphNamed || (!options.editor && existsSync(resolve(options.graphPath)));
+  // Beside the project -- a bundle is one -- or beside a single graph file.
+  const carried = resolve(projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)), WEB_DIR);
+  const pageDir = !hasGraph ? undefined : existsSync(join(carried, 'runtime.html')) ? carried : builtPage();
 
   const start = (port: number) => serve({
     ...(hasGraph ? { graphPath: options.graphPath } : {}),
-    pageDir: existsSync(join(pageDir, 'runtime.html')) ? pageDir : undefined,
+    pageDir,
     port,
     ...(options.editor ? { editor: { dist: resolve(options.editor) } } : {}),
     ...(options.host ? { host: options.host } : {}),
@@ -303,11 +306,10 @@ async function open(url: string): Promise<void> {
   if (process.env.AI_GRAPH_NO_BROWSER) return;
   const command = process.platform === 'win32' ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
   const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  try {
-    spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
-  } catch {
-    // A headless machine is a fine place to serve from; the URL is printed.
-  }
+  // A headless machine is a fine place to serve from; the URL is printed. A
+  // missing opener is not thrown but said as an 'error' event, and unheard that
+  // event ended the process -- a container's, which has no xdg-open, at start.
+  spawn(command, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
 /**
@@ -419,15 +421,17 @@ export async function main(argv: string[]): Promise<number> {
   if (options.mcp) return runMcp(options);
   if (options.bundle) return makeBundle(options);
   if (options.serve || options.editor) return runServer(options);
+  const graph = await loadGraph(options.graphPath);
   // The graph's own clock, when the command line names none: a graph saved as
   // "every 5 minutes" is that on any machine, not only where someone remembers
   // the flag. `--every` still wins, which is how one run is made of it.
-  if (!options.every && existsSync(resolve(options.graphPath))) {
-    const graph = await loadGraph(options.graphPath);
+  if (!options.every) {
     // Its shortest interval: on the command line a round is the whole graph,
     // every trigger counted as fired, so one clock is all there is to keep.
     const intervals = graphTriggers(graph).filter((trigger) => trigger.every).map((trigger) => parseInterval(trigger.every));
     if (intervals.length) options.every = Math.min(...intervals);
   }
-  return options.every ? runEvery(options) : runOnce(options);
+  // Asked once, however many rounds follow.
+  applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
+  return options.every ? runEvery(graph, options) : runOnce(graph);
 }

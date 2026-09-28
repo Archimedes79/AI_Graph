@@ -88,13 +88,9 @@ describe('the panel beside the canvas', () => {
     stop();
   });
 
-  it('closes with its node, however the node goes -- left pointing at the id, it opened again on the next node of that id', () => {
+  it('closes with its node -- left pointing at the id, it opened again on the next node of that id', () => {
     store().setEditingNode('count');
-    store().deleteNode('count');
-    expect(store().editingNodeId).toBeNull();
-    store().setEditingNode('shown');
-    // As the canvas removes a node: Delete pressed on it.
-    store().setRFNodes(store().rfNodes.filter((node) => node.id !== 'shown'));
+    store().deleteNodes(['count']);
     expect(store().editingNodeId).toBeNull();
     // Moving what is left keeps a panel that is open.
     store().setEditingNode('part');

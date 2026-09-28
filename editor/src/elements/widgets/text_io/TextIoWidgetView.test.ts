@@ -5,7 +5,7 @@ import { WIDGET_BUILDERS } from '@/elements/registry';
 import TextIoWidgetView from './TextIoWidgetView';
 
 const box = (mode: string, value: unknown, incoming?: unknown) => renderToStaticMarkup(createElement(TextIoWidgetView, {
-  widget: WIDGET_BUILDERS.text_io.create('Answer', mode), value, incoming, onChange: () => {},
+  widget: WIDGET_BUILDERS.text_io.create('answer', 'Answer', mode), value, incoming, onChange: () => {},
 }));
 const SAVE = 'Save this text as a file';
 

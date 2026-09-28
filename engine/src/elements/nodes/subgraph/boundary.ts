@@ -50,6 +50,16 @@ export function handedUp(node: GraphNode, arrived: Record<string, unknown>, elem
   return wanted ? arrived[wanted] ?? null : null;
 }
 
+/**
+ * What a boundary node is answered with, instead of running: the value handed
+ * down, on the output its element gives it -- `output`, for a text input
+ * node, which is that element's to say.
+ */
+export function handedDown(node: GraphNode, value: unknown, elements: Runners): Record<string, unknown> {
+  const out = (elements.node(node.node_type)?.derivedPorts(node, elements) ?? node).outputs[0]?.id;
+  return out ? { [out]: value } : {};
+}
+
 /** The holding node's ports, as the graph inside it describes them. */
 export function boundaryPorts(graph: Graph, elements: Runners): { inputs: Port[]; outputs: Port[] } {
   // `any` throughout: of the data types only `file_path` means anything to the

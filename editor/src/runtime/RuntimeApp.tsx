@@ -10,8 +10,7 @@ import { watchSchedule } from './watchSchedule';
 import { call, type ScheduleState } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
-import { graphTriggers, startEvents } from '@engine/execution/triggers.ts';
-import { registry as engineRegistry } from '@engine/elements/registry.ts';
+import { startApplication } from '@/app/application';
 
 /**
  * The deployed graph's front-end.
@@ -31,7 +30,6 @@ export default function RuntimeApp() {
   const metadata = useGraphStore((s) => s.metadata);
   // A deployed tool looks like the thing that was designed, scheme included.
   useSchemeOnRoot(metadata.gui_scheme);
-  const executionResult = useGraphStore((s) => s.executionResult);
   const setExecutionResult = useGraphStore((s) => s.setExecutionResult);
 
   const [loadError, setLoadError] = useState('');
@@ -55,27 +53,30 @@ export default function RuntimeApp() {
   const delivered = useDeliveredRun();
 
   // Opened, the tool is started, as ▶ Run starts it in the editor
-  // (`startEvents`). Its trigger nodes are the server's to fire (below); a
-  // graph with none runs whole once where nothing on its page would start it,
-  // and otherwise waits for its page to be used.
+  // (`app/application.ts`) -- unless its server keeps its time. A bundle's
+  // trigger nodes, when the tool starts and on their clock, run in the server,
+  // not here: a page is a window, and a window is not always open (below).
+  // One the server keeps no time for starts here: a graph nothing on its page
+  // starts runs whole once, and the clock of a tool opened from the editor with
+  // ⧉ Open as a tool -- which no server keeps -- ticks in this window while it
+  // is open. The first answer about the clock decides, once.
   const started = useRef(false);
-  useEffect(() => {
-    if (!ready || started.current) return;
-    started.current = true;
-    const graph = useGraphStore.getState().exportGraph();
-    if (!graphTriggers(graph).length && startEvents(graph, engineRegistry).includes(null)) void delivered.run(null);
-  }, [ready, delivered]);
+  const start = useRef(delivered.run);
+  start.current = delivered.run;
 
-  // The graph's own triggers -- when the tool starts, and on its clock -- run in
-  // the server, not here: a page is a window, and a window is not always open.
-  // This only watches. What the server last produced is shown as soon as the
-  // page opens, and each new round as it lands; what that round remembered is
-  // replayed into this page's copy of the graph like any other run's.
+  // The graph's own triggers, where the server keeps them: this only watches.
+  // What the server last produced is shown as soon as the page opens, and each
+  // new round as it lands; what that round remembered is replayed into this
+  // page's copy of the graph like any other run's.
   const [schedule, setSchedule] = useState<ScheduleState | null>(null);
   const seenRound = useRef(0);
   useEffect(() => {
     if (!ready) return undefined;
     return watchSchedule(() => call('schedule'), (state) => {
+      if (!started.current) {
+        started.current = true;
+        if (!state.scheduled) void startApplication(useGraphStore.getState().exportGraph(), () => start.current(null));
+      }
       setSchedule(state);
       if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {
         seenRound.current = state.runs;
@@ -87,10 +88,6 @@ export default function RuntimeApp() {
       }
     });
   }, [ready, setExecutionResult]);
-
-  // A backend error can be several lines long; it belongs in the body, not
-  // squeezed into a header span next to the buttons.
-  const runError = executionResult?.status === 'error' ? executionResult.error : '';
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
@@ -122,15 +119,6 @@ export default function RuntimeApp() {
         )}
         {!loadError && !ready && (
           <div className="m-6 text-sm" style={{ color: DIM }}>Loading…</div>
-        )}
-
-        {runError && (
-          <div
-            className="m-6 text-sm rounded-lg px-4 py-3 whitespace-pre-wrap"
-            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: DANGER_TEXT }}
-          >
-            {runError}
-          </div>
         )}
 
         {/* The page -- or, when it has no blocks, what the tool does and what

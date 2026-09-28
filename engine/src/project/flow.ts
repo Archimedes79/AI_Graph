@@ -44,8 +44,8 @@ function edgeOf(wire: unknown, path: string): GraphEdge {
   return { ...edge, id: wireOf(edge) };
 }
 
-/** Keys in one order, so saving an unchanged graph changes nothing. */
-function sorted<T extends Record<string, unknown>>(record: T): T {
+/** Keys in one order, so saving an unchanged graph changes nothing in the file. */
+export function sorted<T extends Record<string, unknown>>(record: T): T {
   return Object.fromEntries(Object.keys(record).sort().map((key) => [key, record[key]])) as T;
 }
 

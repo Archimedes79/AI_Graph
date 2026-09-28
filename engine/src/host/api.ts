@@ -22,7 +22,7 @@ import type { ExecutionResult, Graph, GraphNode, NodeResult } from '../graph.ts'
 import type { Trigger } from '../execution/triggers.ts';
 import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
-import type { ExampleRun } from '../execution/examples.ts';
+import type { ExampleRun } from '../authoring/examples.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 
 export type { TextChange };
@@ -268,11 +268,9 @@ export const API = {
   schedule: route<void, ScheduleState>('GET', '/api/runtime/last', 'tool'),
   /** Which model the tool calls. Read-only: a recipient configures it in a file, not in a page. */
   toolAiSettings: route<void, ToolAiSettings>('GET', '/api/runtime/ai-settings', 'tool'),
-  requirements: route<Graph, Requirement[]>('POST', '/api/execute/requirements', 'tool'),
+  requirements: route<RunGraph, Requirement[]>('POST', '/api/execute/requirements', 'tool'),
   /** Start a run in the background: the graph, and beside it the page event that asked, if one did. */
   startRun: route<RunGraph, { run_id: string; total: number }>('POST', '/api/execute/start', 'tool'),
-  /** Run to the end in one call, for a script driving a tool over HTTP rather than a page watching it. */
-  runNow: route<Graph, ExecutionResult>('POST', '/api/execute/', 'tool'),
   run: route<{ id: string }, RunSnapshot>('GET', '/api/execute/runs/:id', 'tool'),
   stopRun: route<{ id: string }, { cancelled: boolean }>('POST', '/api/execute/runs/:id/cancel', 'tool'),
   /** Loopback only: listing directories is for the person at the keyboard. */
@@ -338,9 +336,11 @@ export const API = {
   /**
    * One of a node's files in a project, in the person's own editor: `file`,
    * named from the node's folder -- `input.js`, `history.md` -- or, without
-   * it, its body (`nodes/<id>/code.js`). Loopback only: it starts a program.
+   * it, its body (`nodes/<id>/code.js`). The node is one of the graph
+   * `inside` leads down to: the ids of the nodes that hold it, outermost
+   * first (`nodeFileOf`). Loopback only: it starts a program.
    */
-  openExternal: route<{ graph_path: string; node_id: string; file?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
+  openExternal: route<{ graph_path: string; inside?: string[]; node_id: string; file?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
 } as const;
 
 export type Api = typeof API;

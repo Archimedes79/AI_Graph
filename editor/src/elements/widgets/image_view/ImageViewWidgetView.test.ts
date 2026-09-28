@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ImageViewWidgetView from './ImageViewWidgetView';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 
-const widget = WIDGET_BUILDERS.image_view.create('Cover');
+const widget = WIDGET_BUILDERS.image_view.create('cover', 'Cover');
 const shown = (incoming: unknown) => renderToStaticMarkup(createElement(ImageViewWidgetView, {
   widget, value: undefined, incoming, onChange: () => {},
 }));
@@ -12,9 +12,9 @@ const shown = (incoming: unknown) => renderToStaticMarkup(createElement(ImageVie
 describe('an image on the page', () => {
   it('says a value arrived that is not a path, rather than that nothing arrived', () => {
     // The bug: a record such as {cover: "a.png"} was dropped, and the block
-    // said "Nothing to show yet -- wire a file path into it".
+    // said nothing had arrived.
     const html = shown({ cover: 'a.png' });
-    expect(html).not.toContain('Nothing to show yet');
+    expect(html).not.toContain('No image yet');
     expect(html).toContain('shows an image file path or URL');
     expect(html).toContain('{&quot;cover&quot;:&quot;a.png&quot;}');
     expect(html).toContain('A code node wired in before it can pick the path out of it.');
@@ -32,9 +32,12 @@ describe('an image on the page', () => {
     expect(html).toContain('shows an image file path or URL');
   });
 
-  it('still waits quietly when nothing has arrived', () => {
-    expect(shown(undefined)).toContain('Nothing to show yet');
-    expect(shown(null)).toContain('Nothing to show yet');
-    expect(shown('')).toContain('Nothing to show yet');
+  it('still waits quietly when nothing has arrived, in the words of whoever uses the tool', () => {
+    // It told them to "wire a file path into Cover and run the graph":
+    // the builder's words, on the delivered page.
+    for (const nothing of [undefined, null, '']) {
+      expect(shown(nothing)).toContain('>No image yet<');
+      expect(shown(nothing)).not.toMatch(/wire|run the graph/);
+    }
   });
 });

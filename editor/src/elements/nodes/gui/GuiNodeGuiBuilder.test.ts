@@ -15,13 +15,13 @@ function page(widget: GuiWidget): GraphNode {
  */
 describe('what a block on a page asks of the node wired into it', () => {
   it('is what its kind draws', () => {
-    const table = { ...WIDGET_BUILDERS.table.create('Rows'), id: 'rows' };
+    const table = WIDGET_BUILDERS.table.create('rows', 'Rows');
     expect(NODE_BUILDERS.gui.wantsOn(page(table), 'rows_in')).toContain('column header');
   });
 
   it('is what its kind draws for every drawing block: a block reshapes nothing', () => {
     for (const kind of ['plot_window', 'table', 'image_view'] as const) {
-      const block = { ...WIDGET_BUILDERS[kind].create('Block'), id: 'block' };
+      const block = WIDGET_BUILDERS[kind].create('block', 'Block');
       expect(NODE_BUILDERS.gui.wantsOn(page(block), 'block_in'), kind).toBeTruthy();
     }
   });
@@ -35,7 +35,7 @@ describe('what a block on a page asks of the node wired into it', () => {
  */
 describe('where a block on a page shows what arrives', () => {
   it('is a chart\'s size and the sizes it draws its labels and title at', () => {
-    const chart = { ...WIDGET_BUILDERS.plot_window.create('Sizes'), id: 'sizes', w: 16, h: 9 };
+    const chart = { ...WIDGET_BUILDERS.plot_window.create('sizes', 'Sizes'), w: 16, h: 9 };
     expect(NODE_BUILDERS.gui.wantsOn(page(chart), 'sizes_in'))
       .toMatch(/which the chart draws at the block's real size .* shown as it stands; shown at about 1106 x 616 px \(16 x 9 cells\), labels 11 px, title 13 px$/);
   });
@@ -47,7 +47,7 @@ describe('where a block on a page shows what arrives', () => {
   });
 
   it('is a text box\'s text first: it takes anything, and this is read after "which wants"', () => {
-    const box = { ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer', w: 8, h: 5 };
+    const box = { ...WIDGET_BUILDERS.text_io.create('answer', 'Answer', 'output'), w: 8, h: 5 };
     expect(NODE_BUILDERS.gui.wantsOn(page(box), 'answer_in'))
       .toBe('14 px text that wraps and scrolls, shown at about 546 x 336 px (8 x 5 cells)');
   });

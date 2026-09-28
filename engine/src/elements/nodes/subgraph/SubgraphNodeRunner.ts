@@ -2,7 +2,7 @@ import { NodeRunner, type Runners, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { parseGraph, type ExecutionResult, type Graph, type GraphNode } from '../../../graph.ts';
 import { errorOutput, type Problem } from '../../../execution/wiring.ts';
-import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedUp } from './boundary.ts';
+import { boundaryInputs, boundaryOutputs, boundaryPorts, carried, handedDown, handedUp } from './boundary.ts';
 
 export interface SubgraphConfig {
   /** The graph this node holds. An empty one for a node nobody has filled in yet. */
@@ -96,7 +96,7 @@ export class SubgraphNodeRunner extends NodeRunner<SubgraphConfig> {
       // A port nothing is wired to is not answered, and the node inside runs
       // as it is configured.
       if (!(boundary.id in inputs)) continue;
-      given[boundary.id] = { output: inputs[boundary.id] };
+      given[boundary.id] = handedDown(boundary, inputs[boundary.id], elements);
     }
 
     const run = await runtime.subgraph.run(graph, given);

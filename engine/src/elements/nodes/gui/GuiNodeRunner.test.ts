@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { GuiNodeRunner } from './GuiNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
-import { quietRuntime } from '../../../../test/fakes.ts';
+import { registry } from '../../registry.ts';
+import { startEvents } from '../../../execution/triggers.ts';
+import { graphOf, quietRuntime } from '../../../../test/fakes.ts';
 import type { GraphNode } from '../../../graph.ts';
 
 /**
@@ -95,5 +97,44 @@ describe('what a display block shows', () => {
   it('shows a failure that arrives at an image as it is, not read as a path', async () => {
     const shown = await new GuiNodeRunner().display(blocks, { img_in: '⚠ upstream: no cover field' }, noBody);
     expect(shown).toEqual({ img: '⚠ upstream: no cover field' });
+  });
+});
+
+describe('what a page starts', () => {
+  it('is nothing on a block that hands nothing on, whatever it was told', () => {
+    // A chart ticked "using this starts the graph" claimed an event port it
+    // does not have, and the application waited for the page to start it.
+    const shows = page([
+      { id: 'chart', kind: 'plot_window', run_on_change: true },
+      { id: 'said', kind: 'text_io', mode: 'output', run_on_change: true },
+      { id: 'q', kind: 'text_io', mode: 'input' },
+    ]);
+    const element = new GuiNodeRunner();
+    expect(element.derivedPorts(shows).outputs.map((p) => p.id)).toEqual(['q_out']);
+    expect(element.eventPorts(shows)).toEqual([]);
+    expect(startEvents(graphOf([shows]), registry)).toEqual([null]);
+  });
+
+  it('is the port of each block that does', () => {
+    const starts = page([{ id: 'go', kind: 'button' }, { id: 'q', kind: 'text_io', mode: 'input', run_on_change: true }]);
+    expect(new GuiNodeRunner().eventPorts(starts)).toEqual(['go_out', 'q_out']);
+  });
+});
+
+describe('what a page asks before it runs', () => {
+  it('is what its blocks ask, each under its own key -- and an answer goes only to a block that asked', () => {
+    // The page wrote an answer into whichever block had the id, a heading's
+    // text included; now each block says what it asks and keeps what it is told.
+    const asks = page([{ id: 'pick', kind: 'input_picker', label: 'Folder', mode: 'directory' }, { id: 'title', kind: 'text', value: 'Heading' }]);
+    const element = new GuiNodeRunner();
+    // Asked under its block, and used where what the block hands on is.
+    expect(element.runtimeRequirements(asks)).toEqual([{ key: 'page::pick', label: 'Folder', kind: 'directory', direction: 'input', current: '', ports: ['pick_out'] }]);
+    element.applyRuntimeValue(asks, 'pick', '/data');
+    element.applyRuntimeValue(asks, 'title', 'written over');
+    expect(asks.config.gui_widgets).toEqual([
+      expect.objectContaining({ id: 'pick', value: '/data' }),
+      expect.objectContaining({ id: 'title', value: 'Heading' }),
+    ]);
+    expect(element.referencedPaths(asks)).toEqual(['/data']);
   });
 });

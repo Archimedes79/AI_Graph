@@ -10,11 +10,12 @@ import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
+import { lastAsked } from './lastAsked';
 import SubgraphTrail from './SubgraphTrail';
 import GraphProblems from './GraphProblems';
 import ViewTabs, { type EditorView } from './ViewTabs';
-import { startApplication, stopApplication, useApplication } from './application';
-import { usePage } from '@/page/GuiPage';
+import { startApplication, stopApplication, useApplication, useTopHasPage } from './application';
+import { pageOf } from '@/document/guiWidgets';
 import FileMenu, { fileActions } from './FileMenu';
 import { ACCENT_FILL, ACCENT_TEXT, DANGER, DANGER_TEXT, DIM, DIMMER, LINE, MUTED, NEUTRAL_BUTTON, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
 
@@ -37,26 +38,6 @@ export function graphBusy(running: boolean, sweeping: boolean): string | null {
   if (running) return 'A run is going: stop it, or wait for it, before opening another graph.';
   if (sweeping) return '✨ Generate is writing this graph: stop it, or wait for it, before opening another.';
   return null;
-}
-
-/**
- * Numbered requests of which only the last is still wanted: `ask` hands out
- * what tells a request whether it still is, and `cancel` makes none of them.
- *
- * ✨ AI Graph's Cancel closed the dialog and left the request running; opened
- * again, the dialog showed the old design as the answer to a new, empty
- * description, ready to load.
- */
-export function lastAsked(): { ask: () => () => boolean; cancel: () => void } {
-  let last = 0;
-  return {
-    ask: () => {
-      last += 1;
-      const mine = last;
-      return () => mine === last;
-    },
-    cancel: () => { last += 1; },
-  };
 }
 
 interface ToolbarProps {
@@ -89,11 +70,11 @@ export default function Toolbar({
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const sweep = useGraphSweep();
-  // Subscribed to so the toolbar re-renders when the graph changes and the
-  // "✅ Saved" line below can stop claiming something that is no longer true.
-  const rfNodes = useGraphStore((s) => s.rfNodes);
-  const rfEdges = useGraphStore((s) => s.rfEdges);
-  const isDirty = useGraphStore((s) => s.isDirty);
+  // One answer, which the header is drawn anew by when it turns: the unsaved
+  // dot, and the "✅ Saved" line below, which must not claim what is no longer
+  // true. It was asked twice a render, and the header drawn on every change of
+  // the graph -- each a whole serialised document, every frame of a drag.
+  const dirty = useGraphStore((s) => s.isDirty());
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
   const runProgress = useGraphStore((s) => s.runProgress);
@@ -124,7 +105,6 @@ export default function Toolbar({
 
   /** Why another graph cannot be opened now, or null when it can. */
   const busyWith = graphBusy(isExecuting, sweep.busy);
-  const dirty = isDirty() && (rfNodes.length > 0 || rfEdges.length > 0);
 
   /**
    * ▶ Run: the application, run as whoever gets it will run it -- one button,
@@ -134,29 +114,33 @@ export default function Toolbar({
    *
    * It is the document that runs: from inside a node's graph, the canvas goes
    * back up to the top first, where the page is and where the results land.
-   * What a round still needs -- a file nobody chose, a place to write -- is
-   * asked first, by the delivered tool's own steps (`useDeliveredRun`).
+   * A graph run whole at start is asked first what it still needs -- a file
+   * nobody chose, a place to write -- by the delivered tool's own steps
+   * (`useDeliveredRun`).
    */
   const appRunning = useApplication((s) => s.running);
-  const hasPage = usePage().widgets.length > 0;
-  // Where ■ Stop goes back to: the view ▶ Run was pressed on.
+  const hasPage = useTopHasPage();
+  // Where the App tab goes back to: the view ▶ Run was pressed on.
   const ranFrom = useRef<EditorView>('graph');
   const handleRun = () => {
     const store = useGraphStore.getState();
     if (store.subgraphStack.length) store.closeSubgraphsTo(0);
-    if (hasPage) {
+    const graph = useGraphStore.getState().rootGraph();
+    if (pageOf(graph.nodes).widgets.length > 0) {
       if (view !== 'app') ranFrom.current = view;
       onViewChange('app');
     }
-    void startApplication(useGraphStore.getState().exportGraph(), (event) => delivered.run(event));
+    void startApplication(graph, () => delivered.run(null));
   };
-  // Stopped -- by ■ Stop, or by itself, having nothing left to do -- it takes its tab with it.
+  // Stopped -- by ■ Stop, or by itself, having nothing left to do -- or its
+  // page gone, it takes its tab with it.
   useEffect(() => {
-    if (!appRunning && view === 'app') onViewChange(ranFrom.current);
-  }, [appRunning, view, onViewChange]);
+    if (view === 'app' && !(appRunning && hasPage)) onViewChange(ranFrom.current);
+  }, [appRunning, hasPage, view, onViewChange]);
   // Another graph opened, or started anew: the application was the last one's.
-  const documentOpen = useGraphStore((s) => s.document);
-  useEffect(() => stopApplication, [documentOpen]);
+  // Not a step into a node's graph and out, which is the same document.
+  const opened = useGraphStore((s) => s.opened);
+  useEffect(() => stopApplication, [opened]);
 
   // Deploying used to have no busy state and no error handling, so a slow or
   // rejecting backend looked exactly like a dead button.
@@ -301,9 +285,8 @@ export default function Toolbar({
             </span>
           )}
           {/* A "✅ Saved to …" that survives the next ten edits is a lie about
-              what is on disk; it only shows while the graph is actually clean.
-              (rfNodes/rfEdges are read above purely to drive this re-render.) */}
-          {saveStatus && !isDirty() && (
+              what is on disk; it only shows while the graph is actually clean. */}
+          {saveStatus && !dirty && (
             <span className="text-xs truncate" style={{ color: MUTED }} title={saveStatus}>
               {saveStatus}
             </span>

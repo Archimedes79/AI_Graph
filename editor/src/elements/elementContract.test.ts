@@ -21,7 +21,7 @@ import { bodyOf, hasDefinitions } from '@/authoring/generation';
  * the contract test below pass for the wrong reason.
  */
 function makeWidget(kind: GuiWidget['kind']): GuiWidget {
-  return { ...WIDGET_BUILDERS[kind].create(''), id: 'w1' };
+  return WIDGET_BUILDERS[kind].create('w1', '');
 }
 
 /** The blocks that carry no settings at all -- page furniture, not fields. */

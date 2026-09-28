@@ -43,16 +43,6 @@ describe('what a deployed tool serves', () => {
     expect(Array.isArray(graph.nodes)).toBe(true);
   });
 
-  it('runs it, in one call, for anything driving it over HTTP', async () => {
-    const { url, graph } = await serveGraph();
-    const result = await asJson(await fetch(`${url}/api/execute/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(graph),
-    }));
-    expect(result.status).toBe('success');
-  }, 60_000);
-
   it('runs it watchably, in the shape the page reads', async () => {
     const { url, graph } = await serveGraph();
     const post = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph) };
@@ -168,14 +158,34 @@ describe('a web page elsewhere in the same browser', () => {
     expect(await ask(url, '/api/execute/requirements', { Host: host }, JSON.stringify(graph))).toBe(415);
   });
 
-  it('takes any host name when it is served on the network, but still only its own origin', async () => {
+  it('served beyond loopback, answers as this machine on any port, and as no name a page chose', async () => {
+    // A container: bound to every interface, reached as localhost through the
+    // port its host published it on -- and every editor route open to whoever
+    // gets that far, so a page that pointed its own name here must not.
     const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
     started.push(server);
-    const port = new URL(url).port;
+    // Said as an address a browser opens: 0.0.0.0 is none.
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
     const json = { 'Content-Type': 'application/json' };
-    expect(await ask(url, '/api/execute/requirements', { ...json, Host: `tool.lan:${port}`, Origin: `http://tool.lan:${port}` }, graph)).toBe(200);
-    expect(await ask(url, '/api/execute/requirements', { ...json, Host: `tool.lan:${port}`, Origin: 'https://evil.example' }, graph)).toBe(403);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'localhost:8000', Origin: 'http://localhost:8000' }, graph)).toBe(200);
+    expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'evil.example:8000', Origin: 'http://evil.example:8000' }, graph)).toBe(403);
+    expect(await ask(url, '/', { Host: 'tool.lan' })).toBe(403);
+  });
+
+  it('served beyond loopback, answers as a name it was given, and still only to that origin', async () => {
+    process.env.AI_GRAPH_ALLOWED_HOSTS = 'Tool.lan, other.lan';
+    try {
+      const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
+      started.push(server);
+      const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
+      const json = { 'Content-Type': 'application/json' };
+      expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'tool.lan', Origin: 'http://tool.lan' }, graph)).toBe(200);
+      expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'tool.lan', Origin: 'https://evil.example' }, graph)).toBe(403);
+      expect(await ask(url, '/', { Host: 'evil.example' })).toBe(403);
+    } finally {
+      delete process.env.AI_GRAPH_ALLOWED_HOSTS;
+    }
   });
 });
 
@@ -199,6 +209,20 @@ describe('a port that is already taken', () => {
     const error = await second.catch((e: unknown) => e);
     expect(portTaken(error)).toBe(true);
     expect(portTaken(new Error('something else'))).toBe(false);
+  });
+});
+
+describe('a server bound to ::1', () => {
+  it('answers, and says its address as a browser takes it', async (context) => {
+    const served = await serve({ graphPath: MINIMAL, port: 0, host: '::1' }).catch((error: { code?: string }) => {
+      // A machine with no IPv6 loopback has nothing to show here.
+      if (error.code === 'EADDRNOTAVAIL' || error.code === 'EAFNOSUPPORT') return null;
+      throw error;
+    });
+    if (!served) return context.skip();
+    started.push(served.server);
+    expect(served.url).toMatch(/^http:\/\/\[::1\]:\d+$/);
+    expect((await fetch(`${served.url}/api/runtime/graph`)).status).toBe(200);
   });
 });
 
@@ -310,10 +334,10 @@ describe('the engine as the front door of the editor', () => {
     }
   }, 60_000);
 
-  it('opens the picker where the editor was started, even beside a graph it serves', async () => {
+  it('opens the picker where the editor was started, even when it serves a graph', async () => {
     // One browse handler serves both; only where an empty path starts differs.
     // A tool starts in its graph's folder, and the editor -- also when it was
-    // started beside a graph.json and so ships one -- where it was started.
+    // given a graph to serve -- where it was started.
     const dist = await mkdtemp(join(tmpdir(), 'editor-dist-'));
     await writeFile(join(dist, 'index.html'), '<!doctype html><title>the editor</title>');
     const ask = async (url: string) => (await asJson(await fetch(`${url}/api/files/browse`, {

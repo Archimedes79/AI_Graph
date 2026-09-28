@@ -19,7 +19,7 @@ const { listAsRun, listBlockAsRun } = await import('./readAsRun');
 describe('a folder listed as a run lists it', () => {
   it('hands back what a folder picker hands on, run on a page of its own', async () => {
     answer = { status: 'success', outputs: { pick_out: ['a.csv', 'b.csv'] }, error: null };
-    const picker = { ...WIDGET_BUILDERS.input_picker.create('Source', 'directory'), id: 'pick', value: 'data' } as GuiWidget;
+    const picker = { ...WIDGET_BUILDERS.input_picker.create('pick', 'Source', 'directory'), value: 'data' } as GuiWidget;
     expect(await listBlockAsRun(picker)).toEqual(['a.csv', 'b.csv']);
   });
 
@@ -32,7 +32,7 @@ describe('a folder listed as a run lists it', () => {
   it('says a failure rather than catching it, even where the block catches its failures in a run', async () => {
     // A folder picker told to catch listed a folder that does not exist as "0 files".
     answer = { status: 'error', outputs: {}, error: 'ENOENT: no such directory' };
-    const picker = { ...WIDGET_BUILDERS.input_picker.create('Source', 'directory'), id: 'pick', catch_errors: true } as GuiWidget;
+    const picker = { ...WIDGET_BUILDERS.input_picker.create('pick', 'Source', 'directory'), catch_errors: true } as GuiWidget;
     await expect(listBlockAsRun(picker)).rejects.toThrow('ENOENT');
     const sent = posted[posted.length - 1];
     expect(sent.route).toBe('runNode');

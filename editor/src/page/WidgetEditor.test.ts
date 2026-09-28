@@ -14,7 +14,7 @@ const edited = (widget: GuiWidget) => renderToStaticMarkup(createElement(WidgetE
  */
 describe('the editor of the selected block', () => {
   it('is, for a chart, its label and its look and size: nothing to start, nothing to fail', () => {
-    const html = edited({ ...WIDGET_BUILDERS.plot_window.create('Temperatures'), id: 'chart' });
+    const html = edited(WIDGET_BUILDERS.plot_window.create('chart', 'Temperatures'));
     expect(html).toContain('value="Temperatures"');
     expect(html).toContain('Look &amp; size');
     expect(html).not.toContain('failures');
@@ -23,7 +23,7 @@ describe('the editor of the selected block', () => {
   });
 
   it('offers a block that hands something on what starts the graph and what a failure costs', () => {
-    const html = edited({ ...WIDGET_BUILDERS.input_picker.create('Folder', 'directory'), id: 'pick' });
+    const html = edited(WIDGET_BUILDERS.input_picker.create('pick', 'Folder', 'directory'));
     expect(html).toContain('Using this starts the graph');
     expect(html).toContain('Look, size &amp; failures');
     expect(html).toContain('Catch a failure instead of ending the run');
@@ -31,7 +31,7 @@ describe('the editor of the selected block', () => {
 
   it('has no ✨ and no ▶ Try for any kind', () => {
     for (const builder of Object.values(WIDGET_BUILDERS)) {
-      const html = edited({ ...builder.create('Block'), id: 'b' });
+      const html = edited(builder.create('b', 'Block'));
       expect(html, builder.widgetKind).not.toContain('✨');
       expect(html, builder.widgetKind).not.toContain('▶ Try');
     }

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import PlotWindowWidgetView from './PlotWindowWidgetView';
 
-const widget = WIDGET_BUILDERS.plot_window.create('Temperature');
+const widget = WIDGET_BUILDERS.plot_window.create('temperature', 'Temperature');
 const onPage = (value: unknown, incoming?: unknown) => renderToStaticMarkup(createElement(PlotWindowWidgetView, {
   widget, value, incoming, onChange: () => {},
 }));
@@ -22,10 +22,11 @@ describe('a chart on the page', () => {
     expect(onPage('', [{ label: 'Mon', value: 3 }])).toContain('Mon');
   });
 
-  it('shows a string of SVG as it stands, without its scripts', () => {
+  it('shows a string of SVG as a picture, where nothing in it runs', () => {
     const html = onPage('', '<svg viewBox="0 0 10 10"><script>alert(1)</script><circle cx="5" cy="5" r="4"/></svg>');
-    expect(html).toContain('<circle');
+    expect(html).toContain('<img src="data:image/svg+xml;charset=utf-8,%3Csvg');
     expect(html).not.toContain('<script');
+    expect(html).not.toContain('<circle');
   });
 
   it('draws an empty chart before anything has arrived, and the last value it kept after', () => {

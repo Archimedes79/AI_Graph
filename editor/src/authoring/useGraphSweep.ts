@@ -12,12 +12,12 @@ import { useGraphStore } from '@/store/graphStore';
 import { portRenames } from '@/store/portRenames';
 import { graphEdge } from '@/document/wires';
 import {
-  bodyOf, exchangeName, generateRequest, generationGuard, hasDefinitions, isWritten, unfitDefinition, withHistory, writtenInto, type Write,
+  bodyOf, exchangeName, generateRequest, generationGuard, isWritten, unfitDefinition, withHistory, writesFor, writtenInto, type Write,
 } from './generation';
 import { inputFilesOf } from './exampleFile';
 import { missingExamples, sweep, type SweepUnit } from './graphSweep';
 
-export interface SweepState {
+interface SweepState {
   run: () => Promise<void>;
   stop: () => void;
   busy: boolean;
@@ -30,14 +30,14 @@ export interface SweepState {
 export const ANOTHER_GRAPH = 'another graph was opened, and what came back is not written into it';
 
 /**
- * What a sweep writes of *node*: what it is missing -- its input definition
- * where it takes something in, its output definition, its body -- and never
- * what somebody wrote.
+ * What a sweep writes of *node*: what one press of its body's ✨ writes
+ * (`writesFor`) -- its input definition where it takes something in, its
+ * output definition, its body -- less what it holds already: never what
+ * somebody wrote.
  */
 export function missingOf(node: GraphNode): Write[] {
   if (!bodyOf(node)) return [];
-  const writes: Write[] = hasDefinitions(node) ? ['input', 'output', 'body'] : ['body'];
-  return writes.filter((write) => !isWritten(node, write) && (write !== 'input' || node.inputs.length > 0));
+  return writesFor(node, 'body').filter((write) => !isWritten(node, write));
 }
 
 /**

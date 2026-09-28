@@ -23,11 +23,10 @@ node engine/src/main.ts examples/folder_summaries
 They ask for their path before running, so any other location works too — the value in
 the graph is only the default.
 
-The same rule bites once more after deployment: **a bundle ships the tool, not the
-data.** It reads its `graph.json` from its own directory, so a relative data path in the
-graph resolves inside the bundle, where the file is not. Either pick the file on the
-tool's own page (what a graph with a picker or a `prompt_at_runtime` input is for),
-or store an absolute path before deploying.
+The same rule holds after deployment: a bundle runs from its own directory, so a relative
+data path in the graph resolves inside the bundle. That is why **a bundle carries the files
+the graph starts on** (see [What a bundle carries](#what-a-bundle-carries)) -- every one of
+them, or there is no bundle: a tool is handed on whole.
 
 Override an input node:
 
@@ -52,6 +51,9 @@ Serve the graph's own page instead of running it once:
 node engine/src/main.ts my_graph.json --serve --port 8123
 ```
 
+A bundle serves the page it carries, in `web/` beside its project; a graph or a
+project in a checkout is served the page the checkout built (`npm run build`).
+
 ---
 
 There are two, independent kinds of "deploy" in AI-Graph.
@@ -63,11 +65,13 @@ application), opens the graph you are
 editing as the delivered page, in a window of its own — same entry point (`runtime.html`),
 same routes, no editor around it. It answers "what have I actually built" without packing
 a zip first. It is not a deployment: nothing is written, and the window is served by the
-editor you are sitting in. (The App tab shows the same page attached to the document,
+editor you are sitting in -- which keeps no time for it, so a trigger node's clock ticks in
+that window while it is open, as it would in a bundle's server. (The App tab shows the same page attached to the document,
 so a run there still lights up the graph canvas.)
 
 From the toolbar, **🚀 Deploy** gives you a zip holding the vendored
-engine, your graph as `graph.json`, and a `run.sh` / `run.cmd` that starts it. Nothing in
+engine, your graph as the project folder it was built as -- `flow.json`, its page in
+`page/`, a folder per node -- and a `run.sh` / `run.cmd` that starts it. Nothing in
 it is generated: the engine is a verbatim copy of the one the graph was built and tested
 on, so a bundle runs what was tested rather than a second implementation of it. The graph
 carries what runs, and not how each node was written: its history.md, the ✨ prompts it
@@ -107,28 +111,34 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
 See [engine/src/cli/bundle.ts](../engine/src/cli/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
 
-A call like this one must say `Content-Type: application/json`, and on a server bound to
-this machine it must be addressed to `localhost`, `127.0.0.1` or `[::1]` with the server's
-own port: the server answers its own page and scripts on this machine, not a web page
-elsewhere in the browser that found the port.
+A call like this one must say `Content-Type: application/json`, and it must be addressed
+to `localhost`, `127.0.0.1` or `[::1]` — with the server's own port on a server bound to
+this machine — or, on one bound wider, by a name `AI_GRAPH_ALLOWED_HOSTS` lists: the
+server answers its own page and scripts on this machine, not a web page elsewhere in the
+browser that found the port.
 
 ### What a bundle carries
 
-The graph, a verbatim copy of the engine, the page when the graph has one — and **the
-files the graph starts on**: what its file pickers and folder inputs name as defaults, copied
-to the same relative place, so a tool handed to someone opens on its example data rather
-than on "no such file". Only relative paths inside the project are carried; an absolute
-path, or anything over 50 MB, is listed in the bundle's README as the recipient's to bring.
-A text input is a text to a bundle, even one holding a file's path for the node that reads
-it: pick such a file on the tool's page, or have its recipient bring it.
+The graph, a verbatim copy of the engine, the page when the graph has one (built, in
+`web/`: a project's `page/` is the page itself, its blocks) — and **the
+files the graph starts on**: what its file pickers and folder inputs name as defaults, so a
+tool handed to someone opens on its example data rather than on "no such file". **A tool is
+handed on whole, or not at all.** A relative path inside the project keeps its place, and
+nothing in the graph changes; a file from anywhere else -- an absolute path, as 📂 Browse…
+picks it, or one through `..` -- goes to `data/` in the bundle, and the graph there names
+it at its new place. A file that is not there, or more than a bundle carries (50 MB), stops
+Deploy before anything is written, and it says which: choose one that is there and
+smaller, or clear the field. A text input is a text to a bundle, even one holding a file's
+path for the node that reads it: pick such a file on the tool's page instead.
 The launchers `cd` into the bundle first, so those relative paths mean the same there.
 They are the same pair the downloadable editor ships (`engine/src/cli/launchers.ts`): they
 check for Node 24 before starting and say so when it is missing or too old, `run.sh` comes
 out of the zip executable, and a double-clicked `run.cmd` that fails keeps its window open
 until the reason has been read.
 
-A bundle's server also keeps the graph's own clock (*⚙ Settings → What starts this graph*):
-`on start` and `every 5m` run with nobody watching, and the page shows the latest result.
+A bundle's server also keeps the clock of the graph's trigger nodes: a trigger ticked to
+fire when the tool starts, or given an interval such as `5m`, runs with nobody watching,
+and the page shows the latest result.
 
 **Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
 server to stop rather than ending it where it stands: no new round starts, runs in flight

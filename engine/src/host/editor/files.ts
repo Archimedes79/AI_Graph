@@ -107,13 +107,14 @@ export function textEditorFor(path: string, system: string = platform()): { comm
  * only the way to it.
  *
  * Narrow on purpose, because this starts a program on the machine: the path
- * must be an existing text file (`OPENABLE`) inside the project's `nodes/` folder,
- * so a page cannot use it to launch an arbitrary file. VS Code is tried first, by
+ * must be an existing text file (`OPENABLE`) inside the project folder -- one of
+ * a node's texts, which `nodeFileOf` has checked -- so a page cannot use it to
+ * launch an arbitrary file. VS Code is tried first, by
  * its `code` command, since that is where a `.js` with a JSDoc header is most
  * useful; without it, a text editor (`textEditorFor`).
  */
-export async function openExternal(nodesDir: string, relative: string): Promise<{ path: string; with: string }> {
-  const root = resolve(nodesDir);
+export async function openExternal(projectDir: string, relative: string): Promise<{ path: string; with: string }> {
+  const root = resolve(projectDir);
   const path = resolve(root, relative);
   if (!path.startsWith(root + sep)) throw new NotOpenable('That file is not one of this project\'s node files.');
   if (!OPENABLE.has(extname(path).toLowerCase())) {

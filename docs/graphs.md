@@ -74,14 +74,18 @@ editor, a deployed page, the command line.
 **An event is a boolean that is true for one round.** A trigger's port, a button's port:
 `true` in the round that event started, `false` in every round something else started.
 
-A trigger's time is kept by whatever runs the graph, not by a browser tab. A deployed tool's
-**server** holds the clock (`engine/src/host/schedule.ts`): it runs with nobody watching,
-keeps the last result, and a page opened later shows that result and when the next run is
-due. Several triggers keep their own time; rounds never overlap. On the command line the
-shortest interval applies without a flag, a round is the whole graph, and `--every`
-overrides it. In the editor ▶ Run runs the application: a trigger set to fire at start
-fires then, and a clock keeps its time until ■ Stop. A clock inside a [subgraph](#subgraph-nodes) never ticks,
-and `check` says so: only the outermost graph is held by something that keeps time.
+A trigger's time is kept by whatever runs the graph, with one clock
+(`engine/src/execution/clock.ts`): a trigger set to fire at start fires first, each one
+with an interval then keeps its own time, rounds never overlap, and a trigger is looked up
+again each time it is due -- deleted since, it fires no more. A deployed tool's **server**
+holds that clock (`engine/src/host/schedule.ts`): it runs with nobody watching, keeps the
+last result, and a page opened later shows that result and when the next run is due. In
+the editor ▶ Run holds it, until ■ Stop; so does a tool opened with ⧉ Open as a tool, in
+its own window, while that is open -- no server keeps its time. A round a trigger starts
+asks nobody anything, as nobody is there when a served tool's clock strikes. On the command
+line the shortest interval applies without a flag, a round is the whole graph, and
+`--every` overrides it. A clock inside a [subgraph](#subgraph-nodes) never ticks, and
+`check` says so: only the outermost graph is held by something that keeps time.
 
 **▶ Run runs the application**, as an IDE runs the program it builds — one button, in the
 header, the same on every tab. With a page, the page opens (the **App** tab, there while it
@@ -89,10 +93,16 @@ runs) with its fields as they are set, and the graph runs when the page is used:
 pressed, a file picked, a box ticked *Using this starts the graph*. Without a page, what
 starts the graph starts it: its trigger nodes as they are set — or, with none, the whole
 graph once, as a program runs when it is started. While it runs the button is **■ Stop**,
-which ends it; a graph that only computes ends by itself. Anything a round still needs — a
-file nobody chose, a place to write — is asked for first. A delivered tool starts the same
-way when it is opened, and has no ▶ Run of its own: its page is how it is run, so a page
-that takes something in needs something on it that starts the graph, and `check` says so.
+which ends it; a graph that only computes ends by itself, and opening another graph ends it
+too. It is the document that runs: pressed inside a node's graph, ▶ Run takes the canvas up
+to the top first, and a round due while the canvas shows a node's graph waits until it is
+back there. The App tab opens empty, as a delivered tool does -- not on what the last run
+showed -- and says why a round failed. Anything a round started from the page, or the one
+run at start, still needs — a file nobody chose, a place to write — is asked for first; so
+is a round started by a block on the Page tab, whose blocks are live. A delivered tool
+starts the same way when it is opened, and has no ▶ Run of its own: its page is how it is
+run, so a page that takes something in needs something on it that starts the graph -- a
+block, or a trigger node's clock -- and `check` says so.
 
 After a run every node's card shows what it made, named by its port where it has several:
 a line of text or a number, *214 rows* and the first row for a list of records, a small line
@@ -352,12 +362,16 @@ decide what to ask, or ask in a loop; for one question, an AI node is the plaine
 Save a graph under a name — `my_tool` — and it becomes a folder. (A new graph's Save
 opens the file browser in the folder the last graph was opened from or saved to -- at
 first the folder the server was started in -- with its name filled in.) The flow is one
-file, and each node is a folder that says everything about that node:
+file, the page is a folder, and each node is a folder that says everything about that node:
 
 ```
 my_tool/
   flow.json               which nodes there are, and every wire
   layout.json             where each node sits on the canvas
+  page/                   the page: what whoever uses the tool sees
+    page.json             its blocks, in order -- each one's kind, label, size and value
+    node.json
+    interface.json        what it hands the graph and what it shows
   nodes/
     count/                one folder per node, named by its id
       node.json           its heading, its text and its settings
@@ -372,9 +386,6 @@ my_tool/
       input.js
       output.js
       prompt.md           the instructions sent to the model
-    page/
-      node.json           its settings are its blocks
-      interface.json
 ```
 
 **Each fact is in one place.** `flow.json` says which node feeds which, and nothing about
@@ -402,18 +413,21 @@ what ✨ is told.
 | Code | `input.js`, `output.js`, `code.js`, `history.md` |
 | AI | `input.js`, `output.js`, `prompt.md`, `history.md` |
 | Data | `data.json` or `data.txt` — what it holds — and `history.md` |
+| The page | its folder is `page/`, beside `nodes/`, whatever its id: `page.json` — its blocks, in order |
 
 **The folder has every file from the start.** A file nothing has been written into yet is
 its stub: a comment saying what the file is and which ✨ writes it -- a definition's stub
 ends `module.exports = null;`, read as no example at all, and code.js's `node code.js`
 says "code.js holds no code yet: write it with ✨ Code." and exits with 1 -- so the folder
 shows what the node is made of before any of it exists. `history.md` comes once there is history. An input, an
-output, a trigger and a page keep no writing: all they are is settings, and a page's
-blocks are settings as well. Settings — the model, the temperature, a node's mode — are in
+output and a trigger keep no writing: all they are is settings. The page is its blocks,
+so they are a file of their own, `page/page.json`, and a tool's page is the one folder
+anybody opening the project looks for. Settings — the model, the temperature, a node's mode — are in
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
 change to what the graph does, and an unchanged save changes no file. Renaming a node
 renames nothing on disk: folders are named by id. A new node's id is its type — `code`,
-then `code_2` — and a new block's its kind, so `flow.json` reads as what it joins.
+then `code_2` — but for the page, which is `page`, and a new block's id is its kind, so
+`flow.json` reads as what it joins: `page.input_picker_out -> chart.csv`.
 
 The files are what runs. `node engine/src/main.ts my_tool` runs the folder, a served
 tool reads it, the MCP server reads and writes it; `git diff` shows code as code.
@@ -632,8 +646,9 @@ graph is.
 ## The page
 
 A graph has **one page**: an ordered list of **blocks**. In the file it is the one node of
-type `gui`, its blocks in `config.gui_widgets` — the format's names; on screen it is the
-page and its blocks, and nothing else. It is made on the **Page** tab by its first block,
+type `gui`, its blocks in `config.gui_widgets` — the format's names; in a project folder it
+is the folder `page/`, its blocks in `page.json`; on screen it is the page and its blocks,
+and nothing else. It is made on the **Page** tab by its first block,
 not dropped from the palette, and goes with its last: a page is its blocks, and a tool
 whose page has none shows what it does and its run's result, as a tool without a page
 does. A second `gui` node is a problem `check` names, and only the

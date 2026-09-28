@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode } from '@/graph';
-import { derivedNodePorts, syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
+import { blockPort, derivedNodePorts, syncGuiNodePorts, guiWidgetPorts, widgetFiresRun, widgetOfPort } from './guiWidgets';
 import { DEFAULT_WIDGET_SPAN } from './layout';
 import { baseNodeConfig } from './baseNodeConfig';
 import { WIDGET_BUILDERS } from '@/elements/registry';
@@ -30,11 +30,11 @@ describe('syncGuiNodePorts', () => {
 
   it('generates the exact port shape for each widget kind', () => {
     let node = blankGuiNode();
-    const filePicker = WIDGET_BUILDERS.input_picker.create('Pick file');
-    const dirPicker = { ...WIDGET_BUILDERS.input_picker.create('Pick dir'), mode: 'directory' };
-    const textIo = WIDGET_BUILDERS.text_io.create('Text');
-    const chatIo = WIDGET_BUILDERS.text_io.create('Chat');
-    const plotWindow = WIDGET_BUILDERS.plot_window.create('Plot');
+    const filePicker = WIDGET_BUILDERS.input_picker.create('pick_file', 'Pick file');
+    const dirPicker = { ...WIDGET_BUILDERS.input_picker.create('pick_dir', 'Pick dir'), mode: 'directory' };
+    const textIo = WIDGET_BUILDERS.text_io.create('text', 'Text');
+    const chatIo = WIDGET_BUILDERS.text_io.create('chat', 'Chat');
+    const plotWindow = WIDGET_BUILDERS.plot_window.create('plot', 'Plot');
     node.config.gui_widgets = [filePicker, dirPicker, textIo, chatIo, plotWindow];
 
     node = syncGuiNodePorts(node);
@@ -73,7 +73,7 @@ describe('syncGuiNodePorts', () => {
 
   it('plot_window is display-only: one input port, no output port', () => {
     let node = blankGuiNode();
-    const plotWindow = WIDGET_BUILDERS.plot_window.create('Plot');
+    const plotWindow = WIDGET_BUILDERS.plot_window.create('plot', 'Plot');
     node.config.gui_widgets = [plotWindow];
 
     node = syncGuiNodePorts(node);
@@ -85,7 +85,7 @@ describe('syncGuiNodePorts', () => {
 
   it('keeps port ids stable across re-syncs (edge-preserving)', () => {
     const node = blankGuiNode();
-    const widget = WIDGET_BUILDERS.text_io.create('Text');
+    const widget = WIDGET_BUILDERS.text_io.create('text', 'Text');
     node.config.gui_widgets = [widget];
 
     const first = syncGuiNodePorts(node);
@@ -97,9 +97,9 @@ describe('syncGuiNodePorts', () => {
 
   it('removing a widget removes only that widget\'s ports, leaving others identical', () => {
     let node = blankGuiNode();
-    const a = WIDGET_BUILDERS.text_io.create('A');
-    const b = WIDGET_BUILDERS.text_io.create('B');
-    const c = WIDGET_BUILDERS.input_picker.create('C');
+    const a = WIDGET_BUILDERS.text_io.create('a', 'A');
+    const b = WIDGET_BUILDERS.text_io.create('b', 'B');
+    const c = WIDGET_BUILDERS.input_picker.create('c', 'C');
     node.config.gui_widgets = [a, b, c];
     node = syncGuiNodePorts(node);
 
@@ -125,7 +125,7 @@ describe('syncGuiNodePorts', () => {
     // ticking "catch" grew nothing, and after a reload had grown it, the next
     // edit of any block took it away again -- and its wire with it.
     let node = blankGuiNode();
-    const pick = { ...WIDGET_BUILDERS.select.create('Pick'), catch_errors: true };
+    const pick = { ...WIDGET_BUILDERS.select.create('pick', 'Pick'), catch_errors: true };
     node.config.gui_widgets = [pick];
     node = syncGuiNodePorts(node);
     expect(node.outputs.map((p) => p.id)).toEqual([`${pick.id}_out`, `${pick.id}_error`]);
@@ -137,13 +137,13 @@ describe('a new widget: its size and tone, from its GuiBuilder', () => {
   it('gives a new widget concrete cells and no size preset', () => {
     // `size` was a second way of saying what w/h say, so the same widget could
     // be described twice and disagree. There is one encoding now.
-    const widget = WIDGET_BUILDERS.text_io.create('A');
+    const widget = WIDGET_BUILDERS.text_io.create('a', 'A');
     expect({ w: widget.w, h: widget.h }).toEqual(DEFAULT_WIDGET_SPAN);
     expect('size' in widget).toBe(false);
   });
 
   it('carries no coordinates at all — the list order is the position', () => {
-    const widget = WIDGET_BUILDERS.text_io.create('A');
+    const widget = WIDGET_BUILDERS.text_io.create('a', 'A');
     expect('x' in widget).toBe(false);
     expect('y' in widget).toBe(false);
   });
@@ -153,13 +153,13 @@ describe('a new widget: its size and tone, from its GuiBuilder', () => {
     // it used to get a second row to hang from the bottom of, which was the
     // only text on the page that did not start where the others start. Air
     // between sections is the spacer's job.
-    const heading = WIDGET_BUILDERS.text.create('Titel', 'heading');
+    const heading = WIDGET_BUILDERS.text.create('titel', 'Titel', 'heading');
     expect({ w: heading.w, h: heading.h }).toEqual({ w: 16, h: 1 });
     expect(heading.tone).toBe('plain');
 
     // A rule and a spacer are a single row of the grid and nothing else.
     for (const kind of ['divider', 'spacer'] as const) {
-      const block = WIDGET_BUILDERS[kind].create('');
+      const block = WIDGET_BUILDERS[kind].create(kind, '');
       expect({ w: block.w, h: block.h }).toEqual({ w: 16, h: 1 });
       expect(block.tone).toBe('plain');
     }
@@ -168,17 +168,17 @@ describe('a new widget: its size and tone, from its GuiBuilder', () => {
   it('frames what you operate, and nothing else', () => {
     // Only fields get a box by default. A plot and a table already have a shape
     // of their own, and framing them turned the page into an inspector.
-    expect(WIDGET_BUILDERS.plot_window.create('P').tone).toBe('plain');
-    expect(WIDGET_BUILDERS.table.create('T').tone).toBe('plain');
-    expect(WIDGET_BUILDERS.input_picker.create('F').tone).toBe('sunken');
-    expect(WIDGET_BUILDERS.text_io.create('In', 'input').tone).toBe('sunken');
+    expect(WIDGET_BUILDERS.plot_window.create('p', 'P').tone).toBe('plain');
+    expect(WIDGET_BUILDERS.table.create('t', 'T').tone).toBe('plain');
+    expect(WIDGET_BUILDERS.input_picker.create('f', 'F').tone).toBe('sunken');
+    expect(WIDGET_BUILDERS.text_io.create('in', 'In', 'input').tone).toBe('sunken');
     // ...except a text block that only ever shows output, which is prose.
-    expect(WIDGET_BUILDERS.text_io.create('Out', 'output').tone).toBe('plain');
+    expect(WIDGET_BUILDERS.text_io.create('out', 'Out', 'output').tone).toBe('plain');
   });
 
   it('page furniture contributes no ports', () => {
     for (const kind of ['text', 'divider', 'spacer'] as const) {
-      const ports = guiWidgetPorts(WIDGET_BUILDERS[kind].create(kind));
+      const ports = guiWidgetPorts(WIDGET_BUILDERS[kind].create(kind, kind));
       expect(ports.inputs).toEqual([]);
       expect(ports.outputs).toEqual([]);
     }
@@ -194,9 +194,9 @@ describe('a new widget: its size and tone, from its GuiBuilder', () => {
 describe('which block a port belongs to', () => {
   it('finds it from either end, and nothing for a port of no block', () => {
     let node = blankGuiNode();
-    const button = WIDGET_BUILDERS.button.create('Go');
-    const field = WIDGET_BUILDERS.text_io.create('Ask', 'input');
-    const plot = WIDGET_BUILDERS.plot_window.create('Chart');
+    const button = WIDGET_BUILDERS.button.create('go', 'Go');
+    const field = WIDGET_BUILDERS.text_io.create('ask', 'Ask', 'input');
+    const plot = WIDGET_BUILDERS.plot_window.create('chart', 'Chart');
     node.config.gui_widgets = [button, field, plot];
     node = syncGuiNodePorts(node);
 
@@ -205,9 +205,18 @@ describe('which block a port belongs to', () => {
     expect(widgetOfPort(node, 'nothing_out')).toBeUndefined();
   });
 
+  it('asks the engine which ports a block has, rather than naming them here', () => {
+    // A chart hands nothing on: the name its out port would have is no port of it.
+    const plot = WIDGET_BUILDERS.plot_window.create('chart', 'Chart');
+    const node = syncGuiNodePorts({ ...blankGuiNode(), config: { ...baseNodeConfig(), gui_widgets: [plot] } });
+    expect(blockPort(plot, 'in')).toBe(guiWidgetPorts(plot).inputs[0].id);
+    expect(blockPort(plot, 'out')).toBeUndefined();
+    expect(widgetOfPort(node, `${plot.id}_out`)).toBeUndefined();
+  });
+
   it('says which of them start the graph', () => {
-    const button = WIDGET_BUILDERS.button.create('Go');
-    const field = WIDGET_BUILDERS.text_io.create('Ask', 'input');
+    const button = WIDGET_BUILDERS.button.create('go', 'Go');
+    const field = WIDGET_BUILDERS.text_io.create('ask', 'Ask', 'input');
     // A button is an event by its nature; a field is one only when it is told to be.
     expect(widgetFiresRun(button)).toBe(true);
     expect(widgetFiresRun(field)).toBe(false);

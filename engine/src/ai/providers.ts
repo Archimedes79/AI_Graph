@@ -17,12 +17,14 @@
 // is written once, below, and what differs per dialect is only what differs on
 // the wire.
 
-import { lent, type AiRequest, type AiService, type ToolAccess, type ToolSpec } from '../elements/Runtime.ts';
+import type { AiRequest, AiService, ToolAccess, ToolSpec } from '../elements/Runtime.ts';
 
+/**
+ * How to reach the providers: where, with which key, how patiently. Not which
+ * one to ask -- that is each request's, the one AI setting filled in first
+ * (`aiSetting`, and `lent` in `nodeRuntime`).
+ */
 export interface ProviderSettings {
-  /** Which provider a node's `default` resolves to. */
-  provider: string;
-  model: string;
   apiKeys: Record<string, string>;
   endpoints: Record<string, string>;
   /** Attempts in total, including the first. */
@@ -43,8 +45,6 @@ export interface ProviderSettings {
 }
 
 export const DEFAULT_SETTINGS: ProviderSettings = {
-  provider: 'ollama',
-  model: '',
   apiKeys: {},
   endpoints: {
     ollama: 'http://localhost:11434',
@@ -713,12 +713,11 @@ export function aiService(settings: Partial<ProviderSettings> = {}): AiService {
 
   return {
     async complete(request: AiRequest): Promise<string> {
-      // The machine's default model belongs to the machine's default provider
-      // (`lent`). A node that names another provider and no model would
-      // otherwise send that provider a model it has never heard of, and the 404
-      // it answers with reads like a broken endpoint. Asked for nothing, it is
-      // told so.
-      const { provider, model } = lent(request, config);
+      // Where a call goes is the request's to say, the one AI setting already
+      // in it: read a second time here, the setting's model went to a provider
+      // the setting had not chosen. Asked for no model, it is told so rather
+      // than sent a provider's 404, which reads like a broken endpoint.
+      const { provider = '', model = '' } = request;
       if (!model) {
         throw new Error(
           `No model configured for provider '${provider}'. Name one on the AI node, `
@@ -778,8 +777,6 @@ export function settingsFromEnv(env: Record<string, string | undefined>): Partia
   const budget = Number(env.AI_GRAPH_MAX_TOKENS);
 
   return {
-    ...(env.AI_GRAPH_AI_PROVIDER ? { provider: env.AI_GRAPH_AI_PROVIDER } : {}),
-    ...(env.AI_GRAPH_AI_MODEL ? { model: env.AI_GRAPH_AI_MODEL } : {}),
     ...(Number.isFinite(timeout) && timeout >= 0 && env.AI_GRAPH_TIMEOUT_MS ? { timeoutMs: timeout } : {}),
     ...(Number.isFinite(budget) && budget > 0 ? { maxTokens: budget } : {}),
     endpoints,

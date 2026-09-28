@@ -199,9 +199,8 @@ beforeEach(() => {
 
 describe('population plotter: choose a CSV, see the chart', () => {
   const build = () => {
-    addBlock('text', 'heading', { value: 'Population plotter' });
-    const page = pageId();
     const file = addBlock('input_picker', 'file', { label: 'CSV file', extensions: '.csv', value: 'data/population.csv', run_on_change: true });
+    const page = pageId();
     const plot = addBlock('plot_window', undefined, { label: '' });
     const chart = drop('code', 560);
     edit(chart, {
@@ -229,9 +228,8 @@ describe('population plotter: choose a CSV, see the chart', () => {
 
 describe('summarize a folder: choose a folder, read the summaries', () => {
   const build = () => {
-    addBlock('text', 'heading', { value: 'Summarize a folder' });
-    const page = pageId();
     const folder = addBlock('input_picker', 'directory', { label: 'Folder', extensions: '.txt', value: 'stories', run_on_change: true });
+    const page = pageId();
     const summaries = addBlock('text_io', 'output', { label: 'Summaries' });
     const summarize = drop('ai', 560);
     edit(summarize, {
@@ -261,9 +259,8 @@ describe('summarize a folder: choose a folder, read the summaries', () => {
 
 describe('chat: a page with a chat block, and a model', () => {
   const build = () => {
-    addBlock('text', 'heading', { value: 'Chat' });
-    const page = pageId();
     const chat = addBlock('chat', undefined, {});
+    const page = pageId();
     const assistant = drop('ai', 560);
     edit(assistant, {
       label: 'Assistant', text: exampleNode('chat', 'assistant').description, input: ['history', 'message'],

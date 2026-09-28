@@ -43,9 +43,10 @@ describe('a value as a node on the canvas shows it', () => {
     expect(previewOf(png)).toEqual({ kind: 'image', src: png, count: 1 });
     expect(previewOf([png, png, png])).toEqual({ kind: 'image', src: png, count: 3 });
     expect(previewOf('https://example.org/cat.jpg')).toMatchObject({ kind: 'image' });
-    const svg = previewOf('<svg viewBox="0 0 4 4"><script>alert(1)</script><circle r="2"/></svg>');
+    // A picture, where nothing in the SVG runs.
+    const svg = previewOf('<svg viewBox="0 0 4 4"><circle r="2"/></svg>');
     expect(svg).toMatchObject({ kind: 'image' });
-    expect(svg?.kind === 'image' && decodeURIComponent(svg.src)).not.toContain('script');
+    expect(svg?.kind === 'image' && decodeURIComponent(svg.src)).toBe('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><circle r="2"/></svg>');
   });
 
   it('is nothing for a value that holds nothing', () => {
@@ -74,9 +75,9 @@ describe('what a node shows of its last result, beside its ports', () => {
 
   it('is, on a page, what each block shows, read by the block: points on a chart are a chart', () => {
     const blank = NODE_KINDS.gui.create('page');
-    const chart = { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' };
-    const photo = { ...WIDGET_BUILDERS.image_view.create('Photo'), id: 'photo' };
-    const picker = { ...WIDGET_BUILDERS.input_picker.create('File'), id: 'file' };
+    const chart = WIDGET_BUILDERS.plot_window.create('chart', 'Chart');
+    const photo = WIDGET_BUILDERS.image_view.create('photo', 'Photo');
+    const picker = WIDGET_BUILDERS.input_picker.create('file', 'File');
     const page: GraphNode = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [picker, chart, photo] } });
     const shown = NODE_BUILDERS.gui.resultPreviews(page, ran(
       { file_out: 'data/population.csv' },

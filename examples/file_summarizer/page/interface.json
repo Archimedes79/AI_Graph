@@ -30,7 +30,7 @@
     },
     {
       "port": "go_out",
-      "name": "Summarize",
+      "name": "Summarize again",
       "type": "boolean"
     }
   ]

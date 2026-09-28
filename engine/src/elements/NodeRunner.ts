@@ -7,6 +7,7 @@
 import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { collectedInterface, type Schema } from '../execution/interface.ts';
+import { runsPerItem } from '../execution/batching.ts';
 import type { Problem } from '../execution/wiring.ts';
 import type { Logic } from '../authoring/logic.ts';
 import type { Generation } from '../authoring/generation.ts';
@@ -154,7 +155,7 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
 
   /**
    * The blocks this node holds, as the records it keeps them in: a page's
-   * widgets, settings in its `node.json` -- a block writes no file of its own.
+   * widgets, together in its `page.json` -- a block writes no file of its own.
    * None for a node that holds none.
    *
    * The element owns where they are kept; the project folder only asks -- to
@@ -223,8 +224,10 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   outputInterface(node: GraphNode): Schema | undefined {
     const output = this.definitions(node)?.output;
     const shape = output?.trim() ? definitionShape(output) : undefined;
-    if (!shape || this.batchMode(node) !== 'per_item') return shape;
-    return collectedInterface(shape, new Set(node.outputs.filter((port) => port.multi).map((port) => port.id)));
+    const mode = this.batchMode(node);
+    if (!shape || mode !== 'per_item') return shape;
+    const lists = new Set(node.outputs.filter((port) => port.multi).map((port) => port.id));
+    return collectedInterface(shape, lists, runsPerItem(node, mode));
   }
 
   // ── Run time ──────────────────────────────────────────────────────────────

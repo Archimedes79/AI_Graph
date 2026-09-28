@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
 import { writeProject } from '../project/folder.ts';
-import { main, parseArgs, parseInterval } from './cli.ts';
+import { parseInterval } from '../execution/triggers.ts';
+import { main, parseArgs } from './cli.ts';
 
 describe('parseInterval', () => {
   it('reads a bare number as seconds', () => {
@@ -36,8 +39,8 @@ describe('parseArgs', () => {
     expect(parseArgs(['g.json', '--inputs', 'q=a=b']).inputs).toEqual({ q: 'a=b' });
   });
 
-  it('defaults to graph.json, the way a bundle is laid out', () => {
-    expect(parseArgs([]).graphPath).toBe('graph.json');
+  it('defaults to the project in this folder, the way a bundle is laid out', () => {
+    expect(parseArgs([]).graphPath).toBe('.');
   });
 
   it('reads --mcp with no graph at all, and keeps its root out of the graph path', () => {
@@ -45,7 +48,8 @@ describe('parseArgs', () => {
     expect(options.mcp).toBe(true);
     expect(options.mcpRoot).toBe('./project');
     // The folder is the flag's value, not a positional: it must not become the graph.
-    expect(options.graphPath).toBe('graph.json');
+    expect(options.graphPath).toBe('.');
+    expect(options.graphNamed).toBe(false);
   });
 
   it('is not an MCP server unless asked', () => {
@@ -65,14 +69,28 @@ describe('parseArgs', () => {
   });
 });
 
+const port = (id: string, kind: 'input' | 'output', dataType = 'any') =>
+  ({ id, name: id, kind, data_type: dataType, multi: false, required: false, description: '' });
+
+/** What a command prints: stdout, which is the result, and stderr, which is everything said about it. */
+async function printed(argv: string[]): Promise<{ code: number; out: string; err: string }> {
+  const writes: string[] = [];
+  const said: string[] = [];
+  const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { writes.push(String(chunk)); return true; });
+  const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { said.push(String(chunk)); return true; });
+  try {
+    return { code: await main(argv), out: writes.join(''), err: said.join('') };
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+}
+
 /**
  * One node by itself, from a command line: what its panel tries, with no
  * editor anywhere -- the node's example, and the files its example reads.
  */
 describe('run-node', () => {
-  const port = (id: string, kind: 'input' | 'output', dataType = 'any') =>
-    ({ id, name: id, kind, data_type: dataType, multi: false, required: false, description: '' });
-
   async function project(config: Record<string, unknown>): Promise<string> {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-run-node-'));
     await writeProject(dir, parseGraph({
@@ -84,18 +102,6 @@ describe('run-node', () => {
       edges: [],
     }));
     return dir;
-  }
-
-  async function printed(argv: string[]): Promise<{ code: number; out: string }> {
-    const writes: string[] = [];
-    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { writes.push(String(chunk)); return true; });
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    try {
-      return { code: await main(argv), out: writes.join('') };
-    } finally {
-      stdout.mockRestore();
-      stderr.mockRestore();
-    }
   }
 
   it('runs a node once on the example in its input.js -- a file\'s text, already read -- and holds it to its output.js', async () => {
@@ -158,4 +164,166 @@ describe('run-node', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+});
+
+/** A clock on the command line: the rule a served tool's clock keeps too. */
+describe('--every', () => {
+  it('runs one graph round after round: what a round leaves in a data node is what the next starts from', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-every-'));
+    await writeProject(dir, parseGraph({
+      metadata: { name: 'Counter' },
+      nodes: [
+        {
+          id: 'count', node_type: 'data', label: 'Count', inputs: [port('input', 'input')], outputs: [port('output', 'output')],
+          config: { data_format: 'structure', data_value: 0 },
+        },
+        {
+          id: 'add', node_type: 'code', label: 'Add one', inputs: [port('n', 'input')], outputs: [port('next', 'output')],
+          config: { code: 'function run(i) { return { next: i.n + 1 }; }' },
+        },
+      ],
+      edges: [
+        { id: 'a', source_node_id: 'count', source_port_id: 'output', target_node_id: 'add', target_port_id: 'n' },
+        { id: 'b', source_node_id: 'add', source_port_id: 'next', target_node_id: 'count', target_port_id: 'input' },
+      ],
+    }));
+    try {
+      const { code, out } = await printed([dir, '--every', '0.01', '--limit', '3']);
+      expect(code).toBe(0);
+      const rounds = out.trim().split(/\n(?=\{)/).map((round) => JSON.parse(round) as { node_results: { node_id: string; outputs: { next?: number } }[] });
+      expect(rounds.map((round) => round.node_results.find((result) => result.node_id === 'add')?.outputs.next)).toEqual([1, 2, 3]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('says a round that could not even start, and goes on to the next', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-every-'));
+    const graph = join(dir, 'loop.json');
+    // Two nodes feeding each other and nothing that remembers: no round can be put in order.
+    const code = (id: string) => ({ id, node_type: 'code', inputs: [port('in', 'input')], outputs: [port('out', 'output')], config: { code: 'function run(i) { return { out: i.in }; }' } });
+    await writeFile(graph, JSON.stringify({
+      metadata: { name: 'Loop' },
+      nodes: [code('a'), code('b')],
+      edges: [
+        { id: 'ab', source_node_id: 'a', source_port_id: 'out', target_node_id: 'b', target_port_id: 'in' },
+        { id: 'ba', source_node_id: 'b', source_port_id: 'out', target_node_id: 'a', target_port_id: 'in' },
+      ],
+    }));
+    try {
+      const { code: exit, err } = await printed([graph, '--every', '0.01', '--limit', '2']);
+      expect(exit).toBe(1);
+      expect(err.match(/This run failed: .*cycle/g)).toHaveLength(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/** A server started as a person or a launcher starts one: its own process, told nothing opens a browser. */
+function started(args: string[], env: NodeJS.ProcessEnv = { ...process.env, AI_GRAPH_NO_BROWSER: '1' }, cwd?: string) {
+  const child = spawn(process.execPath, [resolve(__dirname, '..', 'main.ts'), ...args], {
+    // Its own settings file, none: what a server says at start must not come from this machine's.
+    env: { ...env, AI_GRAPH_SETTINGS: join(tmpdir(), 'ai-graph-no-settings.json') }, cwd, stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let said = '';
+  child.stderr.on('data', (chunk: Buffer) => { said += chunk.toString(); });
+  const ended = new Promise((done) => child.on('exit', done));
+  return {
+    child,
+    said: () => said,
+    /** Until it serves, or ends, or *ms* have gone by. */
+    async up(ms = 10_000): Promise<void> {
+      for (const until = Date.now() + ms; Date.now() < until && !said.includes('Serving on') && child.exitCode === null;) {
+        await new Promise((wake) => setTimeout(wake, 100));
+      }
+    },
+    async stop(): Promise<void> {
+      child.kill();
+      await ended;
+    },
+  };
+}
+
+const freePort = () => new Promise<number>((found) => {
+  const probe = createServer();
+  probe.listen(0, '127.0.0.1', () => {
+    const { port: taken } = probe.address() as { port: number };
+    probe.close(() => found(taken));
+  });
+});
+
+const MINIMAL = resolve(__dirname, '..', '..', 'fixtures', 'minimal.json');
+const REPO = resolve(__dirname, '..', '..', '..');
+
+describe('--serve and --editor, as they are started', () => {
+  /**
+   * A container has nothing to open a browser in -- no `xdg-open` in an Alpine
+   * image -- and neither has many a server a bundle is started on. A missing
+   * opener is said as an 'error' event, not thrown, and unheard it ended the
+   * process right after "Serving on".
+   */
+  it('serves where nothing can open a browser', async () => {
+    const port = await freePort();
+    // No PATH: whatever opens a browser on this machine cannot be found.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(PATH|AI_GRAPH_NO_BROWSER)$/i.test(name)));
+    const server = started([MINIMAL, '--serve', '--port', String(port)], { ...env, PATH: '' });
+    try {
+      await server.up();
+      await new Promise((wake) => setTimeout(wake, 500));
+      expect(server.child.exitCode, server.said()).toBeNull();
+      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
+    } finally {
+      await server.stop();
+    }
+  }, 30_000);
+
+  it('says a graph that was named and is not there, rather than serving nothing', async () => {
+    const server = started([join(tmpdir(), 'no-such-graph.json'), '--serve', '--port', String(await freePort())]);
+    try {
+      await server.up();
+      expect(server.said()).not.toContain('Serving on');
+      expect(server.said()).toMatch(/Nothing at .*no-such-graph\.json/);
+    } finally {
+      await server.stop();
+    }
+  }, 30_000);
+
+  it('serves a project with the page this checkout built: a project carries none of its own', async () => {
+    const port = await freePort();
+    const server = started([join(REPO, 'examples', 'population_plotter'), '--serve', '--port', String(port)]);
+    try {
+      await server.up();
+      const shown = await fetch(`http://127.0.0.1:${port}/`);
+      expect(shown.headers.get('content-type'), server.said()).toContain('text/html');
+      expect(await shown.text()).toBe(await readFile(join(REPO, 'editor', 'dist', 'runtime.html'), 'utf8'));
+    } finally {
+      await server.stop();
+    }
+  }, 30_000);
+
+  it('as the editor, serves no graph.json it was started beside -- only one it is given', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-editor-'));
+    await writeFile(join(dir, 'graph.json'), await readFile(MINIMAL, 'utf8'));
+    try {
+      const port = await freePort();
+      const beside = started(['--editor', dir, '--port', String(port)], undefined, dir);
+      try {
+        await beside.up();
+        expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(404);
+      } finally {
+        await beside.stop();
+      }
+      const other = await freePort();
+      const given = started(['graph.json', '--editor', dir, '--port', String(other)], undefined, dir);
+      try {
+        await given.up();
+        expect((await fetch(`http://127.0.0.1:${other}/api/runtime/graph`)).status).toBe(200);
+      } finally {
+        await given.stop();
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

@@ -82,11 +82,7 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
 
   /** What it holds, written from its text and from what the nodes it feeds want. */
   override generation(): Generation {
-    return {
-      kind: 'data', fields: { body: 'data_value' },
-      guard: 'Say what this node holds first: its text is what the data is written from.',
-      success: '✅ Data written.',
-    };
+    return { kind: 'data', fields: { body: 'data_value' } };
   }
 
   override whatRuns(): WhatRuns {

@@ -12,10 +12,15 @@
 // produce no results, and a body that has never seen an empty batch should
 // never be asked to handle one.
 //
-// **A batch of one is not a fan-out.** Its scalar outputs stay scalar, so
-// per-item and whole-list agree wherever there was nothing to fan out.
+// **No list, no fan-out.** Where no list arrived on an input declared one,
+// the node runs once on everything, and its outputs that are not declared
+// lists stay as that call returned them: per-item and whole-list agree
+// wherever there was nothing to fan out. Where one did, every output is the
+// list of what the items gave -- for one item, and for none -- so what a node
+// hands on does not change shape with how many there were.
 
 import type { GraphNode } from '../graph.ts';
+import { ERROR_PORT } from './wiring.ts';
 
 /**
  * Whether a list reaching *node*, run in *mode*, is handed over an item at a
@@ -27,18 +32,39 @@ export function runsPerItem(node: GraphNode, mode: 'whole' | 'per_item'): boolea
   return mode === 'per_item' && node.inputs.some((port) => port.multi);
 }
 
-/** One set of inputs per item, broadcasting whatever is not being fanned out. */
+/**
+ * *work* for every index below *count*, in order, no more than *limit* at a
+ * time: how far a fan-out goes at once, for its items and for the files they
+ * are handed. None starts once *signal* has ended the run.
+ */
+export async function atMost(
+  count: number,
+  limit: number,
+  work: (index: number) => Promise<void>,
+  signal?: AbortSignal,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (let index = next++; index < count && !signal?.aborted; index = next++) await work(index);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, count)) }, worker));
+}
+
+/**
+ * One set of inputs per item, broadcasting whatever is not being fanned out --
+ * and whether anything was: a list arrived on an input declared one.
+ */
 export function batchItems(
   node: GraphNode,
   inputs: Record<string, unknown>,
-): Record<string, unknown>[] {
+): { items: Record<string, unknown>[]; fanned: boolean } {
   const multi = new Set(node.inputs.filter((p) => p.multi).map((p) => p.id));
   const lengths = Object.entries(inputs)
     .filter(([key, value]) => multi.has(key) && Array.isArray(value))
     .map(([, value]) => (value as unknown[]).length);
   const size = lengths.length ? Math.max(...lengths) : 1;
 
-  return Array.from({ length: size }, (_, index) => {
+  const items = Array.from({ length: size }, (_, index) => {
     const item: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(inputs)) {
       item[key] = multi.has(key) && Array.isArray(value)
@@ -47,20 +73,28 @@ export function batchItems(
     }
     return item;
   });
+  return { items, fanned: lengths.length > 0 };
 }
 
-/** Collect one result per item, flattening only the ports declared multi. */
+/**
+ * Collect one result per item, flattening only the ports declared multi. Run
+ * over a list (*fanned*), every output is a list -- for no items an empty one,
+ * on each output but the error port, which says why once for the node.
+ */
 export function mergeBatchOutputs(
   node: GraphNode,
   results: Record<string, unknown>[],
+  fanned: boolean,
 ): Record<string, unknown> {
   const multi = new Set(node.outputs.filter((p) => p.multi).map((p) => p.id));
   const merged: Record<string, unknown> = {};
-  const single = results.length === 1;
+  if (fanned && !results.length) {
+    for (const port of node.outputs) if (port.id !== ERROR_PORT) merged[port.id] = [];
+  }
 
   for (const result of results) {
     for (const [key, value] of Object.entries(result ?? {})) {
-      if (single && !multi.has(key)) {
+      if (!fanned && !multi.has(key)) {
         merged[key] = value;
         continue;
       }
@@ -80,6 +114,9 @@ export function mergeBatchOutputs(
  * is called `output`. Wrapping it is what everyone expects; dropping it is what
  * happened before anyone wrote this down. With several ports there is no honest
  * guess, so the value passes through and the mismatch shows up downstream.
+ *
+ * The error port a node grows when it catches its failures is not one of them:
+ * the executor fills it, and a body's answer never goes there.
  */
 export function reconcileOutputs(
   node: GraphNode,
@@ -88,6 +125,7 @@ export function reconcileOutputs(
   const portIds = node.outputs.map((p) => p.id);
   if (!result || typeof result !== 'object' || !portIds.length) return result;
   if (portIds.some((id) => id in result)) return result;
-  if (portIds.length === 1) return { [portIds[0]]: result };
+  const answers = portIds.filter((id) => id !== ERROR_PORT);
+  if (answers.length === 1) return { [answers[0]]: result };
   return result;
 }

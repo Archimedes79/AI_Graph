@@ -155,10 +155,6 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
    * only a node that is wired into one hears it.
    */
   override generation(): Generation {
-    return {
-      kind: 'code', fields: CODE_FIELDS,
-      guard: 'Say what this node should do first: its text is what the code is written from.',
-      success: '✅ Code written.',
-    };
+    return { kind: 'code', fields: CODE_FIELDS };
   }
 }

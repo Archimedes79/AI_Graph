@@ -13,6 +13,7 @@ import { Latch } from './execution/latch.ts';
 import { registry } from './elements/registry.ts';
 import { nodeFiles, nodeCode } from './host/node.ts';
 import { aiService } from './ai/providers.ts';
+import { lent } from './elements/Runtime.ts';
 import { writeBundle } from './cli/bundle.ts';
 
 /**
@@ -89,6 +90,8 @@ async function load(name: string): Promise<Graph> {
   return graph;
 }
 
+const stub = () => aiService({ endpoints: { openai_compatible: model.url } });
+
 function runGraph(graph: Graph, trigger: Trigger | null = null, latch?: Latch) {
   return executeGraph(graph, {
     registry,
@@ -97,7 +100,8 @@ function runGraph(graph: Graph, trigger: Trigger | null = null, latch?: Latch) {
     runtime: {
       files: nodeFiles,
       code: nodeCode,
-      ai: aiService({ provider: 'openai_compatible', model: 'stub-model', endpoints: { openai_compatible: model.url } }),
+      // The one AI setting, filled in as `nodeRuntime` fills it: the stub model.
+      ai: { complete: (request) => stub().complete({ ...request, ...lent(request, { provider: 'openai_compatible', model: 'stub-model' }) }) },
     },
   });
 }
@@ -114,7 +118,7 @@ const blocksOf = (graph: Graph, nodeId: string) =>
  */
 function runBundle(dir: string): Promise<{ code: number; out: string; err: string }> {
   return new Promise((fulfil, fail) => {
-    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), join(dir, 'graph.json'), '--limit', '1'], {
+    const child = spawn(process.execPath, [join(dir, 'engine', 'main.ts'), dir, '--limit', '1'], {
       cwd: dir, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,

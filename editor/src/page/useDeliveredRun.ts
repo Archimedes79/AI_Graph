@@ -3,6 +3,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { call, type Requirement, type RunTrigger } from '@/api/client';
 import type { Graph } from '@/graph';
 import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
+import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 /**
@@ -33,7 +34,8 @@ export function useDeliveredRun() {
   const run = async (trigger: RunTrigger | null = null) => {
     const graph = exportGraph();
     try {
-      const needed = await call('requirements', graph);
+      // For this event: what it does not run is not asked about.
+      const needed = await call('requirements', trigger ? { ...graph, trigger } : graph);
       if (needed.length > 0) {
         pending.current = trigger;
         setRequirements(needed);
@@ -57,7 +59,9 @@ export function useDeliveredRun() {
     // run -- otherwise an operator running the same tool daily retypes the
     // same paths on every single run.
     for (const node of graph.nodes) {
-      if (answered.has(node.id)) updateNode(node.id, { config: node.config });
+      // Over every setting the node has in memory, not the lean form the copy
+      // was exported in: that leaves out each key that equals its default.
+      if (answered.has(node.id)) updateNode(node.id, { config: { ...baseNodeConfig(), ...node.config } });
     }
     setRequirements(null);
     const trigger = pending.current;

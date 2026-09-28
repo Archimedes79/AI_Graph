@@ -95,7 +95,9 @@ as if a stranger wrote it.
   `..`, an absolute path elsewhere and another drive are refused alike. Checked as
   written and again after following links, so a symlink or junction inside the root is
   not a way out.
-- **Only `.json`,** and never under a dot-folder, `node_modules` or `dist`.
+- **Only a `.json` path,** and never under a dot-folder, `node_modules` or `dist`. A
+  project is named by its `flow.json`; saving it writes its nodes' files (`code.js`,
+  `prompt.md`, …) in its folder, inside the root, as the editor does.
 - **A file that exists is replaced only if it is already a graph.** `save_graph`
   cannot overwrite `package.json`: it has no `nodes`.
 - **`ai-settings.json` is never opened** by any tool, under any spelling.

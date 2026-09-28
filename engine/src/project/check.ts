@@ -10,6 +10,7 @@
 import type { Graph, GraphEdge, GraphNode } from '../graph.ts';
 import { NESTING_LIMIT, memoryFeedbackEdges, topologicalLevels } from '../execution/executor.ts';
 import { RUN_PORT, graphTriggers, pageStarts } from '../execution/triggers.ts';
+import { keepsTime } from '../execution/clock.ts';
 import { ERROR_PORT, names, wiringProblems, type Problem } from '../execution/wiring.ts';
 import { registry } from '../elements/registry.ts';
 import { resultKeys } from '../elements/NodeRunner.ts';
@@ -170,12 +171,13 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
 
 /**
  * A page that takes something in -- a box, a picker, a choice -- where nothing
- * starts the graph: no block on it does, and no trigger node. The tool runs
- * once when it is started (`startEvents`), and what is entered afterwards is
- * never read. A page is how a person runs the tool, so it needs its trigger.
+ * starts the graph: no block on it does, and no trigger node keeps time. The
+ * tool runs when it is started (`startEvents`: a trigger set to fire at start,
+ * or the whole graph once), and what is entered afterwards is never read. A
+ * page is how a person runs the tool, so it needs its trigger.
  */
 function idlePage(graph: Graph): Problem[] {
-  if (graphTriggers(graph).length || pageStarts(graph, registry)) return [];
+  if (graphTriggers(graph).some(keepsTime) || pageStarts(graph, registry)) return [];
   const page = graph.nodes.find((node) => registry.node(node.node_type)?.hasInterface);
   if (!page) return [];
   const takes = registry.node(page.node_type)!.derivedPorts(page, registry)?.outputs ?? page.outputs;

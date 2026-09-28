@@ -8,9 +8,11 @@
 //
 // So a node that runs only as context may hand back what it produced last
 // time, on one condition: nothing it depends on has changed. "Depends on" is
-// the node as written (type, settings, ports) and every value that arrived on
+// the node as written (type, settings, ports), every value that arrived on
 // its inputs -- with wired files already read, so a file edited since is a
-// different input. A node with no inputs at all reads the outside world
+// different input -- and the one AI setting, which answers every model call
+// that names no model of its own: after another model is chosen, a node that
+// asks one asks it. A node with no inputs at all reads the outside world
 // instead (a file, a page, the clock) and is never reused; it is also what is
 // cheap.
 //
@@ -19,6 +21,7 @@
 
 import { createHash } from 'node:crypto';
 import type { GraphNode } from '../graph.ts';
+import type { ModelChoice } from '../elements/Runtime.ts';
 
 /** How many results are kept. A long session must not accumulate every one it ever saw. */
 const LIMIT = 256;
@@ -26,10 +29,10 @@ const LIMIT = 256;
 export class LastOutputs {
   private readonly kept = new Map<string, Record<string, unknown>>();
 
-  /** One key for this node, as written, receiving these inputs. */
-  key(node: GraphNode, inputs: Record<string, unknown>): string {
+  /** One key for this node, as written, receiving these inputs, with *setting* the one AI setting. */
+  key(node: GraphNode, inputs: Record<string, unknown>, setting?: ModelChoice): string {
     const written = { type: node.node_type, config: node.config, inputs: node.inputs, outputs: node.outputs };
-    return createHash('sha256').update(JSON.stringify([written, inputs])).digest('hex');
+    return createHash('sha256').update(JSON.stringify([written, inputs, setting ?? null])).digest('hex');
   }
 
   get(key: string): Record<string, unknown> | undefined {

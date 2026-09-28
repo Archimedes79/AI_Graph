@@ -1,6 +1,6 @@
 {
   "name": "Summarize a folder",
-  "description": "Choose a folder and read a summary of every text file in it. One page, one model: the AI node runs once per file, and the page shows the summaries one under the other. Choosing a folder starts it. Paths are relative to the working directory, so run this from the repository root.",
+  "description": "Choose a folder and read a summary of every text file in it. One page, one model: the AI node runs once per file, and the page shows the summaries one under the other. Choosing a folder starts it.",
   "nodes": {
     "page": "gui",
     "summarize": "ai"

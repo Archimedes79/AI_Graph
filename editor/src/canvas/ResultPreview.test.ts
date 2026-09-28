@@ -12,7 +12,6 @@ import type { GraphNode } from '@/graph';
 // lifts both of these above the imports.)
 const open = vi.hoisted(() => ({
   executionResult: null as unknown,
-  rfEdges: [], setEditingNode: () => {}, deleteNode: () => {},
 }));
 vi.mock('@/store/graphStore', () => ({
   useGraphStore: (select: (state: typeof open) => unknown) => select(open),

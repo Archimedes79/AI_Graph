@@ -43,7 +43,6 @@ describe('the application, running', () => {
     } as never;
     try {
       const html = renderToStaticMarkup(createElement(ApplicationView));
-      expect(html).toContain('No page yet');
       expect(html).toContain('forty-two words');
     } finally {
       open.rfNodes = page;

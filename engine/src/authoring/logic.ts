@@ -15,7 +15,7 @@
 // it was given.
 
 import type { Runtime } from '../elements/Runtime.ts';
-import { runBody, type BodyGiven } from '../elements/body.ts';
+import { runBody } from '../elements/body.ts';
 
 /**
  * What the body *is*, which decides who executes it.
@@ -66,17 +66,13 @@ export class Logic {
    * Run the body over *inputs*.
    *
    * Only meaningful for `code`; a prompt is sent by the element that owns the
-   * model call. An empty body passes the inputs
-   * through — the sane default, which used to mean three different things in
-   * three elements: one called the sandbox anyway and failed with a reference
-   * error out of a subprocess, one guarded first, one passed through.
+   * model call.
    *
    * No failure policy here: what a failure costs is the executor's business
    * (`catch_errors`), the same for every element.
    */
-  async run(inputs: Record<string, unknown>, runtime: Runtime, given?: BodyGiven): Promise<Record<string, unknown>> {
-    if (this.isEmpty) return inputs;
-    return runBody(this.body, inputs, runtime, given);
+  async run(inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {
+    return runBody(this.body, inputs, runtime);
   }
 }
 

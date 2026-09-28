@@ -5,7 +5,7 @@
 // engine's filesystem is not the browser's, and it is not the model provider's
 // either — a path means nothing to either of them.
 
-import type { FileService } from '../elements/Runtime.ts';
+import type { FileService } from './Runtime.ts';
 
 /** Bigger than this and inlining it is a mistake rather than a slow request. */
 export const MAX_INLINE_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -36,20 +36,20 @@ export function isInlineUrl(value: string): boolean {
  * Refuses two things by name rather than by failing later: a file that is not
  * an image, and one too large to inline. Both would otherwise travel — to a
  * browser as a broken picture, to a provider as a bill — and the message a
- * person can act on is the one that says which file and how big.
+ * person can act on is the one that says which file and how big. The size is
+ * asked before anything is read: reading a picture of gigabytes whole, only
+ * to refuse it, is the harm itself.
  */
 export async function imageDataUrl(path: string, files: FileService): Promise<string> {
   const resolved = files.resolve(path);
   const mediaType = imageMediaType(resolved);
   if (!mediaType) throw new Error(`Not a recognised image file: ${resolved}`);
 
-  const base64 = await files.read(resolved, 'binary');
-  // base64 carries 3 bytes in every 4 characters; padding is at most two.
-  const bytes = Math.floor((base64.length * 3) / 4);
+  const bytes = await files.size?.(resolved) ?? 0;
   if (bytes > MAX_INLINE_IMAGE_BYTES) {
     const megabytes = (bytes / 1024 / 1024).toFixed(1);
     const limit = Math.floor(MAX_INLINE_IMAGE_BYTES / 1024 / 1024);
     throw new Error(`Image is ${megabytes} MB; the limit is ${limit} MB.`);
   }
-  return `data:${mediaType};base64,${base64}`;
+  return `data:${mediaType};base64,${await files.read(resolved, 'binary')}`;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import PlotChart, { drawsSomething } from './PlotChart';
+import PlotChart, { asDrawing, drawsSomething } from './PlotChart';
 import type { WidgetViewProps } from '../WidgetView';
 import SaveButton from '../SaveButton';
 import { drawnSvg, fileName, saveFile } from '../download';
@@ -56,6 +56,9 @@ export default function PlotWindowWidgetView({ widget, value, incoming }: Widget
   }, [data]);
 
   const save = () => {
+    // A finished drawing is saved as it arrived; a figure as it is drawn.
+    const drawing = asDrawing(data);
+    if (drawing) return saveFile(fileName(widget.label, 'chart', 'svg'), drawing, 'image/svg+xml');
     const svg = containerRef.current?.querySelector('svg');
     if (svg) saveFile(fileName(widget.label, 'chart', 'svg'), drawnSvg(svg), 'image/svg+xml');
   };

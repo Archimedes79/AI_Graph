@@ -19,12 +19,12 @@ import { dirname, join, resolve } from 'node:path';
 import { parseGraph, type Graph } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
-import { applyRuntimeValues, runtimeRequirements } from '../execution/runtimeValues.ts';
+import { runtimeRequirements } from '../execution/runtimeValues.ts';
 import { triggeredNodes } from '../execution/triggers.ts';
-import { aiSetting, candidatePaths } from '../ai/settings.ts';
+import { aiSetting, settingsPath } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, foreignRequest, message, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
 } from './http.ts';
 import { browse } from './browse.ts';
 import { extensionFilter } from '../elements/folderListing.ts';
@@ -49,20 +49,14 @@ export interface ServeOptions {
    * The graph this server ships, for a deployed tool.
    *
    * Optional, because the editor posts the graph being edited with every
-   * request, so there is nothing stored to serve. Only the `graph` route needs it.
+   * request, so there is nothing stored to serve unless it is given one. With
+   * it come the `graph` route, the graph's clock and the file its last round is
+   * kept in, and the folder the file picker opens in.
    */
   graphPath?: string;
   /** Where the built page lives, if this bundle carries one. */
   pageDir?: string;
   port?: number;
-  /**
-   * Let the page list directories.
-   *
-   * Loopback only, and that is not a detail: on 0.0.0.0 it would expose this
-   * machine's filesystem listing to the network, which is a different thing
-   * from letting the person at the keyboard choose their own file.
-   */
-  allowBrowse?: boolean;
   host?: string;
   /** Serve the editor instead of a deployed page: `dist` is the built editor. */
   editor?: { dist: string };
@@ -82,9 +76,9 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const lifecycle = new Lifecycle();
   const host = options.host ?? '127.0.0.1';
   const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1';
-  const exchange: Exchange = { loopback: (options.allowBrowse ?? true) && loopback };
+  const exchange: Exchange = { loopback };
   /** Who this server is, for telling its own page from another's: its port is known once it listens. */
-  const self = { loopback, port: 0 };
+  const self = { loopback, port: 0, names: namesFor(host) };
 
   // The graph this server ships is held, not re-read: what a run remembers is
   // settled into it, so the next scheduled round -- and the next page to open --
@@ -99,8 +93,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
   };
   const clock = held.graph
     ? schedule(() => held.graph!, (graph, signal, trigger) => {
-      applyRuntimeValues(graph, {}, registry);
-      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }));
+      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }), signal);
     }, lastRunFile(options.graphPath!))
     : null;
   if (clock) lifecycle.own('the schedule', () => clock.stop());
@@ -111,8 +104,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
     // Where an empty path opens the picker, decided here and nowhere else. A
     // tool's opens where its graph is — a bundle's own folder, which is also
     // what its paths are relative to. The editor's opens where the editor was
-    // started, which is the same idea one level up, even when it was started
-    // beside a graph.json it therefore also serves.
+    // started, which is the same idea one level up, even when it was given a
+    // graph to serve as well.
     ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.editor || !options.graphPath
       ? process.cwd()
       : (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))),
@@ -128,7 +121,9 @@ export async function serve(options: ServeOptions): Promise<Served> {
   if (missing.length) throw new Error(`No handler for ${missing.join(', ')}: the server and api.ts disagree.`);
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    const url = new URL(request.url ?? '/', `http://${host}`);
+    // Only the path and the query are read, so the base is any that parses:
+    // the bound address does not, where it is `::1`, and every request was a 500.
+    const url = new URL(request.url ?? '/', 'http://localhost');
     const path = url.pathname;
     const foreign = foreignRequest(request, self, path.startsWith('/api/'));
     if (foreign) return sendJson(response, 403, { detail: foreign });
@@ -188,8 +183,14 @@ export async function serve(options: ServeOptions): Promise<Served> {
     });
   });
   self.port = (server.address() as AddressInfo).port;
-  return { server, url: `http://${host}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
+  // An IPv6 address in brackets, as a browser takes it -- and every address,
+  // which no browser can open, as this machine's own.
+  const named = WILDCARD.get(host) ?? hostnameOf(host) ?? host;
+  return { server, url: `http://${named}:${self.port}`, shutdown: (graceMs) => lifecycle.shutdown(graceMs) };
 }
+
+/** A bind to every address, and the one of them a browser here opens: this machine's own. */
+const WILDCARD = new Map([['0.0.0.0', '127.0.0.1'], ['::', '[::1]']]);
 
 /** Whether a failure to start is "something else is already on that port". */
 export function portTaken(error: unknown): boolean {
@@ -222,7 +223,7 @@ function toolRoutes(
     async toolAiSettings() {
       // The function a run asks, so the page says what a run calls.
       const { provider, model } = await aiSetting();
-      const file = candidatePaths().find((path) => existsSync(path)) ?? candidatePaths()[0];
+      const file = settingsPath();
       return {
         provider,
         model,
@@ -231,7 +232,13 @@ function toolRoutes(
       };
     },
 
-    requirements: (asked) => runtimeRequirements(parseGraph(asked), registry),
+    requirements(asked) {
+      // Asked for one event, only what that event runs is asked about.
+      const graph = parseGraph(asked);
+      const trigger = asked.trigger?.node_id ? asked.trigger : null;
+      const only = trigger ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry)) : null;
+      return runtimeRequirements(graph, registry, only);
+    },
 
     startRun(asked) {
       const graph = parseGraph(asked);
@@ -242,12 +249,6 @@ function toolRoutes(
         : null;
       const total = only?.size ?? graph.nodes.length;
       return { run_id: runs.start(graph, trigger, total), total };
-    },
-
-    runNow(asked) {
-      const graph = parseGraph(asked);
-      applyRuntimeValues(graph, {}, registry);
-      return runs.whole(graph);
     },
 
     run(asked) {

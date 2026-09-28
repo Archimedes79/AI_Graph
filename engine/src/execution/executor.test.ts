@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Graph, GraphNode } from '../graph.ts';
-import { collectInputs, executeGraph, executeNode, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
+import { callNode, collectInputs, executeGraph, executeNode, inputsFor, memoryFeedbackEdges, runNodeAlone, topologicalLevels } from './executor.ts';
 import { NodeRunner } from '../elements/NodeRunner.ts';
 import { type Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -71,6 +71,28 @@ describe('memoryFeedbackEdges', () => {
     const nodes = [node('a', 'code'), node('b', 'code')];
     const edges = [edge('e1', 'a', 'o', 'b', 'i'), edge('e2', 'b', 'o', 'a', 'i')];
     expect(memoryFeedbackEdges(nodes, edges, registry).size).toBe(0);
+  });
+
+  it('cuts a loop through a page and a data node at the page, whichever comes first', async () => {
+    // Cut at the data node, the page was shown what the data node held from
+    // before, and what it was shown was never kept: a data node keeps what
+    // arrives loop or no loop, a page only what comes back around one.
+    const make = () => ({
+      page: node('page', 'gui', { gui_widgets: [
+        { id: 'q', kind: 'text_io', mode: 'input', value: 'typed now' },
+        { id: 'shown', kind: 'text_io', mode: 'output' },
+      ] }),
+      keep: node('keep', 'data', { data_value: 'from before' }),
+      echo: node('echo', 'code', { code: 'function run(i) { return { out: i.v }; }' }),
+    });
+    const edges = [edge('in', 'page', 'q_out', 'keep', 'input'), edge('on', 'keep', 'output', 'echo', 'v'), edge('back', 'echo', 'out', 'page', 'shown_in')];
+    const runtime = quietRuntime({ code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) } });
+    for (const order of [['page', 'keep', 'echo'], ['keep', 'page', 'echo']] as const) {
+      const nodes = make();
+      const run = await executeGraph(graphOf(order.map((id) => nodes[id]), edges), { runtime, registry });
+      expect(run.node_results.find((r) => r.node_id === 'page')!.display, order.join()).toEqual({ shown: 'typed now' });
+      expect(run.memory, order.join()).toContainEqual({ node_id: 'page', port_id: 'shown_in', value: 'typed now' });
+    }
   });
 });
 
@@ -476,11 +498,62 @@ describe('one node tried by itself', () => {
     expect(result.error).toMatch(/ENOENT: data\.csv/);
   });
 
+  /** `reader` hangs on `flag`'s ◆, and `target` takes what `reader` read. */
+  const flagged = (open: boolean) => graphOf([
+    node('flag', 'code', { code: `function run() { return { open: ${open} }; }` }),
+    node('reader', 'code', { code: 'function run() { return { text: "the file" }; }' }),
+    node('target', 'code', { code: 'function run(i) { return { n: String(i.text ?? "").length }; }' }),
+  ], [edge('g', 'flag', 'open', 'reader', '__run'), edge('t', 'reader', 'text', 'target', 'text')]);
+  const running = () => {
+    const ran: string[] = [];
+    const runtime = quietRuntime({
+      code: { run: async (body, inputs) => new Function('inputs', `${body}; return run(inputs);`)(inputs) },
+      report: (event) => { if (event.type === 'node_start') ran.push(event.node_id); },
+    });
+    return { ran, runtime };
+  };
+
+  it('runs what computes the ◆ of what feeds it, as ⟳ From the graph asks', async () => {
+    // It used to leave `flag` out, so `reader` never opened and nothing arrived.
+    const { runtime } = running();
+    const { inputs } = await inputsFor(flagged(true), 'target', { runtime, registry });
+    expect(inputs).toEqual({ text: 'the file' });
+  });
+
+  it('does not run when what feeds it stood still, rather than running on nothing and succeeding', async () => {
+    const { ran, runtime } = running();
+    const { result } = await runNodeAlone(flagged(false), 'target', undefined, { runtime, registry });
+    expect(result.status).toBe('error');
+    expect(result.error).toMatch(/"reader".*Nothing opened its ◆/);
+    expect(ran).not.toContain('target');
+  });
+
   it('says what does not fit its output.js, as a run says it', async () => {
     const make = node('make', 'code', { code: 'x', output_definition: 'module.exports = { "n": 1.5 };' });
     make.outputs = [{ id: 'n', name: 'n', kind: 'output', data_type: 'any', multi: false, required: false, description: '' }];
     const runtime = quietRuntime({ code: { run: async () => ({ n: 'not a number' }) } });
     const alone = await executeNode(graphOf([make]), 'make', {}, { runtime, registry });
     expect(alone.messages?.[0]).toBe('Does not fit its output.js: output "n" is text; output.js says a number');
+  });
+
+  it('hands its body the stop it was given, run on inputs or on its example', async () => {
+    // Both took a signal and dropped it: ▶ Try stopped went on grinding.
+    const stop = new AbortController();
+    const handed: (AbortSignal | undefined)[] = [];
+    const runtime = quietRuntime({ code: { run: async (_body, inputs, signal) => { handed.push(signal); return inputs; } } });
+    const graph = graphOf([node('work', 'code', { code: 'x' })]);
+    await executeNode(graph, 'work', {}, { runtime, registry, signal: stop.signal });
+    await callNode(graph, 'work', {}, { runtime, registry, signal: stop.signal });
+    expect(handed).toEqual([stop.signal, stop.signal]);
+  });
+
+  it('starts no more items once it is stopped', async () => {
+    const stop = new AbortController();
+    let ran = 0;
+    const runtime = quietRuntime({ code: { run: async (_body, inputs) => { ran += 1; stop.abort(); return inputs; } } });
+    const each = node('each', 'code', { code: 'x', batch_mode: 'per_item', batch_concurrency: 1 });
+    each.inputs = [{ id: 'item', name: 'item', kind: 'input', data_type: 'any', multi: true, required: false, description: '' }];
+    await executeNode(graphOf([each]), 'each', { item: [1, 2, 3] }, { runtime, registry, signal: stop.signal });
+    expect(ran).toBe(1);
   });
 });

@@ -7,7 +7,7 @@
 // made from a body is not a second, thinner way to ask.
 
 import type { Runtime } from '../../Runtime.ts';
-import { imageDataUrl, imageMediaType } from '../../../execution/images.ts';
+import { imageDataUrl, imageMediaType } from '../../images.ts';
 import { assemblePrompt } from './prompt.ts';
 
 /** How often one run of a body may ask for the model. A loop that forgot to end must not spend a budget. */

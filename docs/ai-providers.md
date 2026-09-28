@@ -59,9 +59,9 @@ file by hand:
 
 `ai` is the one AI setting. A provider without a model takes that provider's own
 default; with no `ai` at all it is whichever local provider is running, else Ollama. The
-file is looked up in the working directory, next to the executable, at
-`$AI_GRAPH_SETTINGS`, and finally `~/.ai-graph/settings.json`. An environment variable of
-the same name always wins over what is stored there.
+file is looked up in the working directory, beside the engine's folder (a bundle's `run.sh`),
+and finally `~/.ai-graph/settings.json` -- or only where `$AI_GRAPH_SETTINGS` says, when it
+says. An environment variable of the same name always wins over what is stored there.
 
 Two provider names are worth spelling out:
 

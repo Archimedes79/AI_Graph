@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { Graph, Port } from '@/graph';
 import { call } from '@/api/client';
 import { useGraphStore } from '@/store/graphStore';
@@ -7,7 +8,7 @@ import PortsEditor from './PortsEditor';
 import { withPorts } from './nodeDraft';
 import { useNodePanel } from './nodePanel';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { ONCE, type NodePanelProps, type UndoStep } from '@/elements/NodeGuiBuilder';
+import { ONCE, type NodeGuiBuilder, type NodePanelProps, type UndoStep } from '@/elements/NodeGuiBuilder';
 import SidePanel from '@/ui/SidePanel';
 import NodeKind from './NodeKind';
 import { useGenerate } from '@/authoring/useGenerate';
@@ -38,7 +39,10 @@ interface NodeEditorProps {
  */
 export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const panel = useNodePanel(nodeId);
-  const graphNodes = useGraphStore((s) => s.rfNodes.map((item) => item.data.graphNode));
+  // The nodes as their contents, compared one by one: a fresh list every time
+  // the store changed drew the panel anew on every tick of a run and every
+  // frame of a drag, when no node had changed.
+  const graphNodes = useGraphStore(useShallow((s) => s.rfNodes.map((item) => item.data.graphNode)));
   const graphEdges = useGraphStore((s) => s.rfEdges);
   const metadata = useGraphStore((s) => s.metadata);
   // The last run's per-node values: where the file an input definition is
@@ -50,7 +54,17 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
   const node = panel.node();
   if (!node) return null;
 
-  const element = NODE_BUILDERS[node.node_type];
+  const element: NodeGuiBuilder | undefined = NODE_BUILDERS[node.node_type];
+  // A type this editor does not know is kept as it came (`normalizeGraphNode`): nothing here to change.
+  if (!element) {
+    return (
+      <SidePanel kicker={<NodeKind node={node} />} title={node.label} onClose={onClose}>
+        <p className="px-6 py-5 text-sm" style={{ color: MUTED }}>
+          This editor does not know nodes of type "{node.node_type}". The node is kept, and saved, as it came.
+        </p>
+      </SidePanel>
+    );
+  }
   const caught = node.config.catch_errors === true;
 
   const setConfig: NodePanelProps['setConfig'] = (key, value, step) => panel.setConfig(key, value, step);

@@ -6,7 +6,10 @@ import type { DataType, Port, PortKind } from '../graph.ts';
  * Ports were built inline wherever they were needed — in the editor's node
  * creation, again where a node's mode changes, again per widget kind — and each
  * copy repeated `required: false, description: ''` and could quietly differ in
- * `multi`, which decides whether several edges collect into a list.
+ * `multi`: that the port carries a list -- what a node run once per item runs
+ * over, or collects its calls' lists into, and what `check` holds a wire to.
+ * Not whether several edges collect into one: any port fed by several does
+ * (`collectInputs`).
  */
 export function port(
   id: string,

@@ -5,7 +5,7 @@ import { ApiError, watchGeneration, type AICall } from '@/api/client';
 /** Said when ✨ was stopped: what it wrote before stays, what was on its way does not come. */
 const STOPPED = '⏹ Stopped: what was still on its way is not written.';
 
-export interface GenerateOptions<T> {
+interface GenerateOptions<T> {
   /**
    * Return why generation cannot start yet (e.g. "Please add a prompt first."),
    * or nothing to proceed.

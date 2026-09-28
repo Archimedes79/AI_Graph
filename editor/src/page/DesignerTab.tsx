@@ -4,6 +4,8 @@ import { useGraphStore } from '@/store/graphStore';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
 import { usePage, usePageEvents } from './GuiPage';
+import { useDeliveredRun } from './useDeliveredRun';
+import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
@@ -20,7 +22,10 @@ export default function DesignerTab() {
   const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const { page, widgets } = usePage();
-  const events = usePageEvents();
+  // Its blocks are live, and a round they start is the delivered tool's: what
+  // the graph still needs is asked first.
+  const delivered = useDeliveredRun();
+  const events = usePageEvents((trigger) => { void delivered.run(trigger); });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // What was typed into a live block, shown in place of what arrived there --
   // for as long as the block still holds it. A run that sent it, or a panel
@@ -221,6 +226,8 @@ export default function DesignerTab() {
             what runs when it runs is said here, as every other node says it. */}
         {page && <div className="mt-5"><WhatRuns node={page} folded /></div>}
       </aside>
+
+      <RequirementsDialog requirements={delivered.requirements} onSubmit={delivered.submit} onCancel={delivered.cancel} />
 
       {/* The element under the cursor while it is being dragged. Without it the
           only feedback was the result, which on a failed drop is no feedback. */}
