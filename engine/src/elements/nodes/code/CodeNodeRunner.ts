@@ -14,10 +14,17 @@ export interface CodeConfig {
   code: string;
 }
 
-/** code.js while there is no code: what it is, and which ✨ writes it. */
+/**
+ * code.js while there is no code: what it is, and which ✨ writes it -- and,
+ * run on its own (`node code.js`), a line that says so and a failing exit
+ * code, where a file of comments printed nothing and "succeeded". The folder
+ * reads the stub as it wrote it, as no code (`standard`).
+ */
 const CODE_STUB = `// code.js: what this code node does -- \`function run(inputs)\`, returning an
 // object keyed by its outputs. ✨ Code writes it from the node's text, its
-// input.js and its output.js.`;
+// input.js and its output.js.
+console.error('code.js holds no code yet: write it with ✨ Code.');
+process.exitCode = 1;`;
 
 /**
  * What follows the code in code.js, and only there: the folder writes it after

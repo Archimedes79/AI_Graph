@@ -570,7 +570,8 @@ A graph is a folder, and **each fact is in one place**:
 
   **Every file is there from the start.** A text nothing has been written into is written
   as its stub (`TextFile.standard`): a comment saying what the file is and which ✨ writes
-  it -- a definition's ends `module.exports = null;` -- and a stub read back is nothing
+  it -- a definition's ends `module.exports = null;`, code.js's with a line that, run on
+  its own, says it holds no code yet and fails -- and a stub read back is nothing
   written. `history.md` has no stub: it comes with the first exchange. What follows a body
   in its file only on disk -- code.js's lines that run it by itself -- is `TextFile.footer`,
   written after the body and taken off on the way in.

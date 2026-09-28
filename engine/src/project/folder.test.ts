@@ -169,6 +169,17 @@ describe('a project folder', () => {
     expect(problemsIn(read)).toEqual([]);
   });
 
+  it('writes a code.js with no code yet that says so when it is run on its own, and fails -- and reads back as no code', async () => {
+    const graph = sample();
+    graph.nodes[1].config.code = '';
+    await writeProject(dir, graph);
+    const ran = await promisify(execFile)(process.execPath, [join(dir, 'nodes', 'count', 'code.js')], { cwd: dir })
+      .then(() => ({ code: 0, stderr: '' }), (error: { code?: number; stderr?: string }) => ({ code: error.code, stderr: String(error.stderr) }));
+    expect(ran).toEqual({ code: 1, stderr: 'code.js holds no code yet: write it with ✨ Code.\n' });
+    forgetSeen();
+    expect((await readProject(dir)).nodes[1].config).not.toHaveProperty('code');
+  }, 30_000);
+
   it('takes the part that runs code.js on its own out wherever it stands: code added after it is the node\'s', async () => {
     const graph = sample();
     Object.assign(graph.nodes[1].config, { code: 'function run() { return { total: 1 }; }' });

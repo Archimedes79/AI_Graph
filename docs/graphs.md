@@ -374,8 +374,9 @@ what ✨ is told.
 
 **The folder has every file from the start.** A file nothing has been written into yet is
 its stub: a comment saying what the file is and which ✨ writes it -- a definition's stub
-ends `module.exports = null;`, read as no example at all -- so the folder shows what the
-node is made of before any of it exists. `history.md` comes once there is history. An input, an
+ends `module.exports = null;`, read as no example at all, and code.js's `node code.js`
+says "code.js holds no code yet: write it with ✨ Code." and exits with 1 -- so the folder
+shows what the node is made of before any of it exists. `history.md` comes once there is history. An input, an
 output, a trigger and a page keep no writing: all they are is settings, and a page's
 blocks are settings as well. Settings — the model, the temperature, a node's mode — are in
 its `node.json`, and positions in `layout.json`, so moving a node on the canvas is not a
