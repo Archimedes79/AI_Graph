@@ -41,7 +41,9 @@ shows — under the node's label ("Result" here), and with `write_mode` `file` o
 **data** node is a value that survives the run: its kind (`data_format`, text or
 structure) and what it holds (`data_value`, kept in `data.json` or `data.txt`). Its
 panel is its text and that value -- **✨ Data** writes the value from the text, shaped
-as the nodes it feeds want it: what is typed is in the graph as it is typed, a structure
+as the nodes it feeds want it (asked for text where it is kept as text, for JSON where it
+holds structure; a text node answered with a JSON list, record or number becomes a
+structure): what is typed is in the graph as it is typed, a structure
 that does not parse stays in the box with the reason and is not stored, and a file
 dropped on the box — or on the node on the canvas — is what it holds from then on (what
 the file says, parsed when it is JSON).

@@ -180,7 +180,8 @@ export function writtenInto(node: GraphNode, write: Write, response: Pick<Genera
     if (definitionKeys(response.result).length) outputs = outputsFrom(node, response.result);
   } else {
     const body = bodyOf(node);
-    if (body) config[body.field] = body.kind === 'data' && node.config.data_format === 'structure' ? JSON.parse(response.result) : response.result;
+    if (body?.kind === 'data') Object.assign(config, heldFrom(node, body.field, response.result));
+    else if (body) config[body.field] = response.result;
   }
   config.history = withHistory(node, name, response.calls, at);
   return {
@@ -189,6 +190,24 @@ export function writtenInto(node: GraphNode, write: Write, response: Pick<Genera
     outputs,
     config: config as GraphNode['config'],
   };
+}
+
+/**
+ * What a data node holds from what ✨ Data wrote, into *field*: parsed where
+ * it is kept as structure (the engine refused what does not parse). Kept as
+ * text, an answer that is JSON of anything but a string -- a list, a record, a
+ * number -- makes it a structure from now on: left text, the list of capitals
+ * went to data.txt and the node it fed was handed one string.
+ */
+function heldFrom(node: GraphNode, field: string, text: string): Record<string, unknown> {
+  if (node.config.data_format === 'structure') return { [field]: JSON.parse(text) };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { [field]: text };
+  }
+  return typeof parsed === 'string' ? { [field]: text } : { [field]: parsed, data_format: 'structure' };
 }
 
 /** *node*'s history.md with one more exchange at its end: *calls*, under *name*. */

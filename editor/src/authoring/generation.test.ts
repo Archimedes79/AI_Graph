@@ -94,6 +94,17 @@ describe('what comes back, written in', () => {
     expect(writtenInto(made('data'), 'body', answer('three'), '✨ Data', at).config.data_value).toBe('three');
   });
 
+  it('makes a data node kept as text a structure where ✨ Data answered with JSON of anything but a string', () => {
+    // The review's capitals: a JSON list kept as text went to data.txt, and the node it fed was handed one string.
+    const capitals = writtenInto(made('data'), 'body', answer('[{ "capital": "Paris", "population": 2102650 }]'), '✨ Data', at);
+    expect(capitals.config).toMatchObject({ data_format: 'structure', data_value: [{ capital: 'Paris', population: 2102650 }] });
+    expect(writtenInto(made('data'), 'body', answer('42'), '✨ Data', at).config).toMatchObject({ data_format: 'structure', data_value: 42 });
+    // A text stays text, one that is JSON of a string too.
+    for (const text of ['Dear reader,', '"quoted"', '{ not json']) {
+      expect(writtenInto(made('data'), 'body', answer(text), '✨ Data', at).config, text).toMatchObject({ data_format: 'text', data_value: text });
+    }
+  });
+
   it('restates the node\'s text where a change was asked, and leaves it where nothing came back for it', () => {
     const node = { ...made('code'), description: 'Count the words.' };
     expect(writtenInto(node, 'body', answer('x', '  Count the words, and the lines. '), 'Change: lines', at).description).toBe('Count the words, and the lines.');
