@@ -294,7 +294,27 @@ describe('changing a body there is (refine)', () => {
     const reply = await generate({ node: node('ai', { prompt: 'Be brief.' }), refine: { change: 'Be kind too.', outcome: 'ok.' } }, deps(ai));
     expect(ai.asked[0].prompt).toContain('## The instructions (prompt.md) as it is now\n\nBe brief.');
     expect(ai.asked[0].prompt).toContain('## What to change\n\nBe kind too.');
+    // Asked for the restated text after the block, and not also for the block "and nothing else".
+    expect(ai.asked[0].prompt).toContain('in one ```md block, then the node\'s text restated as asked above, and nothing else');
+    expect(`${ai.asked[0].system} ${ai.asked[0].prompt}`).not.toMatch(/block and nothing else|Output only/);
     expect(reply).toMatchObject({ result: 'Be brief, and kind.', description: 'Answers briefly and kindly.' });
+  });
+
+  it('writes what a data node holds again whole, changed as said, with the text restated -- the bar\'s change of a data node', async () => {
+    const ai = scripted(['Here:\n```json\n{"cities": ["Berlin", "Paris"]}\n```\n<description>Keeps two capitals: Berlin and Paris.</description>']);
+    const held = node('data', { data_format: 'structure', data_value: { cities: ['Berlin'] } }, { inputs: ['input'], outputs: ['output'] });
+    const reply = await generate({ node: held, write: 'body', refine: { change: 'Add Paris.' } }, deps(ai));
+    const { prompt, system } = ai.asked[0];
+    expect(prompt).toContain('## What the node holds as it is now\n\n{\n  "cities": [\n    "Berlin"\n  ]\n}');
+    expect(prompt).toContain('## What to change\n\nAdd Paris.');
+    expect(prompt).toMatch(/restate what this node does in one or two sentences, inside <description><\/description> tags/);
+    expect(prompt).toContain('in one ```json block, as plain JSON -- then, after the block, the node\'s text restated as asked above, and nothing else.');
+    expect(`${system} ${prompt}`).not.toMatch(/JSON, and nothing else|Output only/);
+    expect(reply).toMatchObject({ result: '{"cities": ["Berlin", "Paris"]}', description: 'Keeps two capitals: Berlin and Paris.' });
+    // Written anew, with nothing to change, it is the data and nothing else.
+    const fresh = scripted(['```json\n{"cities": []}\n```']);
+    await generate({ node: held }, deps(fresh));
+    expect(fresh.asked[0].prompt).toContain('in one ```json block, as plain JSON, and nothing else.');
   });
 });
 

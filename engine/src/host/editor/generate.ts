@@ -115,10 +115,11 @@ const SYSTEMS: Record<PromptKind, string> = {
   output: 'You write one file of a node in a graph tool: its output definition, output.js -- a JSDoc typedef of what one '
     + 'call of the node returns, then one example of it as plain JSON. Output only the file, in one ```js block.',
   code: CODE_SYSTEM,
+  // Not "only the block": a change asks for the node's text restated after it (`RESTATE`), and the frame says which.
   prompt: 'You are an expert prompt engineer. You write the instructions one node of a graph tool gives a model every time '
-    + 'it runs: concise, effective, and about the task. Output only the instructions, in one ```md block.',
+    + 'it runs: concise, effective, and about the task. Output the instructions in one ```md block, and nothing the request does not ask for.',
   data: 'You write the data one node of a graph tool holds between runs: realistic, and shaped as the nodes it feeds want '
-    + 'it. Output only the data, in one fenced block.',
+    + 'it. Output the data in one fenced block, and nothing the request does not ask for.',
 };
 
 export function firstCodeBlock(text: string): string {
@@ -171,10 +172,16 @@ const quoted = (ids: string[]): string => ids.map((id) => `"${id}"`).join(', ');
 const EMPTY_INPUT = 'Handle an input that is missing or empty as well as a full one: then the output says what to do instead of failing -- '
   + 'a chart gets a figure with no points and a title saying what to choose, a text says what it waits for.';
 
-/** The frame after the prompt: the file's format and how to answer. The engine's, not the person's to edit. */
-function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
+/**
+ * The frame after the prompt: the file's format and how to answer. The
+ * engine's, not the person's to edit. *restating*: a change was asked, and
+ * the node's text comes back restated after the block (`RESTATE`) -- which a
+ * frame that said "and nothing else" would forbid.
+ */
+function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boolean): string {
   const { inputs, outputs, wired, reads, perItem } = shape;
   const lines = ['## How to answer'];
+  const nothingElse = restating ? ', then the node\'s text restated as asked above, and nothing else' : ' and nothing else';
   switch (kind) {
     case 'input': {
       lines.push('Answer with the whole file input.js, in one ```js block and nothing else:');
@@ -218,7 +225,7 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
       // As the node runs: text on its one output, JSON only where the definition names more than one text (`textOutput`).
       const output = shape.definitions?.output.trim() ?? '';
       const text = output ? textOutput(output) : 'output';
-      lines.push('Answer with the whole file prompt.md, in one ```md block and nothing else: the instructions the model is given every time this node runs.',
+      lines.push(`Answer with the whole file prompt.md, in one \`\`\`md block${nothingElse}: the instructions the model is given every time this node runs.`,
         inputs.length > 1 ? `What arrives is sent after them, each input under its port id: ${quoted(inputs)}.`
           : inputs.length ? 'What arrives is sent after them, as it is.' : 'Nothing is wired in: the instructions are the whole question.',
         'Put {Node Description} and {Output Definition} where they belong in the instructions: they are filled in when the node runs -- '
@@ -230,9 +237,10 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode): string {
       break;
     }
     case 'data': {
+      const after = restating ? ' -- then, after the block, the node\'s text restated as asked above, and nothing else' : ', and nothing else';
       lines.push(node.config.data_format === 'structure'
-        ? 'Answer with what the node holds, in one ```json block, as plain JSON, and nothing else.'
-        : 'Answer with what the node holds, in one ```text block, the text itself, and nothing else.');
+        ? `Answer with what the node holds, in one \`\`\`json block, as plain JSON${after}.`
+        : `Answer with what the node holds, in one \`\`\`text block, the text itself${after}.`);
       break;
     }
   }
@@ -518,7 +526,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   /** The prompt as sent: the template filled -- with the text a change restated, for its repair -- then *evidence*, then the frame. */
   const prompt = (evidence: string, description?: string): string => [
     fillPrompt(template, description ? variables({ ...request, node: { ...node, description } }, shape.reads) : values),
-    evidence, frame(kind, shape, node),
+    evidence, frame(kind, shape, node, !!request.refine?.change?.trim()),
   ].filter(Boolean).join('\n\n');
 
   const calls: AICall[] = deps.calls ?? [];
