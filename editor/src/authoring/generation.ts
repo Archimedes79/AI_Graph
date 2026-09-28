@@ -20,6 +20,7 @@ import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { ERROR_PORT } from '@engine/execution/wiring.ts';
 import { inputSources, outputTargets } from './generationContext';
 import { graphContext } from './graphContext';
+import { runsPerItem } from './perItem';
 import { filesOf } from '@/document/givenFiles';
 
 /** What one ✨ writes: a node's input definition, its output definition, or its body. */
@@ -158,7 +159,7 @@ function typeOf(value: unknown): Port['data_type'] {
 export function outputsFrom(node: GraphNode, definition: string): Port[] {
   const read = definitionExample(definition);
   if (!('example' in read)) return node.outputs;
-  const perItem = node.config.batch_mode === 'per_item' && node.inputs.some((port) => port.multi);
+  const perItem = runsPerItem(node);
   const ports: Port[] = Object.entries(read.example).map(([id, value]) => node.outputs.find((port) => port.id === id) ?? {
     id, name: id, kind: 'output', data_type: typeOf(value), multi: perItem, required: false, description: '',
   });
