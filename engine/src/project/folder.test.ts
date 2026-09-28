@@ -292,6 +292,23 @@ describe('a project folder', () => {
     expect(await text('nodes/say/notes.txt')).toBe('mine');
   });
 
+  it('keeps nothing of a node\'s old kind once it is another: not in its node.json, not in its folder', async () => {
+    await writeProject(dir, sample());
+    const read = await readProject(dir);
+    // The code node is an ai node now, and the ai node a data node -- as ✨ AI Graph or a model over MCP may hand them back.
+    read.nodes[1].node_type = 'ai';
+    read.nodes[2].node_type = 'data';
+    await writeProject(dir, read);
+    expect(JSON.parse(await text('nodes/count/node.json')).config).not.toHaveProperty('code');
+    expect(existsSync(join(dir, 'nodes/count/code.js'))).toBe(false);
+    // What both kinds keep stays: its definitions and its history.
+    expect(await text('nodes/count/input.js')).toBe('module.exports = { "files": ["a.csv"] };\n');
+    expect(await text('nodes/count/history.md')).toMatch(/^## 2026-09-28 09:05 · ✨ Code/);
+    expect(Object.keys(JSON.parse(await text('nodes/say/node.json')).config)).not.toContain('prompt');
+    expect(existsSync(join(dir, 'nodes/say/prompt.md'))).toBe(false);
+    expect(existsSync(join(dir, 'nodes/say/input.js'))).toBe(false);
+  });
+
   it('keeps a person\'s file in a node\'s folder, whatever it is called and however deep', async () => {
     const graph = sample();
     await writeProject(dir, graph);

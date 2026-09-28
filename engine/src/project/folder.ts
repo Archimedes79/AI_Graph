@@ -141,6 +141,11 @@ export function projectTexts(graph: Graph): ProjectText[] {
   return found;
 }
 
+/** The settings any kind of node keeps in a file of its own (`NodeRunner.texts`), asked of every kind for *node*. */
+function textFields(node: GraphNode): Set<string> {
+  return new Set(registry.nodeTypes().flatMap((type) => registry.node(type)?.texts(node).map((text) => text.field) ?? []));
+}
+
 /** One node that holds a graph, and the folder that graph is kept in. */
 export interface NestedGraph {
   node: GraphNode;
@@ -435,8 +440,16 @@ function planProject(folder: string, copy: Graph, root = folder): Plan[] {
   // A node's ports: its interface, in its own folder.
   const flow = flowOf(copy);
   for (const node of copy.nodes) {
+    const element = registry.node(node.node_type);
     // A typo in flow.json must not cost the node its code on the next save.
-    if (!registry.node(node.node_type)) untouched.add(join(folder, nodeFolder(node.id)));
+    if (!element) untouched.add(join(folder, nodeFolder(node.id)));
+    else {
+      // A node that became another kind -- by ✨ AI Graph, the bar, a model
+      // over MCP -- keeps none of the old kind's writing: in node.json it
+      // would be a setting nothing reads. Its file goes as one no node keeps.
+      const own = new Set(element.texts(node).map((text) => text.field));
+      for (const field of textFields(node)) if (!own.has(field)) delete node.config[field];
+    }
     files.set(join(folder, nodeFolder(node.id), INTERFACE_FILE), toFile(describeInterface(node), true));
   }
   for (const text of projectTexts(copy)) {
