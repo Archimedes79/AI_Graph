@@ -14,18 +14,19 @@ function problemsOf(graph: Graph): Problem[] {
 }
 
 /**
- * What `check` finds in a graph about to be loaded from outside -- one ✨ AI
- * Graph designed, one pasted as JSON -- said before Load. A graph with two
- * pages was loaded without a word, and the second page's blocks could then
- * be neither seen nor changed nor removed.
+ * What `check` finds in a graph about to be taken in from outside -- one ✨ AI
+ * Graph designed or changed, one pasted as JSON -- said before the button
+ * that takes it (*action*: Load, Apply). A graph with two pages was loaded
+ * without a word, and the second page's blocks could then be neither seen nor
+ * changed nor removed.
  */
-export default function GraphProblems({ graph }: { graph: Graph }) {
+export default function GraphProblems({ graph, action = 'Load' }: { graph: Graph; action?: string }) {
   const problems = useMemo(() => problemsOf(graph), [graph]);
   if (!problems.length) return null;
   return (
     <div className="text-xs px-3 py-2 rounded space-y-1" style={{ background: 'rgba(234,179,8,0.08)', color: '#fcd34d' }} role="status">
       <p className="font-medium">
-        ⚠ {problems.length === 1 ? 'This graph has a problem' : `This graph has ${problems.length} problems`}. Load takes it as it is.
+        ⚠ {problems.length === 1 ? 'This graph has a problem' : `This graph has ${problems.length} problems`}. {action} takes it as it is.
       </p>
       <ul className="space-y-1">
         {problems.map((problem, index) => (

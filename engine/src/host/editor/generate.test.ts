@@ -351,3 +351,58 @@ describe('a whole graph', () => {
     await expect(generateGraph('x', { ai: scripted(['no json here']), target })).rejects.toBeInstanceOf(GenerationFailed);
   });
 });
+
+describe('a whole graph, changed as said', () => {
+  const current = parseGraph({
+    metadata: { name: 'Word tool', description: 'Counts words.', gui_scheme: 'paper' },
+    nodes: [
+      { id: 'count', node_type: 'code', label: 'Count', position: { x: 420, y: 120 }, config: { code: 'function run() { return {}; }' } },
+      { id: 'page', node_type: 'gui', label: 'Page', position: { x: 40, y: 80 }, width: 340, height: 300 },
+    ],
+    edges: [],
+  });
+
+  it('is sent the graph there is, as the document the model writes, with the change -- and asked to keep the ids', async () => {
+    const ai = scripted(['```json\n{"nodes":[],"edges":[]}\n```']);
+    await generateGraph('Call the counter "Count words".', { ai, target }, current);
+    const { prompt, system } = ai.asked[0];
+    // The document itself, so a model shown it can hand it back whole.
+    expect(prompt).toContain(JSON.stringify(current, null, 2));
+    expect(prompt).toContain('Change it as follows:\nCall the counter "Count words".');
+    expect(prompt).toMatch(/Keep every node's id, and keep everything the change does not touch/);
+    // The rules a designed graph is held to hold for a changed one: the kinds, their settings, the derived ports.
+    expect(system).toContain('Graph DSL');
+  });
+
+  it('keeps what the answer leaves out: the graph\'s name and scheme, where each node stands, a page\'s size', async () => {
+    // An answer that says nothing of the metadata, of positions or of a size.
+    const answer = {
+      nodes: [
+        { id: 'count', node_type: 'code', label: 'Count words' },
+        { id: 'page', node_type: 'gui', label: 'Page' },
+        { id: 'shown', node_type: 'output', label: 'Words', position: { x: 800, y: 120 } },
+      ],
+      edges: [],
+    };
+    const reply = await generateGraph('Show the count.', { ai: scripted([`\`\`\`json\n${JSON.stringify(answer)}\n\`\`\``]), target }, current);
+    const graph = parseGraph(reply.graph);
+    expect(graph.metadata).toMatchObject({ name: 'Word tool', description: 'Counts words.', gui_scheme: 'paper' });
+    expect(graph.nodes.map((node) => [node.id, node.label, node.position])).toEqual([
+      ['count', 'Count words', { x: 420, y: 120 }], ['page', 'Page', { x: 40, y: 80 }], ['shown', 'Words', { x: 800, y: 120 }],
+    ]);
+    expect(graph.nodes[1]).toMatchObject({ width: 340, height: 300 });
+    // What the answer does say is what it says: a new name is a change.
+    const renamed = await generateGraph('Rename it.', {
+      ai: scripted(['```json\n{"metadata":{"name":"Counter"},"nodes":[],"edges":[]}\n```']), target,
+    }, current);
+    expect(parseGraph(renamed.graph).metadata).toMatchObject({ name: 'Counter', gui_scheme: 'paper' });
+  });
+
+  it('designs one when the graph there is has no nodes yet, under the name it has when the design gives none', async () => {
+    const ai = scripted(['```json\n{"nodes":[],"edges":[]}\n```']);
+    const empty = parseGraph({ metadata: { name: 'My tool', gui_scheme: 'office' }, nodes: [], edges: [] });
+    const reply = await generateGraph('Count the words of a text.', { ai, target }, empty);
+    expect(ai.asked[0].prompt).toBe('Design a graph that does the following:\nCount the words of a text.');
+    expect(parseGraph(reply.graph).metadata).toMatchObject({ name: 'My tool', gui_scheme: 'office' });
+  });
+});

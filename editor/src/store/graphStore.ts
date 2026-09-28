@@ -7,12 +7,10 @@ import type { PortRenames } from './portRenames';
 import { derivedNodePorts, showsPage } from '@/document/guiWidgets';
 import { call, type RunTrigger } from '@/api/client';
 import { errorText } from '@/api/errorText';
-import { ACCENT } from '@/ui/theme';
 import { delivered } from './executionStatus';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
-import type React from 'react';
 import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
@@ -82,16 +80,32 @@ export interface GraphStore {
   currentRunId: string | null;
 
   // UI state
+  /** The node whose panel is open beside the canvas: the one the person is on. */
   editingNodeId: string | null;
   /**
-   * "Say what to change", asked of one node from the bar under the canvas:
-   * its panel takes it, when it is open for that node, and clears it.
+   * A change said in the bar under the canvas for one node, waiting for that
+   * node's panel to make it -- with when it was said, so the same words said
+   * twice are two changes. Gone with the graph it was said in.
    */
   pendingChange: { nodeId: string; text: string; at: number } | null;
-  askChange: (nodeId: string, text: string) => void;
-  clearChange: () => void;
 
   // Actions
+  /** Ask node *nodeId*'s panel to change the node as *text* says (`pendingChange`). */
+  askChange: (nodeId: string, text: string) => void;
+  /** The waiting change was taken up, or is no longer wanted. */
+  clearChange: () => void;
+  /**
+   * Nothing selected: no node's panel open, and nothing marked on the canvas.
+   * What ✕ and Escape on a panel, a click on the empty canvas and the bar's
+   * "on:" do alike, so the canvas never marks a node the bar is not on.
+   */
+  clearSelection: () => void;
+  /**
+   * The graph on the canvas replaced by *graph* -- this graph, changed, its
+   * ids kept -- as one undo step of this document: the file it came from
+   * stays, and so does the panel of a node that is still there.
+   */
+  changeGraph: (graph: Graph) => void;
   /**
    * Change what the graph is called, what it does, its page's scheme: a
    * change like any other, one undo step per field typed into (`commit`).
@@ -260,19 +274,6 @@ export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult):
 }
 
 /**
- * A wire that carries a value, and one that only says "start here".
- *
- * Drawn differently because they *are* different: a run edge delivers nothing,
- * and a canvas where it looks like data invites the question of what the AI
- * node does with a button's `true`. Dashed and amber reads as a signal.
- */
-export function edgeStyle(targetPort: string | null | undefined): React.CSSProperties {
-  return targetPort === RUN_PORT
-    ? { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '6 4' }
-    : { stroke: ACCENT, strokeWidth: 2 };
-}
-
-/**
  * Where a node goes that nobody put anywhere -- a palette click, the page a
  * first block makes: to the right of what is already there, not on top of it.
  * A random spot put the second node on the first more often than not, and a
@@ -424,15 +425,14 @@ function buildReactFlowGraph(graph: Graph) {
     data: { graphNode: gn },
   }));
 
+  // How a wire looks is the canvas's to say (`canvas/wireLook.ts`): it depends
+  // on what is selected there, which the document knows nothing of.
   const rfEdges: Edge[] = graph.edges.map((ge) => ({
     id: ge.id,
     source: ge.source_node_id,
     sourceHandle: ge.source_port_id,
     target: ge.target_node_id,
     targetHandle: ge.target_port_id,
-    type: 'smoothstep',
-    animated: false,
-    style: edgeStyle(ge.target_port_id),
   }));
 
   return { rfNodes, rfEdges };
@@ -498,7 +498,7 @@ export const useGraphStore = create<GraphStore>()(
       if (get().rfEdges.some(joins)) return;
       get().commit();
       set((state) => {
-        state.rfEdges.push({ ...wire, id, type: 'smoothstep', style: edgeStyle(wire.targetHandle) } as never);
+        state.rfEdges.push({ ...wire, id } as never);
 
         // A wire from a port that carries file paths -- a picker, a folder --
         // ticks "Read the file at this path" on the input it ends on: the port
@@ -579,17 +579,26 @@ export const useGraphStore = create<GraphStore>()(
         state.rfEdges = state.rfEdges.filter(
           (e: Edge) => e.source !== nodeId && e.target !== nodeId
         );
+        if (state.editingNodeId === nodeId) state.editingNodeId = null;
       });
     },
 
     setRFNodes: (nodes) =>
       set((state) => {
         state.rfNodes = nodes as never;
+        // A panel open on a node the canvas just removed closes with it:
+        // left pointing at the id, it opened again on the next node of that id.
+        if (state.editingNodeId && !nodes.some((node) => node.id === state.editingNodeId)) state.editingNodeId = null;
       }),
 
     setRFEdges: (edges) =>
       set((state) => {
         state.rfEdges = edges;
+      }),
+
+    setEditingNode: (nodeId) =>
+      set((state) => {
+        state.editingNodeId = nodeId;
       }),
 
     askChange: (nodeId, text) =>
@@ -602,10 +611,24 @@ export const useGraphStore = create<GraphStore>()(
         state.pendingChange = null;
       }),
 
-    setEditingNode: (nodeId) =>
+    clearSelection: () => {
+      // The panel first, on its own: a panel closed while the graph stays
+      // writes what still waits in it (`nodeDialog.watch`), and the marks
+      // below are a change to the canvas's nodes.
       set((state) => {
-        state.editingNodeId = nodeId;
-      }),
+        state.editingNodeId = null;
+      });
+      set((state) => {
+        for (const node of state.rfNodes) if (node.selected) node.selected = false;
+        for (const edge of state.rfEdges) if (edge.selected) edge.selected = false;
+      });
+    },
+
+    changeGraph: (graph) => {
+      get().commit();
+      // As an undo step lands: the same document a step on, not another one.
+      get().applyGraphSnapshot(JSON.stringify(graph), true);
+    },
 
     setExecutionResult: (shown, ran) =>
       set((state) => {
@@ -651,6 +674,7 @@ export const useGraphStore = create<GraphStore>()(
         state.future = [];
         state.subgraphStack = [];
         state.editingNodeId = null;
+        state.pendingChange = null;
         state.document += 1;
       });
       // Snapshot through exportGraph() rather than from normalizedGraph: it is
@@ -683,6 +707,8 @@ export const useGraphStore = create<GraphStore>()(
         // Its own level, its own history: an undo in here cannot reach out.
         state.past = [];
         state.future = [];
+        // A change said for a node out there is not for one of the same id in here.
+        state.pendingChange = null;
         state.document += 1;
       });
     },
@@ -706,6 +732,7 @@ export const useGraphStore = create<GraphStore>()(
         // keystroke, and nothing to say it was about to happen.
         state.past = changed ? [...frame.past, before].slice(-HISTORY_LIMIT) : frame.past;
         state.future = changed ? [] : frame.future;
+        state.pendingChange = null;
         state.document += 1;
       });
     },

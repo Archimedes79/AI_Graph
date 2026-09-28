@@ -1,31 +1,18 @@
 import React, { memo, useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, NodeResizer } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
-import type { NodeResult } from '@/graph';
+import type { GraphNode, NodeResult, Port } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS } from '@/elements/registry';
-import { errorLine } from '@/elements/resultPreview';
-import { ACCENT, DANGER, DANGER_TEXT, DIMMER, HEADER, HOVER, LINE, MUTED, PRIMARY_BUTTON, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
-import { hasOutputs } from '@/store/executionStatus';
+import { errorLine, type PortPreviews } from '@/elements/resultPreview';
+import { ACCENT, ACCENT_GLOW, DANGER, DIM, EVENT, HOVER, LINE, MUTED, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
+import { hasOutputs, statusTone } from '@/store/executionStatus';
 import { showsPage, widgetFiresRun, widgetOfPort } from '@/document/guiWidgets';
 import { carriesFiles, dropExample, droppedFile } from '@/authoring/droppedFile';
 import { errorText } from '@/api/errorText';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
 import ResultPreview, { ErrorPreview } from './ResultPreview';
-
-/**
- * How an event looks, wherever one appears: the amber diamond of the run port.
- *
- * A page has two sorts of output and they used to be drawn with the same green
- * dot -- a button, which *starts* the graph and carries no value worth having,
- * and a field, whose value is read when something else starts it. Which one a
- * block is decides what the whole tool does when someone uses it, so it is
- * worth a shape of its own, and the shape it gets is the one already meaning
- * "a run begins here" on the top of every other node.
- */
-const EVENT_PORT: React.CSSProperties = {
-  background: '#f59e0b', border: '2px solid #78350f', borderRadius: 2, transform: 'rotate(45deg)',
-};
+import NodeKind from './NodeKind';
 
 // Colour AND a glyph: a red/green 8px dot is unreadable both to a screen
 // reader and to a colour-blind user scanning a canvas for the failed node.
@@ -41,25 +28,136 @@ const statusStyles: Record<NodeResult['status'] | 'held', { color: string; glyph
   held: { color: '#6b7280', glyph: '‖', title: 'Did not run this round: what it produced in an earlier round stands' },
 };
 
+/** Its first line of text, which is what a card has room for: the rest is the panel's. */
+export function firstLine(text: string): string {
+  return text.split('\n').map((line) => line.trim()).find(Boolean) ?? '';
+}
+
+/**
+ * One port, as a dot on the card's edge -- or, for a block of the page that
+ * starts the graph, the amber diamond an event wears everywhere. The dot is
+ * drawn inside a bare handle rather than as it, so the diamond can turn while
+ * the name beside it stays level. The name shows while the card is under the
+ * pointer -- which is while a wire is being dragged to it -- and is always the
+ * handle's title.
+ */
+function PortDot({ port, type, side, top, lit, fires, named }: {
+  port: Port;
+  type: 'source' | 'target';
+  side: 'left' | 'right';
+  /** Where on the edge, from the top of what holds it. */
+  top: string | number;
+  /** The card is the one selected: its dots take the accent, as its wires do. */
+  lit: boolean;
+  fires?: boolean;
+  /** Its name floats beside it; a page's rows say theirs in the row. */
+  named?: boolean;
+}) {
+  const colour = lit ? ACCENT : MUTED;
+  // A list is a ring: it takes, or hands on, several values.
+  const dot: React.CSSProperties = fires
+    ? { background: EVENT, border: `2px solid ${SURFACE}`, borderRadius: 2, transform: 'rotate(45deg)' }
+    : { background: port.multi ? SURFACE : colour, border: `2px solid ${port.multi ? colour : SURFACE}`, borderRadius: '50%' };
+  const title = fires
+    ? `${port.description || port.name} — using this block starts the graph, from whatever this is wired to.`
+    : `${port.description || port.name}${port.multi ? ' (a list)' : ''}`;
+  return (
+    <Handle
+      type={type}
+      position={side === 'left' ? Position.Left : Position.Right}
+      id={port.id}
+      title={title}
+      style={{ width: 12, height: 12, top, [side]: -7, background: 'transparent', border: 'none', borderRadius: 0 }}
+    >
+      <span className="absolute pointer-events-none" style={{ inset: 1, ...dot }} />
+      {named && (
+        <span
+          className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] leading-4 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100"
+          style={{ [side === 'left' ? 'right' : 'left']: 16, background: SURFACE, border: `1px solid ${LINE}`, color: TEXT }}
+        >
+          {port.name}{port.multi && ' ∞'}
+        </span>
+      )}
+    </Handle>
+  );
+}
+
+/** Where each of *count* dots stands on an edge: spread evenly down it, one alone in the middle. */
+const spread = (index: number, count: number): string => `${((index + 1) / (count + 1)) * 100}%`;
+
+/**
+ * The page's ports, one row each, in the page's order: what its blocks hand
+ * on -- their dots on the left edge -- and what they show, on the right, with
+ * what each showed on the last run under it.
+ */
+function PageRows({ node, previews, status, held, lit }: {
+  node: GraphNode;
+  previews?: PortPreviews;
+  status?: NodeResult['status'];
+  held?: boolean;
+  lit: boolean;
+}) {
+  return (
+    <div className="flex flex-col py-1.5" style={{ borderTop: `1px solid ${LINE}` }}>
+      {node.outputs.map((port) => {
+        // A block that starts the graph is an event, not a value that happens
+        // to be read: drawn as one, and said in words beside it.
+        const block = widgetOfPort(node, port.id);
+        const fires = block ? widgetFiresRun(block) : false;
+        return (
+          <div key={`out:${port.id}`} className="relative flex items-center px-3.5 py-1 text-xs min-w-0">
+            <PortDot port={port} type="source" side="left" top="50%" lit={lit} fires={fires} />
+            <span className="truncate" style={{ color: MUTED }}>
+              {fires && <span title="Using this block starts the graph" style={{ color: EVENT }}>⚡ </span>}
+              {port.name}{port.multi && <span title="A list: hands on several values"> ∞</span>}
+            </span>
+          </div>
+        );
+      })}
+      {node.inputs.map((port) => {
+        // What the block fed here shows, as the block reads it: the page's
+        // element answers, not a kind named in here.
+        const preview = previews?.inputs[port.id];
+        return (
+          <div key={`in:${port.id}`} className="relative flex flex-col items-end gap-1 px-3.5 py-1 text-xs min-w-0">
+            <PortDot port={port} type="target" side="right" top={12} lit={lit} />
+            <span className="truncate max-w-full" style={{ color: MUTED }}>
+              {port.name}{port.multi && <span title="A list: takes several values"> ∞</span>}
+            </span>
+            {preview && <ResultPreview preview={preview} status={status} held={held} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A node on the canvas: a card that says what it is -- its kind in its kind's
+ * tint, its id, its heading and the first line of what it should do -- and,
+ * after a run, how it went and a small picture of what it made. Its ports are
+ * dots on its edges; the page's card lists its blocks' ports as rows instead,
+ * each with its dot. Clicking it opens its panel beside the canvas (the
+ * canvas's `onNodeClick`), and the card with its panel open wears the accent.
+ */
 const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const { graphNode } = data;
-  const setEditingNode = useGraphStore((s) => s.setEditingNode);
   const deleteNode = useGraphStore((s) => s.deleteNode);
+  const open = useGraphStore((s) => s.editingNodeId === id);
   const executionResult = useGraphStore((s) =>
     s.executionResult?.node_results.find((r) => r.node_id === id)
   );
 
   const builder = NODE_BUILDERS[graphNode.node_type];
-  const bgColor = builder?.color ?? SURFACE;
-  const icon = builder?.icon ?? '⬜';
+  const lit = selected || open;
   const status = executionResult ? statusStyles[executionResult.held ? 'held' : executionResult.status] : undefined;
   // A node that did not run says why, when the run said.
   const statusTitle = executionResult?.status === 'skipped' && !executionResult.held
     ? executionResult.messages?.[0] ?? status?.title
     : status?.title;
-  const statusColor = status?.color;
-  const isGuiLike = showsPage(graphNode.node_type);
+  const page = showsPage(graphNode.node_type);
   const summary = builder?.canvasSummary?.(graphNode);
+  const said = firstLine(graphNode.description);
   // What it made last, beside the port each value stands at: the element
   // says which port and how the value reads. Faded while it stood still.
   const previews = executionResult && hasOutputs(executionResult) && builder
@@ -68,12 +166,15 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
   const failure = executionResult?.status === 'error'
     ? <ErrorPreview line={errorLine(executionResult.error)} error={executionResult.error ?? ''} />
     : null;
-
-  const handleEdit = useCallback(() => setEditingNode(id), [id, setEditingNode]);
+  // Under the card, each value by the port it stands at -- named, when there is more than one to tell apart.
+  const shown = previews
+    ? [...graphNode.inputs.map((port) => [port, previews.inputs[port.id]] as const),
+      ...graphNode.outputs.map((port) => [port, previews.outputs[port.id]] as const)].filter(([, preview]) => preview)
+    : [];
 
   // A file dropped on a node fills what the element says (`dropPort`): the
   // example of a node built in the four steps, what a data node holds. No
-  // dialog on the way; its own dialog opens on it (`dropExample`).
+  // dialog on the way; its own panel opens on it (`dropExample`).
   const dropInto = builder?.dropPort(graphNode);
   const [fileOver, setFileOver] = useState(false);
   const [dropFailed, setDropFailed] = useState('');
@@ -94,11 +195,10 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     setDropFailed('');
     dropExample(id, dropInto, file).catch((reason) => setDropFailed(errorText(reason, 'The file could not be read.')));
   }, [id, dropInto]);
-  // The ✕ sits a few pixels from ✏️, deleting is immediate, and it silently
-  // takes every attached edge with it -- so a node that is wired into the
-  // graph asks first; Ctrl+Z is not where anyone should find that out. An
-  // unconnected node deletes straight away, because that is the case where a
-  // confirmation is just noise.
+  // Deleting is immediate, and it silently takes every attached edge with it
+  // -- so a node that is wired into the graph asks first; Ctrl+Z is not where
+  // anyone should find that out. An unconnected node deletes straight away,
+  // because that is the case where a confirmation is just noise.
   const connectedEdgeCount = useGraphStore(
     (s) => s.rfEdges.filter((edge) => edge.source === id || edge.target === id).length
   );
@@ -114,21 +214,29 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     [connectedEdgeCount, graphNode.label, id, deleteNode]
   );
 
+  const failedDrop = statusTone('error');
+  const ports = Math.max(graphNode.inputs.length, graphNode.outputs.length);
+
   return (
     <div
-      className="rounded-lg overflow-hidden shadow-lg select-none"
-      // Anywhere on the node, as the palette's hint says -- not only on its title bar.
-      onDoubleClick={handleEdit}
+      className="group relative flex flex-col rounded-xl select-none"
       onDragOver={onDragOver}
       onDragLeave={() => setFileOver(false)}
       onDrop={onDrop}
-      style={
-        isGuiLike
-          ? { background: bgColor, border: `2px solid ${statusColor ?? LINE}`, width: '100%', height: '100%' }
-          : { background: bgColor, border: `2px solid ${fileOver ? ACCENT : statusColor ?? LINE}`, minWidth: 180, maxWidth: 240 }
-      }
+      style={{
+        background: SURFACE,
+        border: `1px ${fileOver ? 'dashed' : 'solid'} ${lit || fileOver ? ACCENT : LINE}`,
+        // The accent, doubled to two pixels without moving anything, and its glow.
+        boxShadow: lit ? `0 0 0 1px ${ACCENT}, 0 0 0 6px ${ACCENT_GLOW}` : undefined,
+        ...(page
+          // The page is drawn at the size it was given. What does not fit is
+          // cut at its top and bottom, never at its sides: its dots and their
+          // names stand out past the edges.
+          ? { width: '100%', height: '100%', clipPath: 'inset(-8px -240px -8px -240px)' }
+          : { minWidth: 200, maxWidth: 260, minHeight: ports * 16 + 16 }),
+      }}
     >
-      {isGuiLike && (
+      {page && (
         <NodeResizer
           isVisible={selected}
           minWidth={220}
@@ -137,41 +245,31 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           handleStyle={{ background: ACCENT, width: 8, height: 8 }}
         />
       )}
-      {/* Header */}
-      <div
-        className="flex items-center justify-between px-3 py-2 cursor-pointer"
-        style={{ background: HEADER }}
-      >
-        <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1 mr-2">
-          {/* The run port: every node has it and no node declares it. A page is
-              the one kind that does not -- it is where events come from, not
-              where they go. */}
-          {!isGuiLike && (
-            <Handle
-              type="target"
-              position={Position.Top}
-              id={RUN_PORT}
-              style={{
-                background: '#f59e0b', border: '2px solid #78350f',
-                width: 10, height: 10, borderRadius: 2,
-                position: 'relative', transform: 'rotate(45deg)', top: 'auto', left: 'auto',
-                flexShrink: 0,
-              }}
-              title="Start here. Wire a button — or any block that starts the graph — to this, and using it runs the graph from this node on. It carries no value."
-            />
-          )}
-          <span className="text-base leading-none">{icon}</span>
+      {/* The run port: every node has it and no node declares it. A page is
+          the one kind that does not -- it is where events come from, not
+          where they go. */}
+      {!page && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          id={RUN_PORT}
+          title="Start here. Wire a button — or any block that starts the graph — to this, and using it runs the graph from this node on. It carries no value."
+          style={{ width: 12, height: 12, top: -7, left: 18, transform: 'none', background: 'transparent', border: 'none', borderRadius: 0 }}
+        >
           <span
-            className="text-sm font-semibold truncate"
-            style={{ color: TEXT }}
-          >
-            {graphNode.label}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+            className="absolute pointer-events-none"
+            style={{ inset: 1, background: EVENT, border: `2px solid ${SUNKEN}`, borderRadius: 2, transform: 'rotate(45deg)' }}
+          />
+        </Handle>
+      )}
+
+      <div className="flex flex-col gap-1 px-3.5 pt-3 pb-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <NodeKind node={graphNode} />
+          <span className="flex-1" />
           {status && (
             <span
-              className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none"
+              className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0"
               style={{ background: status.color, color: SUNKEN }}
               role="img"
               aria-label={`Last run: ${statusTitle}`}
@@ -180,147 +278,32 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
               {status.glyph}
             </span>
           )}
-          <button
-            onClick={handleEdit}
-            className="text-xs px-1.5 py-0.5 rounded opacity-70 hover:opacity-100 transition-opacity"
-            style={PRIMARY_BUTTON}
-            title="Edit node"
-            aria-label={`Edit node ${graphNode.label}`}
-          >
-            ✏️
-          </button>
+          {/* Out of the way until it is wanted: on the card under the pointer,
+              or the one selected. `nodrag`: pressing it does not start a move. */}
           <button
             onClick={handleDelete}
-            className="text-xs px-1.5 py-0.5 rounded opacity-70 hover:opacity-100 transition-opacity"
-            style={{ background: DANGER, color: 'white' }}
+            className={`nodrag shrink-0 rounded px-1 text-xs leading-4 transition-opacity group-hover:opacity-100 focus:opacity-100 ${lit ? 'opacity-100' : 'opacity-0'}`}
+            style={{ color: MUTED }}
             title="Delete node"
             aria-label={`Delete node ${graphNode.label}`}
           >
             ✕
           </button>
         </div>
-      </div>
-
-      {/* Ports — the page gets a two-column layout: what its blocks hand on left, what they show right */}
-      {isGuiLike ? (
-        <div className="px-3 py-2">
-          <div className="grid grid-cols-2 gap-x-2">
-            {/* Left column: source (output) ports — handles on the left edge */}
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-semibold mb-0.5" style={{ color: DIMMER }}>→ OUT</span>
-              {graphNode.outputs.map((port) => {
-                // A block that starts the graph is an event, not a value that
-                // happens to be read: drawn as one, and said in words beside it.
-                const block = widgetOfPort(graphNode, port.id);
-                const fires = block ? widgetFiresRun(block) : false;
-                return (
-                  <div key={port.id} className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
-                    <Handle
-                      type="source"
-                      position={Position.Left}
-                      id={port.id}
-                      style={{
-                        background: port.multi ? '#a78bfa' : SUCCESS,
-                        border: '2px solid #14532d',
-                        width: 10, height: 10,
-                        position: 'relative', transform: 'none', top: 'auto', left: 'auto',
-                        flexShrink: 0,
-                        ...(fires ? EVENT_PORT : {}),
-                      }}
-                      title={fires
-                        ? `${port.description || port.name} — using this block starts the graph, from whatever this is wired to.`
-                        : (port.description || port.name)}
-                    />
-                    <span className="text-xs truncate" style={{ color: fires ? '#fbbf24' : '#86efac' }}>
-                      {fires && <span title="Using this block starts the graph">⚡ </span>}
-                      {port.name}{port.multi && <span title="A list: takes or hands on several values"> ∞</span>}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Right column: target (input) ports — handles on the right edge */}
-            <div className="flex flex-col gap-1 items-end">
-              <span className="text-xs font-semibold mb-0.5" style={{ color: DIMMER }}>IN ←</span>
-              {graphNode.inputs.map((port) => {
-                // What the block fed here shows, as the block reads it: the
-                // page's element answers, not a kind named in here.
-                const preview = previews?.inputs[port.id];
-                return (
-                  <React.Fragment key={port.id}>
-                    <div className="relative flex items-center gap-1.5" style={{ marginRight: -12 }}>
-                      <span className="text-xs truncate" style={{ color: MUTED }}>
-                        {port.name}{port.multi && <span title="A list: takes or hands on several values"> ∞</span>}
-                      </span>
-                      <Handle
-                        type="target"
-                        position={Position.Right}
-                        id={port.id}
-                        style={{
-                          background: port.multi ? '#a78bfa' : ACCENT,
-                          border: '2px solid #312e81',
-                          width: 10, height: 10,
-                          position: 'relative', transform: 'none', top: 'auto', right: 'auto',
-                          flexShrink: 0,
-                        }}
-                        title={port.description || port.name}
-                      />
-                    </div>
-                    {preview && <ResultPreview preview={preview} status={executionResult?.status} held={held} />}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          </div>
-          {/* Memory-feedback hint -- this node's own persisted value breaks any cycle automatically, no manual edge marking needed */}
-          {(graphNode.inputs.length > 0 && graphNode.outputs.length > 0) && (
-            <p className="text-xs mt-2 px-1" style={{ color: DIMMER }}>
-              Tip: the page remembers what it shows, so a wire back into it (AI → a text block) closes a loop without a cycle.
-            </p>
-          )}
-          {failure && <div className="mt-1">{failure}</div>}
+        <div className="truncate text-sm font-semibold" style={{ color: TEXT }} title={graphNode.label}>
+          {graphNode.label}
         </div>
-      ) : (
-      <div className="px-3 py-2 flex flex-col gap-1">
-        {/* Inputs */}
-        {graphNode.inputs.map((port) => {
-          // What arrived here, where it is what the node hands on: an output node's result.
-          const preview = previews?.inputs[port.id];
-          return (
-            <React.Fragment key={port.id}>
-              <div className="relative flex items-center gap-1.5" style={{ marginLeft: -12 }}>
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={port.id}
-                  style={{
-                    background: port.multi ? '#a78bfa' : ACCENT,
-                    border: '2px solid #312e81',
-                    width: 10,
-                    height: 10,
-                    position: 'relative',
-                    transform: 'none',
-                    top: 'auto',
-                    left: 'auto',
-                    flexShrink: 0,
-                  }}
-                  title={port.description || port.name}
-                />
-                <span className="text-xs" style={{ color: MUTED }}>
-                  {port.name}
-                  {port.multi && <span title="Takes a list: several values, or one from each wired node"> ∞</span>}
-                </span>
-              </div>
-              {preview && <ResultPreview preview={preview} status={executionResult?.status} held={held} />}
-            </React.Fragment>
-          );
-        })}
+        {said && (
+          <div className="line-clamp-2 text-xs leading-snug" style={{ color: DIM }} title={graphNode.description}>
+            {said}
+          </div>
+        )}
 
         {/* What the node holds, when its element says: a data node's value, an
             input's text, where an output writes, when a trigger fires. */}
         {summary !== undefined && (
           <div
-            className="text-xs truncate mt-1 px-1 py-0.5 rounded font-mono"
+            className="mt-1 truncate rounded px-1 py-0.5 font-mono text-xs"
             style={{ background: HOVER, color: MUTED }}
             title={summary}
           >
@@ -328,54 +311,34 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           </div>
         )}
 
-        {failure}
+        {!page && shown.map(([port, preview]) => (
+          <div key={port.id} className="mt-1 flex min-w-0 flex-col gap-0.5">
+            {shown.length > 1 && <span className="text-[10px]" style={{ color: DIM }}>{port.name}</span>}
+            <ResultPreview preview={preview!} status={executionResult?.status} held={held} />
+          </div>
+        ))}
+        {failure && <div className="mt-1">{failure}</div>}
         {/* A file dropped here that could not become its example, and why --
             whole, since it says what to do instead. */}
         {dropFailed && (
-          <div className="text-xs mt-1 px-1 py-0.5 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: DANGER_TEXT }}>
+          <div className="mt-1 rounded px-1 py-0.5 text-xs" style={{ background: failedDrop.bg, color: failedDrop.fg }}>
             {dropFailed}
           </div>
         )}
-
-        {/* Outputs, each with what came out of it last */}
-        {graphNode.outputs.map((port) => (
-          <React.Fragment key={port.id}>
-            <div className="relative flex items-center justify-end gap-1.5" style={{ marginRight: -12 }}>
-              <span className="text-xs" style={{ color: MUTED }}>
-                {port.name}
-                {port.multi && <span title="Hands on a list: the next node runs once per item, unless it takes the whole list"> ∞</span>}
-              </span>
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={port.id}
-                style={{
-                  background: port.multi ? '#a78bfa' : ACCENT,
-                  border: '2px solid #312e81',
-                  width: 10,
-                  height: 10,
-                  position: 'relative',
-                  transform: 'none',
-                  top: 'auto',
-                  right: 'auto',
-                  flexShrink: 0,
-                }}
-                title={port.description || port.name}
-              />
-            </div>
-            {previews?.outputs[port.id] && <ResultPreview preview={previews.outputs[port.id]} status={executionResult?.status} held={held} />}
-          </React.Fragment>
-        ))}
       </div>
+
+      {page ? (
+        <PageRows node={graphNode} previews={previews} status={executionResult?.status} held={held} lit={lit} />
+      ) : (
+        <>
+          {graphNode.inputs.map((port, index) => (
+            <PortDot key={`in:${port.id}`} port={port} type="target" side="left" top={spread(index, graphNode.inputs.length)} lit={lit} named />
+          ))}
+          {graphNode.outputs.map((port, index) => (
+            <PortDot key={`out:${port.id}`} port={port} type="source" side="right" top={spread(index, graphNode.outputs.length)} lit={lit} named />
+          ))}
+        </>
       )}
-
-      {/* Type badge */}
-      <div
-        className="px-3 py-1 text-xs"
-        style={{ color: DIMMER, background: HEADER, textAlign: 'right' }}
-      >
-        {builder?.label}
-      </div>
     </div>
   );
 });

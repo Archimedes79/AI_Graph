@@ -302,7 +302,12 @@ export const API = {
   generate: route<GenerateRequest & Watched, GenerateResponse>('POST', '/api/ai/generate', 'editor'),
   /** What the generation with this id has sent and received so far. */
   generationProgress: route<{ id: string }, { calls: AICall[] }>('GET', '/api/ai/generate/progress', 'editor'),
-  generateGraph: route<{ description: string } & Watched, { graph: Graph; explanation: string }>(
+  /**
+   * A whole graph from a description: designed anew -- or, sent the graph
+   * there is (`graph`), that graph changed as the description says, its ids
+   * and what the change does not touch kept.
+   */
+  generateGraph: route<{ description: string; graph?: Graph } & Watched, { graph: Graph; explanation: string }>(
     'POST', '/api/ai/generate-graph', 'editor'),
 
   /** The graph as a deployable zip, named by the server (`<graph name>_bundle.zip`). */

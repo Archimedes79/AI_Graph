@@ -47,11 +47,11 @@ describe('removalsToApply', () => {
 });
 
 describe('the keys that delete on the canvas', () => {
-  it('delete nothing while a node\'s dialog is open over it -- Backspace deleted the node behind it', () => {
-    expect(deleteKeys(true, false)).toEqual(['Delete', 'Backspace']);
-    // A button that went away under the focus -- ✨ Fix, once it fixed -- leaves the key to the page.
-    expect(deleteKeys(true, true)).toBeNull();
+  it('delete only as pressed on the canvas -- never in the panel beside it, where Backspace deleted the node it was open on', () => {
+    expect(deleteKeys(true, true)).toEqual(['Delete', 'Backspace']);
+    // Pressed in the panel, or after a button there went away under the focus -- ✨ Fix, once it fixed.
+    expect(deleteKeys(true, false)).toBeNull();
     // Another view on screen: the canvas stays mounted behind it, and its keys are not the view's.
-    expect(deleteKeys(false, false)).toBeNull();
+    expect(deleteKeys(false, true)).toBeNull();
   });
 });

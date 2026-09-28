@@ -68,7 +68,7 @@ export interface Scheme {
   dangerText: string;
 
   /** One tint per node type, so the canvas reads at a glance. */
-  nodes: { input: string; ai: string; code: string; data: string; output: string; gui: string };
+  nodes: { input: string; ai: string; code: string; data: string; output: string; gui: string; subgraph: string; trigger: string };
 }
 
 export const SCHEMES: Scheme[] = [
@@ -81,7 +81,7 @@ export const SCHEMES: Scheme[] = [
     text: '#e2e8f0', muted: '#94a3b8', dim: '#64748b', dimmer: '#475569',
     accent: '#6366f1', accentText: '#a5b4fc', accentFill: 'rgba(99,102,241,0.10)', onAccent: '#ffffff',
     success: '#22c55e', danger: '#ef4444', dangerText: '#fca5a5',
-    nodes: { input: '#1e3a5f', ai: '#2d1b4e', code: '#1a3a2a', data: '#183b3b', output: '#3a2000', gui: '#4a1d3a' },
+    nodes: { input: '#1e3a5f', ai: '#2d1b4e', code: '#1a3a2a', data: '#183b3b', output: '#3a2000', gui: '#4a1d3a', subgraph: '#2a2a4a', trigger: '#4a3a12' },
   },
   {
     id: 'paper',
@@ -96,7 +96,7 @@ export const SCHEMES: Scheme[] = [
     text: '#22201c', muted: '#6b6760', dim: '#8b877e', dimmer: '#a9a59b',
     accent: '#c05f38', accentText: '#8f4526', accentFill: 'rgba(192,95,56,0.10)', onAccent: '#ffffff',
     success: '#2f7d32', danger: '#b3261e', dangerText: '#8c1d18',
-    nodes: { input: '#dde7f2', ai: '#e6dcf0', code: '#dcecdf', data: '#d8eaea', output: '#f3e3cb', gui: '#eedbe6' },
+    nodes: { input: '#dde7f2', ai: '#e6dcf0', code: '#dcecdf', data: '#d8eaea', output: '#f3e3cb', gui: '#eedbe6', subgraph: '#e2e1ef', trigger: '#f1e7c9' },
   },
   {
     id: 'office',
@@ -111,7 +111,7 @@ export const SCHEMES: Scheme[] = [
     text: '#1a1d23', muted: '#5a6270', dim: '#7c8595', dimmer: '#a3abb8',
     accent: '#2563eb', accentText: '#1d4ed8', accentFill: 'rgba(37,99,235,0.08)', onAccent: '#ffffff',
     success: '#15803d', danger: '#b42318', dangerText: '#912018',
-    nodes: { input: '#e4edfa', ai: '#ece4f7', code: '#e2f0e6', data: '#dfeeee', output: '#f7ead2', gui: '#f4dfec' },
+    nodes: { input: '#e4edfa', ai: '#ece4f7', code: '#e2f0e6', data: '#dfeeee', output: '#f7ead2', gui: '#f4dfec', subgraph: '#e7e6f6', trigger: '#f8efd3' },
   },
   {
     id: 'anthracite',
@@ -124,7 +124,7 @@ export const SCHEMES: Scheme[] = [
     text: '#ededf0', muted: '#9a9aa2', dim: '#71717a', dimmer: '#4f4f57',
     accent: '#8b93ff', accentText: '#b4b9ff', accentFill: 'rgba(139,147,255,0.12)', onAccent: '#111119',
     success: '#4ade80', danger: '#fb7185', dangerText: '#fda4af',
-    nodes: { input: '#1a2230', ai: '#241f30', code: '#1a2a20', data: '#182a2b', output: '#2c2416', gui: '#2c1e28' },
+    nodes: { input: '#1a2230', ai: '#241f30', code: '#1a2a20', data: '#182a2b', output: '#2c2416', gui: '#2c1e28', subgraph: '#20203a', trigger: '#2c2614' },
   },
   {
     id: 'graphite',
@@ -135,7 +135,7 @@ export const SCHEMES: Scheme[] = [
     text: '#e8e8ea', muted: '#a1a1a8', dim: '#79797f', dimmer: '#57575d',
     accent: '#2dd4bf', accentText: '#5eead4', accentFill: 'rgba(45,212,191,0.12)', onAccent: '#06231f',
     success: '#34d399', danger: '#f87171', dangerText: '#fca5a5',
-    nodes: { input: '#1d2f36', ai: '#2a2435', code: '#1e3228', data: '#1c3234', output: '#342819', gui: '#35232f' },
+    nodes: { input: '#1d2f36', ai: '#2a2435', code: '#1e3228', data: '#1c3234', output: '#342819', gui: '#35232f', subgraph: '#26263a', trigger: '#35301b' },
   },
 ];
 
@@ -196,6 +196,8 @@ export function schemeVars(id: string | undefined): React.CSSProperties {
     '--ui-node-data': s.nodes.data,
     '--ui-node-output': s.nodes.output,
     '--ui-node-gui': s.nodes.gui,
+    '--ui-node-subgraph': s.nodes.subgraph,
+    '--ui-node-trigger': s.nodes.trigger,
     ...Object.fromEntries(plotColours(id).map((colour, index) => [`--plot-${index + 1}`, colour])),
     // Scrollbars, form controls and the window's own backdrop follow, so a
     // light scheme is light to the edges instead of a light page on a dark desk.

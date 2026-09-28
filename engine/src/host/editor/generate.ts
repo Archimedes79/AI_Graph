@@ -585,15 +585,63 @@ export class GenerationFailed extends Error {
 
 // The system prompt lives in graphPrompt.ts: it is prose, and it is long.
 
-/** Ask for a whole Graph DSL document from a description. The caller parses it. */
+type Graph = import('../../graph.ts').Graph;
+
+/**
+ * What a change to *current* is asked with: the graph as the document the
+ * model writes, and the whole document back. Asked for a patch, a model makes
+ * up a format of its own; asked for the document it knows, it keeps what it
+ * was shown.
+ */
+function changePrompt(current: Graph, description: string): string {
+  return [
+    `This is the graph as it is now:\n\`\`\`json\n${JSON.stringify(current, null, 2)}\n\`\`\``,
+    `Change it as follows:\n${description}`,
+    'Answer with the whole graph after the change, as one complete document of the same shape. Keep every '
+      + 'node\'s id, and keep everything the change does not touch -- nodes, wires, positions, labels, settings, '
+      + 'code and prompts -- exactly as it is. A new node gets an id no other node has.',
+  ].join('\n\n');
+}
+
+/**
+ * *answer* with what it left out of *current* put back: the graph's name and
+ * scheme, where each node it kept stands, and the size a page was drawn at.
+ * Left out, each fell to its default -- a change to one node renamed the tool
+ * and moved every node into the corner.
+ */
+function keptFrom(current: Graph, answer: unknown): unknown {
+  if (!answer || typeof answer !== 'object') return answer;
+  const document = answer as { metadata?: object; nodes?: unknown };
+  const before = new Map(current.nodes.map((node) => [node.id, node]));
+  const nodes = Array.isArray(document.nodes)
+    ? document.nodes.map((node: Record<string, unknown>) => {
+      const was = node && typeof node === 'object' ? before.get(String(node.id)) : undefined;
+      if (!was) return node;
+      const kept = { ...node };
+      for (const key of ['position', 'width', 'height'] as const) if (kept[key] === undefined) kept[key] = was[key];
+      return kept;
+    })
+    : document.nodes;
+  return { ...document, metadata: { ...current.metadata, ...(document.metadata ?? {}) }, nodes };
+}
+
+/**
+ * Ask for a whole Graph DSL document: one designed from *description* -- or,
+ * given the graph there is (*current*), that graph changed as *description*
+ * says, its ids and whatever the change does not touch kept. A graph with no
+ * nodes yet is designed, under its name. The caller parses the document.
+ */
 export async function generateGraph(
-  description: string, deps: Pick<GenerateDeps, 'ai' | 'target' | 'calls'>,
+  description: string, deps: Pick<GenerateDeps, 'ai' | 'target' | 'calls'>, current?: Graph,
 ): Promise<{ graph: unknown; explanation: string; calls: AICall[] }> {
   const calls: AICall[] = deps.calls ?? [];
   const ai = recording(deps.ai, calls);
+  const prompt = current?.nodes.length
+    ? changePrompt(current, description)
+    : `Design a graph that does the following:\n${description}`;
   let raw: string;
   try {
-    raw = await ai.complete({ prompt: `Design a graph that does the following:\n${description}`, system: GRAPH_SYSTEM, ...deps.target });
+    raw = await ai.complete({ prompt, system: GRAPH_SYSTEM, ...deps.target });
   } catch (error) {
     throw new GenerationFailed(error instanceof Error ? error.message : String(error), calls);
   }
@@ -605,5 +653,9 @@ export async function generateGraph(
   } catch {
     throw new GenerationFailed('Could not parse a Graph DSL JSON document from the AI response', calls);
   }
-  return { graph, explanation: fenced ? raw.slice(fenced.index + fenced[0].length).trim() : '', calls };
+  return {
+    graph: current ? keptFrom(current, graph) : graph,
+    explanation: fenced ? raw.slice(fenced.index + fenced[0].length).trim() : '',
+    calls,
+  };
 }
