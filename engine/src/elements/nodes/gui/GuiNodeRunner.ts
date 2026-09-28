@@ -105,11 +105,17 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   override readonly hasInterface = true;
 
-  /** A block that starts the graph does so on its `_out` port: what the page names when it fires. */
+  /**
+   * A block that starts the graph does so on its `_out` port: what the page
+   * names when it fires. One it has -- a block that only shows hands nothing
+   * on, and starts nothing, whatever it was once told.
+   */
   override eventPorts(node: GraphNode): string[] {
-    return this.config(node).widgets
-      .filter((widget) => BY_KIND.get(widget.kind)?.firesRun(widget))
-      .map((widget) => `${widget.id}_out`);
+    return this.config(node).widgets.flatMap((widget) => {
+      const element = BY_KIND.get(widget.kind);
+      const out = `${widget.id}_out`;
+      return element?.firesRun(widget) && element.ports(widget).outputs.some((port) => port.id === out) ? [out] : [];
+    });
   }
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {

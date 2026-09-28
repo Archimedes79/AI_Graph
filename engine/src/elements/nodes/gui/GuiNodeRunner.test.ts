@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { GuiNodeRunner } from './GuiNodeRunner.ts';
 import type { Runtime } from '../../Runtime.ts';
-import { quietRuntime } from '../../../../test/fakes.ts';
+import { registry } from '../../registry.ts';
+import { startEvents } from '../../../execution/triggers.ts';
+import { graphOf, quietRuntime } from '../../../../test/fakes.ts';
 import type { GraphNode } from '../../../graph.ts';
 
 /**
@@ -95,5 +97,26 @@ describe('what a display block shows', () => {
   it('shows a failure that arrives at an image as it is, not read as a path', async () => {
     const shown = await new GuiNodeRunner().display(blocks, { img_in: '⚠ upstream: no cover field' }, noBody);
     expect(shown).toEqual({ img: '⚠ upstream: no cover field' });
+  });
+});
+
+describe('what a page starts', () => {
+  it('is nothing on a block that hands nothing on, whatever it was told', () => {
+    // A chart ticked "using this starts the graph" claimed an event port it
+    // does not have, and the application waited for the page to start it.
+    const shows = page([
+      { id: 'chart', kind: 'plot_window', run_on_change: true },
+      { id: 'said', kind: 'text_io', mode: 'output', run_on_change: true },
+      { id: 'q', kind: 'text_io', mode: 'input' },
+    ]);
+    const element = new GuiNodeRunner();
+    expect(element.derivedPorts(shows).outputs.map((p) => p.id)).toEqual(['q_out']);
+    expect(element.eventPorts(shows)).toEqual([]);
+    expect(startEvents(graphOf([shows]), registry)).toEqual([null]);
+  });
+
+  it('is the port of each block that does', () => {
+    const starts = page([{ id: 'go', kind: 'button' }, { id: 'q', kind: 'text_io', mode: 'input', run_on_change: true }]);
+    expect(new GuiNodeRunner().eventPorts(starts)).toEqual(['go_out', 'q_out']);
   });
 });
