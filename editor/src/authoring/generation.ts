@@ -197,12 +197,15 @@ export function withHistory(node: GraphNode, name: string, calls: AICall[], at =
 }
 
 /**
- * What to say once *write*'s ✨ is done: that it was written -- and, where the
- * engine tried it, on what and how that went, so a body that does not fit its
- * output.js is said now rather than by the next run.
+ * What to say once *write*'s ✨ is done: that it was written -- or changed, as
+ * *refine* asked -- and, where the engine tried it, on what and how that went,
+ * so a body that does not fit its output.js is said now rather than by the
+ * next run. ✨ Fix (a *refine* with no change) says what the repair came to.
  */
-export function resultMessage(name: string, probe: ProbeReport | undefined, changed: boolean): string {
-  const done = changed ? `${name}: changed` : `${name}: written`;
+export function resultMessage(name: string, response: Pick<GenerateResponse, 'probe'>, refine?: Refine): string {
+  const { probe } = response;
+  if (refine && !refine.change?.trim()) return fixMessage(probe);
+  const done = refine ? `${name}: changed` : `${name}: written`;
   switch (probe?.status) {
     case 'ok':
       return `✅ ${done}, and it fits output.js on the example in input.js.`;
@@ -213,5 +216,20 @@ export function resultMessage(name: string, probe: ProbeReport | undefined, chan
       return `⚠️ ${done}, but ${lowerFirst(probe.problems.join('; '))}`;
     default:
       return `✅ ${done}.`;
+  }
+}
+
+/** ✨ Fix is a repair: what it came to -- repaired, or still not -- not that a body was written. */
+function fixMessage(probe: ProbeReport | undefined): string {
+  switch (probe?.status) {
+    case 'ok':
+    case 'repaired':
+      return '✅ ✨ Fix: repaired, and it fits output.js on the example in input.js.';
+    case 'failed':
+      if (probe.error) return `⚠️ ✨ Fix: it still fails on the example in input.js: ${probe.error}`;
+      return `⚠️ ✨ Fix: still does not fit -- ${lowerFirst(probe.problems.join('; '))}`;
+    default:
+      // Nothing to try it on here -- an AI node's prompt.md is tried by ▶ Try.
+      return '✅ ✨ Fix: written again. ▶ Try tries it.';
   }
 }

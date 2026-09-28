@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GraphNode, Port } from '@/graph';
+import type { ProbeReport } from '@/api/client';
 import { NODE_KINDS } from '@/document/nodeKinds';
 import {
   exchangeName, generateRequest, generationGuard, isWritten, outputsFrom, resultMessage, unfitDefinition, writeName, writesFor, writtenInto,
@@ -134,18 +135,30 @@ describe('the outputs an output definition names', () => {
 });
 
 describe('what is said once ✨ is done', () => {
+  const probe = (status: ProbeReport['status'], error = '', problems: string[] = []) => ({ probe: { status, error, problems } });
+
   it('says it was written, and how the try on the example went', () => {
-    expect(resultMessage('✨ Code', { status: 'ok', error: '', problems: [] }, false)).toBe('✅ ✨ Code: written, and it fits output.js on the example in input.js.');
-    expect(resultMessage('✨ Code', { status: 'repaired', error: '', problems: [] }, true)).toMatch(/^✅ ✨ Code: changed\. The first attempt did not fit/);
-    expect(resultMessage('✨ Code', { status: 'failed', error: 'boom', problems: [] }, false)).toBe('⚠️ ✨ Code: written, but it fails on the example in input.js: boom');
-    expect(resultMessage('✨ Code', { status: 'failed', error: '', problems: ['"count" is missing'] }, false)).toBe('⚠️ ✨ Code: written, but "count" is missing');
-    expect(resultMessage('✨ Input', { status: 'skipped', error: '', problems: [] }, false)).toBe('✅ ✨ Input: written.');
+    expect(resultMessage('✨ Code', probe('ok'))).toBe('✅ ✨ Code: written, and it fits output.js on the example in input.js.');
+    expect(resultMessage('✨ Code', probe('repaired'), { change: 'Add one.' })).toMatch(/^✅ ✨ Code: changed\. The first attempt did not fit/);
+    expect(resultMessage('✨ Code', probe('failed', 'boom'))).toBe('⚠️ ✨ Code: written, but it fails on the example in input.js: boom');
+    expect(resultMessage('✨ Code', probe('failed', '', ['"count" is missing']))).toBe('⚠️ ✨ Code: written, but "count" is missing');
+    expect(resultMessage('✨ Input', probe('skipped'))).toBe('✅ ✨ Input: written.');
+  });
+
+  it('says what ✨ Fix came to -- repaired, or still not -- rather than that code was written', () => {
+    const fix = { error: 'x is not defined' };
+    expect(resultMessage('✨ Code', probe('repaired'), fix)).toBe('✅ ✨ Fix: repaired, and it fits output.js on the example in input.js.');
+    expect(resultMessage('✨ Code', probe('ok'), fix)).toBe('✅ ✨ Fix: repaired, and it fits output.js on the example in input.js.');
+    expect(resultMessage('✨ Code', probe('failed', '', ['Output "output" is a number; output.js says a list']), fix))
+      .toBe('⚠️ ✨ Fix: still does not fit -- output "output" is a number; output.js says a list');
+    expect(resultMessage('✨ Code', probe('failed', 'boom'), fix)).toBe('⚠️ ✨ Fix: it still fails on the example in input.js: boom');
+    expect(resultMessage('✨ Prompt', probe('skipped'), fix)).toBe('✅ ✨ Fix: written again. ▶ Try tries it.');
   });
 
   it('stops a press at a definition that does not fit the node: what comes after would be written against it', () => {
     const names = { status: 'failed' as const, error: '', problems: ['It names "text", which is not among the inputs: "input".'] };
     expect(unfitDefinition('input', names)).toBe('it names "text", which is not among the inputs: "input".');
-    expect(resultMessage('✨ Input', names, false)).toBe('⚠️ ✨ Input: written, but it names "text", which is not among the inputs: "input".');
+    expect(resultMessage('✨ Input', { probe: names })).toBe('⚠️ ✨ Input: written, but it names "text", which is not among the inputs: "input".');
     expect(unfitDefinition('output', { status: 'skipped', error: '', problems: [] })).toBeUndefined();
     // A body that fails its try is written and said: nothing comes after it.
     expect(unfitDefinition('body', { status: 'failed', error: 'boom', problems: [] })).toBeUndefined();

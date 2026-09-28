@@ -100,7 +100,7 @@ export default function NodeEditor({ nodeId, onClose }: NodeEditorProps) {
           unfit = unfitDefinition(one, result.probe);
           panel.change((now) => writtenInto(now, one, result, name), ONCE);
         },
-        success: (result) => resultMessage(writeName(current, one), result.probe, !!refine?.change?.trim()),
+        success: (result) => resultMessage(writeName(current, one), result, refine),
         failure: `${writeName(current, one)} failed`,
         failed: (calls) => panel.change((now) => ({ ...now, config: { ...now.config, history: withHistory(now, `${name} (failed)`, calls) } }), ONCE),
       });
