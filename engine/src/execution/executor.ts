@@ -31,7 +31,6 @@ import type { LastOutputs } from './reuse.ts';
 import type { Latch } from './latch.ts';
 import { mismatches } from './interface.ts';
 import { ERROR_PORT, fatalProblems, unrunnable } from './wiring.ts';
-import { applyRuntimeValues } from './runtimeValues.ts';
 
 /** Ids of the fewest edges that must be ignored to make the graph acyclic. */
 export function memoryFeedbackEdges(
@@ -731,7 +730,6 @@ export async function runNodeAlone(
   given: Record<string, unknown> | undefined,
   options: RunOptions,
 ): Promise<{ inputs: Record<string, unknown>; result: NodeResult }> {
-  applyRuntimeValues(graph, {}, options.registry);
   if (given) return { inputs: given, result: await executeNode(graph, nodeId, given, options) };
   const { inputs, upstream } = await inputsFor(graph, nodeId, options);
   if (upstream.node_results.some((result) => result.status === 'error')) {
