@@ -6,7 +6,7 @@ import { imageDataUrl, imageMediaType, isInlineUrl, MAX_INLINE_IMAGE_BYTES } fro
 import { nodeFiles } from '../host/node.ts';
 import { registry } from '../elements/registry.ts';
 import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
-import type { Runtime } from '../elements/Runtime.ts';
+import type { FileService, Runtime } from '../elements/Runtime.ts';
 
 /**
  * Pictures, on the way to a browser or to a model.
@@ -68,6 +68,17 @@ describe('imageDataUrl', () => {
       await writeFile(path, Buffer.alloc(MAX_INLINE_IMAGE_BYTES + 1024, 0));
       await expect(imageDataUrl(path, runtime.files)).rejects.toThrow(/MB; the limit is/);
     });
+  });
+
+  it('refuses it without reading it: reading all of a picture of gigabytes is the harm', async () => {
+    let reads = 0;
+    const files: FileService = {
+      ...nodeFiles,
+      size: async () => 3 * 1024 * 1024 * 1024,
+      read: async () => { reads += 1; return 'AAAA'; },
+    };
+    await expect(imageDataUrl('/photos/huge.png', files)).rejects.toThrow('Image is 3072.0 MB; the limit is 8 MB.');
+    expect(reads).toBe(0);
   });
 });
 

@@ -22,6 +22,7 @@ export function quietRuntime(over: Partial<Omit<Runtime, 'files'>> & { files?: P
   return {
     files: {
       read: async () => '', write: async () => {}, list: async () => [], resolve: (path) => path, exists: async () => true,
+      size: async () => 0,
       ...files,
     },
     code: { run: async (_body, inputs) => inputs },

@@ -18,6 +18,7 @@ import { aiSetting, configuredMcpServers, configuredSettings } from '../ai/setti
 export const nodeFiles: FileService = {
   resolve: (path: string) => resolve(path),
   exists: async (path: string) => existsSync(path),
+  size: async (path: string) => (await stat(path)).size,
   async read(path: string, mode: 'text' | 'binary' = 'text') {
     if (mode === 'binary') return (await readFile(path)).toString('base64');
     return readFile(path, 'utf8');
