@@ -1,15 +1,5 @@
 [
   {
-    "h": 1,
-    "id": "title",
-    "kind": "text",
-    "label": "",
-    "mode": "heading",
-    "tone": "plain",
-    "value": "Summarize a folder",
-    "w": 16
-  },
-  {
     "extensions": ".txt",
     "h": 2,
     "id": "folder",

@@ -1,15 +1,5 @@
 [
   {
-    "h": 1,
-    "id": "title",
-    "kind": "text",
-    "label": "",
-    "mode": "heading",
-    "tone": "plain",
-    "value": "Chat",
-    "w": 16
-  },
-  {
     "h": 10,
     "id": "chat",
     "kind": "chat",

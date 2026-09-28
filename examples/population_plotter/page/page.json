@@ -1,15 +1,5 @@
 [
   {
-    "h": 1,
-    "id": "title",
-    "kind": "text",
-    "label": "",
-    "mode": "heading",
-    "tone": "plain",
-    "value": "Population plotter",
-    "w": 16
-  },
-  {
     "extensions": ".csv",
     "h": 2,
     "id": "file",

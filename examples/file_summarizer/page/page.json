@@ -1,16 +1,6 @@
 [
   {
     "h": 1,
-    "id": "title",
-    "kind": "text",
-    "label": "",
-    "mode": "heading",
-    "tone": "plain",
-    "value": "File reader & summarizer",
-    "w": 16
-  },
-  {
-    "h": 1,
     "id": "intro",
     "kind": "text",
     "label": "",
