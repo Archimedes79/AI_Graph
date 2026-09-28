@@ -670,12 +670,12 @@ or a page that has them can do the same.
   browsing and a file chip's opening of a node's file in the person's own editor switch off
   on such a bind.
 - The server answers its own page, not every page in the browser: a request must name
-  127.0.0.1, localhost or [::1] (no DNS rebinding) -- on loopback with the server's port;
-  bound wider, on any port, or as the address it was bound to or a name
-  `AI_GRAPH_ALLOWED_HOSTS` lists; an API call
-  that says where it comes from must come from the server's own origin, one the browser
-  marks cross-site is refused, and a body is read only when it is sent as `application/json`
-  (`foreignRequest` and `readJson` in `host/http.ts`).
+  127.0.0.1, localhost or [::1] (no DNS rebinding) -- with the server's port on loopback;
+  bound wider, with any port, or the address it was bound to, or a name
+  `AI_GRAPH_ALLOWED_HOSTS` lists. An API call that says where it comes from must come
+  from the server's own origin, one the browser marks cross-site is refused, and a body is
+  read only when it is sent as `application/json` (`foreignRequest` and `readJson` in
+  `host/http.ts`).
 - The `for` column of the contract is the line between a deployed tool and the editor: a
   deployed tool answers its graph, run/watch/stop, a file picker and a read-only view of
   its AI settings — no generation, no editing, no writing settings.
