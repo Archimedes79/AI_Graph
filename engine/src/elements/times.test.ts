@@ -116,7 +116,7 @@ describe('what a run calls', () => {
   const RUN_TIME = [
     ...readdirSync(join(SRC, 'execution')).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name))
       .map((name) => `execution/${name}`),
-    'elements/body.ts', 'elements/folderListing.ts', 'authoring/logic.ts',
+    'elements/body.ts', 'elements/folderListing.ts', 'elements/images.ts', 'authoring/logic.ts',
     'host/serve.ts', 'host/runs.ts', 'host/rounds.ts', 'host/schedule.ts', 'host/node.ts',
   ];
 

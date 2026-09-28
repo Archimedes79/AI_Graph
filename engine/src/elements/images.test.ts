@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { imageDataUrl, imageMediaType, isInlineUrl, MAX_INLINE_IMAGE_BYTES } from './images.ts';
 import { nodeFiles } from '../host/node.ts';
-import { registry } from '../elements/registry.ts';
-import { parseWidget } from '../elements/nodes/gui/GuiNodeRunner.ts';
-import type { FileService, Runtime } from '../elements/Runtime.ts';
+import { registry } from './registry.ts';
+import { parseWidget } from './nodes/gui/GuiNodeRunner.ts';
+import type { FileService, Runtime } from './Runtime.ts';
 
 /**
  * Pictures, on the way to a browser or to a model.

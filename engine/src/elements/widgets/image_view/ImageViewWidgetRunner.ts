@@ -1,6 +1,6 @@
 import { type Runtime } from '../../Runtime.ts';
 import { type Widget } from '../../WidgetRunner.ts';
-import { imageDataUrl, isInlineUrl } from '../../../execution/images.ts';
+import { imageDataUrl, isInlineUrl } from '../../images.ts';
 import { DisplayWidgetRunner } from '../DisplayWidgetRunner.ts';
 
 /** An image, by path, URL or data URL. */

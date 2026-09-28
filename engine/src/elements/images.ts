@@ -5,7 +5,7 @@
 // engine's filesystem is not the browser's, and it is not the model provider's
 // either — a path means nothing to either of them.
 
-import type { FileService } from '../elements/Runtime.ts';
+import type { FileService } from './Runtime.ts';
 
 /** Bigger than this and inlining it is a mistake rather than a slow request. */
 export const MAX_INLINE_IMAGE_BYTES = 8 * 1024 * 1024;

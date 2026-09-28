@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { imageMediaType } from '../../../execution/images.ts';
+import { imageMediaType } from '../../images.ts';
 import { parseWidget } from '../../nodes/gui/GuiNodeRunner.ts';
 import { ImageViewWidgetRunner } from './ImageViewWidgetRunner.ts';
 import { quietRuntime } from '../../../../test/fakes.ts';

@@ -32,6 +32,7 @@ engine/src/elements/                            editor/src/elements/
   WidgetRunner.ts                                 WidgetGuiBuilder.ts
   registry.ts                                     registry.ts
   Runtime.ts  port.ts  folderListing.ts           fields/  (settings several panels share)
+  images.ts
   nodes/                                          nodes/
     ai/     AiNodeRunner.ts  prompt.ts  ask.ts      ai/   AiNodeGuiBuilder.ts  AiNodePanel.tsx
                                                           AiNodeAdvancedPanel.tsx
@@ -271,8 +272,8 @@ engine/src                               editor/src
     executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
     triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
     batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
-    runtimeValues.ts  images.ts              DesignerTab …       Page tab, the running app, layout, schemes
-    reuse.ts  interface.ts
+    runtimeValues.ts  wiring.ts              DesignerTab …       Page tab, the running app, layout, schemes
+    reuse.ts  latch.ts  interface.ts
   project/           a graph on disk
     folder.ts        read · write · watch
     flow.ts          flow.json: nodes and wires
