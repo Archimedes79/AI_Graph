@@ -16,6 +16,7 @@
 // per-item and whole-list agree wherever there was nothing to fan out.
 
 import type { GraphNode } from '../graph.ts';
+import { ERROR_PORT } from './wiring.ts';
 
 /**
  * Whether a list reaching *node*, run in *mode*, is handed over an item at a
@@ -80,6 +81,9 @@ export function mergeBatchOutputs(
  * is called `output`. Wrapping it is what everyone expects; dropping it is what
  * happened before anyone wrote this down. With several ports there is no honest
  * guess, so the value passes through and the mismatch shows up downstream.
+ *
+ * The error port a node grows when it catches its failures is not one of them:
+ * the executor fills it, and a body's answer never goes there.
  */
 export function reconcileOutputs(
   node: GraphNode,
@@ -88,6 +92,7 @@ export function reconcileOutputs(
   const portIds = node.outputs.map((p) => p.id);
   if (!result || typeof result !== 'object' || !portIds.length) return result;
   if (portIds.some((id) => id in result)) return result;
-  if (portIds.length === 1) return { [portIds[0]]: result };
+  const answers = portIds.filter((id) => id !== ERROR_PORT);
+  if (answers.length === 1) return { [answers[0]]: result };
   return result;
 }

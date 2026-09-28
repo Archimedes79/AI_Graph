@@ -70,6 +70,14 @@ describe('reconcileOutputs', () => {
     expect(reconcileOutputs(n, { count: 3 })).toEqual({ output: { count: 3 } });
   });
 
+  it('wraps it as well beside the error port a node grows to catch its failures', () => {
+    // Ticking "catch failures" adds `error` to the outputs; the answer still
+    // has one port to go on, and used to reach nothing downstream instead.
+    const n = node([], [port('output', 'output', false), port('error', 'output', false)]);
+    expect(reconcileOutputs(n, { n: 3 })).toEqual({ output: { n: 3 } });
+    expect(reconcileOutputs(n, { error: 'said so' })).toEqual({ error: 'said so' });
+  });
+
   it('leaves a body that named its ports alone', () => {
     const n = node([], [port('a', 'output', false), port('b', 'output', false)]);
     expect(reconcileOutputs(n, { a: 1, b: 2 })).toEqual({ a: 1, b: 2 });
