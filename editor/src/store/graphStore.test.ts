@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { useGraphStore } from './graphStore';
 import type { Graph, GraphNode } from '@/graph';
 import { guiWidgetPorts, syncGuiNodePorts } from '@/document/guiWidgets';
@@ -75,8 +75,8 @@ describe('graphStore.newGraph', () => {
 
 describe('graphStore.updateNode edge pruning', () => {
   it('removes edges attached to ports no longer present after an update', () => {
-    const w1 = WIDGET_BUILDERS.input_picker.create('A');
-    const w2 = WIDGET_BUILDERS.input_picker.create('B');
+    const w1 = WIDGET_BUILDERS.input_picker.create('a', 'A');
+    const w2 = WIDGET_BUILDERS.input_picker.create('b', 'B');
     const guiNode = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -117,7 +117,7 @@ describe('graphStore.updateNode edge pruning', () => {
     // What the designer does on every edit: the page's new blocks, their ports
     // synced, handed to updateNode -- whose pruning cut this wire as soon as
     // anybody renamed a block, because the synced ports had no `_error`.
-    const pick = { ...WIDGET_BUILDERS.select.create('Pick'), catch_errors: true };
+    const pick = { ...WIDGET_BUILDERS.select.create('pick', 'Pick'), catch_errors: true };
     const page = syncGuiNodePorts(graphNode({ id: 'gui1', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [pick] } }));
     const sink = graphNode({
       id: 'sink',
@@ -152,7 +152,7 @@ describe('graphStore.updateNode edge pruning', () => {
 
 describe('graphStore.loadGraph gui port sync', () => {
   it('regenerates a gui node\'s ports from its widget list even if stale ports were provided', () => {
-    const widget = WIDGET_BUILDERS.text_io.create('Text');
+    const widget = WIDGET_BUILDERS.text_io.create('text', 'Text');
     const staleGui = graphNode({
       id: 'gui1',
       node_type: 'gui',
@@ -273,6 +273,47 @@ describe('graphStore.loadGraph: a key the file leaves out', () => {
   });
 });
 
+describe('graphStore.isDirty', () => {
+  it('is asked on every tick of a run and frame of a drag, and serialises the document only when it changed', () => {
+    loadTestGraph([graphNode({ id: 'a' })]);
+    const store = () => useGraphStore.getState();
+    store().isDirty();
+    const serialised = vi.spyOn(JSON, 'stringify');
+    try {
+      for (let asked = 0; asked < 10; asked += 1) store().isDirty();
+      useGraphStore.setState({ runProgress: { completed: 1, total: 2, label: 'a', itemDone: 0, itemTotal: 0, idleSeconds: null } });
+      expect(store().isDirty()).toBe(false);
+      expect(serialised).not.toHaveBeenCalled();
+      store().updateNode('a', { label: 'Renamed' });
+      serialised.mockClear();
+      expect(store().isDirty()).toBe(true);
+      expect(serialised).toHaveBeenCalled();
+      store().undo();
+      expect(store().isDirty()).toBe(false);
+    } finally {
+      serialised.mockRestore();
+      useGraphStore.setState({ runProgress: null });
+    }
+  });
+});
+
+describe('graphStore.loadGraph: a node of a type this editor does not know', () => {
+  it('opens the graph, and saves the node as it came, wires and all -- as the engine and a project folder keep it', () => {
+    // Opening such a graph threw "Cannot read properties of undefined".
+    const later = {
+      id: 'later', node_type: 'vision', label: 'Later', description: 'A kind of a newer engine.', position: { x: 5, y: 6 },
+      inputs: [{ id: 'picture', name: 'Picture', kind: 'input', data_type: 'image', multi: false, required: false, description: '' }],
+      outputs: [], config: { batch_mode: 'whole_list', lens: 'wide' },
+    } as unknown as GraphNode;
+    const source = graphNode({ id: 'a', outputs: [{ id: 'output', name: 'Output', kind: 'output', data_type: 'text', multi: false, required: false, description: '' }] });
+    loadTestGraph([source, later], [{ id: 'e1', source_node_id: 'a', source_port_id: 'output', target_node_id: 'later', target_port_id: 'picture' }]);
+    const saved = useGraphStore.getState().exportGraph();
+    expect(saved.nodes.find((node) => node.id === 'later')).toEqual(later);
+    expect(saved.edges).toHaveLength(1);
+    expect(useGraphStore.getState().isDirty()).toBe(false);
+  });
+});
+
 describe('graphStore width/height persistence', () => {
   it('round-trips node size through loadGraph -> exportGraph', () => {
     const node = graphNode({ id: 'n1', width: 320, height: 240 });
@@ -294,7 +335,7 @@ describe('graphStore: what a run remembered', () => {
   // The store's part is to replay that list into its own long-lived copy of the
   // graph, so the next run starts from it -- and to do nothing else.
   const gui = (kind: 'text_io' | 'chat') => {
-    const widget = WIDGET_BUILDERS[kind].create('Block');
+    const widget = WIDGET_BUILDERS[kind].create('block', 'Block');
     const node = graphNode({
       id: 'gui1', node_type: 'gui',
       config: { ...blankConfig(), gui_widgets: [widget] },
@@ -424,6 +465,27 @@ describe('graphStore, a project open on disk', () => {
     }]);
     expect(nodeById('page').inputs).toEqual([]);
     expect(nodeById('page').outputs.map((port) => port.id)).toEqual(['file_out']);
+  });
+
+  it('takes no undo step, and keeps Redo, when nothing that came from disk is taken', () => {
+    // A change for a node that is gone, one that says what the node holds,
+    // one left on disk: the step was taken before any of that was known.
+    loadTestGraph([codeNode(), graphNode({ id: 'part', node_type: 'subgraph', config: { ...blankConfig(), subgraph: { metadata: { name: 'Inner' }, nodes: [], edges: [] } } })]);
+    useGraphStore.getState().markSaved();
+    useGraphStore.getState().updateNode('count', { label: 'Renamed' });
+    useGraphStore.getState().updateNode('count', { label: 'Renamed again' });
+    useGraphStore.getState().undo();
+    const { past, future } = useGraphStore.getState();
+    const refused = useGraphStore.getState().takeDiskChanges([
+      { node_id: 'gone', field: 'code', value: 'function run() {}' },
+      { node_id: 'count', field: 'code', value: nodeById('count').config.code },
+      { node_id: 'part', field: NESTED_GRAPH_FIELD, value: { metadata: { name: 'Inner' }, nodes: [graphNode({ id: 'theirs' })], edges: [] } },
+    ]);
+    expect(refused).toEqual(['part']);
+    expect(useGraphStore.getState().past).toEqual(past);
+    expect(useGraphStore.getState().future).toEqual(future);
+    useGraphStore.getState().redo();
+    expect(nodeById('count').label).toBe('Renamed again');
   });
 
   it('keeps unsaved edits unsaved when a change comes in from disk', () => {

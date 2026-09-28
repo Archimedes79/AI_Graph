@@ -4,8 +4,7 @@ import { DIMMER, LINE, MUTED, SUNKEN } from '@/ui/theme';
 /**
  * What to say about a value that arrived and is not a path: a record with the
  * path somewhere inside it, most often. It used to be dropped, and the block
- * said nothing had arrived -- "wire a file path into it" -- when one had been
- * wired, and a value had come.
+ * said nothing had arrived when one had been wired, and a value had come.
  */
 function notAPath(block: string, value: unknown): string {
   const seen = JSON.stringify(value) ?? String(value);
@@ -35,10 +34,10 @@ export default function ImageViewWidgetView({ widget, value, incoming }: WidgetV
 
   return (
     <div className="h-full overflow-auto rounded-lg p-2" style={{ background: SUNKEN, border: `1px solid ${LINE}` }}>
+      {/* Said as the other blocks say it: this is what whoever uses the tool
+          sees, and how the graph is wired is not theirs to do. */}
       {images.length === 0 && problems.length === 0 && (
-        <p className="text-xs p-2" style={{ color: DIMMER }}>
-          Nothing to show yet — wire a file path into {widget.label || widget.id} and run the graph.
-        </p>
+        <p className="text-xs p-2" style={{ color: DIMMER }}>No image yet</p>
       )}
 
       {problems.map((problem, index) => (

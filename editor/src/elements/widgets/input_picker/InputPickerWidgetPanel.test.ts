@@ -14,7 +14,7 @@ function panel(widget: GuiWidget): string {
 /** A folder picked on a page: its file types and its subfolders, then the list. */
 describe('a folder picker, in its panel', () => {
   it('is the folder, its file types and its subfolders, and a way to see the list -- no code, no ✨', () => {
-    const html = panel({ ...builder.create('Folder', 'directory'), value: 'data' });
+    const html = panel({ ...builder.create('folder', 'Folder', 'directory'), value: 'data' });
     expect(html).toContain('aria-label="Folder"');
     expect(html).toContain('aria-label="File types"');
     expect(html).toContain('Look into subfolders too');
@@ -26,11 +26,11 @@ describe('a folder picker, in its panel', () => {
   });
 
   it('says in one line that keeping some of the files is a code node after it', () => {
-    expect(panel(builder.create('Folder', 'directory'))).toContain('To use only some of them, wire a code node after it');
+    expect(panel(builder.create('folder', 'Folder', 'directory'))).toContain('To use only some of them, wire a code node after it');
   });
 
   it('has nothing to list before a folder is chosen, and no listing at all for one file', () => {
-    expect(/<button[^>]*disabled[^>]*>Show the files it lists/.test(panel(builder.create('Folder', 'directory')))).toBe(true);
-    expect(panel(builder.create('File', 'file'))).not.toContain('Show the files it lists');
+    expect(/<button[^>]*disabled[^>]*>Show the files it lists/.test(panel(builder.create('folder', 'Folder', 'directory')))).toBe(true);
+    expect(panel(builder.create('file', 'File', 'file'))).not.toContain('Show the files it lists');
   });
 });

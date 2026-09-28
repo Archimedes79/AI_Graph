@@ -10,6 +10,7 @@ import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
 import LiveGeneration from '@/authoring/LiveGeneration';
+import { lastAsked } from './lastAsked';
 import SubgraphTrail from './SubgraphTrail';
 import GraphProblems from './GraphProblems';
 import ViewTabs, { type EditorView } from './ViewTabs';
@@ -37,26 +38,6 @@ export function graphBusy(running: boolean, sweeping: boolean): string | null {
   if (running) return 'A run is going: stop it, or wait for it, before opening another graph.';
   if (sweeping) return '✨ Generate is writing this graph: stop it, or wait for it, before opening another.';
   return null;
-}
-
-/**
- * Numbered requests of which only the last is still wanted: `ask` hands out
- * what tells a request whether it still is, and `cancel` makes none of them.
- *
- * ✨ AI Graph's Cancel closed the dialog and left the request running; opened
- * again, the dialog showed the old design as the answer to a new, empty
- * description, ready to load.
- */
-export function lastAsked(): { ask: () => () => boolean; cancel: () => void } {
-  let last = 0;
-  return {
-    ask: () => {
-      last += 1;
-      const mine = last;
-      return () => mine === last;
-    },
-    cancel: () => { last += 1; },
-  };
 }
 
 interface ToolbarProps {
@@ -89,11 +70,11 @@ export default function Toolbar({
 }: ToolbarProps) {
   const metadata = useGraphStore((s) => s.metadata);
   const sweep = useGraphSweep();
-  // Subscribed to so the toolbar re-renders when the graph changes and the
-  // "✅ Saved" line below can stop claiming something that is no longer true.
-  const rfNodes = useGraphStore((s) => s.rfNodes);
-  const rfEdges = useGraphStore((s) => s.rfEdges);
-  const isDirty = useGraphStore((s) => s.isDirty);
+  // One answer, which the header is drawn anew by when it turns: the unsaved
+  // dot, and the "✅ Saved" line below, which must not claim what is no longer
+  // true. It was asked twice a render, and the header drawn on every change of
+  // the graph -- each a whole serialised document, every frame of a drag.
+  const dirty = useGraphStore((s) => s.isDirty());
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const isExecuting = useGraphStore((s) => s.isExecuting);
   const runProgress = useGraphStore((s) => s.runProgress);
@@ -124,7 +105,6 @@ export default function Toolbar({
 
   /** Why another graph cannot be opened now, or null when it can. */
   const busyWith = graphBusy(isExecuting, sweep.busy);
-  const dirty = isDirty() && (rfNodes.length > 0 || rfEdges.length > 0);
 
   /**
    * ▶ Run: the application, run as whoever gets it will run it -- one button,
@@ -305,9 +285,8 @@ export default function Toolbar({
             </span>
           )}
           {/* A "✅ Saved to …" that survives the next ten edits is a lie about
-              what is on disk; it only shows while the graph is actually clean.
-              (rfNodes/rfEdges are read above purely to drive this re-render.) */}
-          {saveStatus && !isDirty() && (
+              what is on disk; it only shows while the graph is actually clean. */}
+          {saveStatus && !dirty && (
             <span className="text-xs truncate" style={{ color: MUTED }} title={saveStatus}>
               {saveStatus}
             </span>

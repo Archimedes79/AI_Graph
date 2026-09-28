@@ -83,7 +83,7 @@ describe('the application ▶ Run starts', () => {
     await startApplication(graph, runWhole);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(rounds).toHaveLength(1);
-    useGraphStore.getState().deleteNode('clock');
+    useGraphStore.getState().deleteNodes(['clock']);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(rounds).toHaveLength(1);
   });

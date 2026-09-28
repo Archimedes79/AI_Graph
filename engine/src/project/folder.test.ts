@@ -698,6 +698,20 @@ describe('a graph inside a node', () => {
     expect(existsSync(join(dir, 'nodes/part/nodes/shorten/code.js'))).toBe(true);
   });
 
+  it('keeps the files its nodes\' chips open: an inner node\'s, not the outer node\'s of the same id', async () => {
+    // Ids are each graph's own. Asked by its id alone, the inner "shorten"'s
+    // code.js chip opened the outer "shorten"'s code.js.
+    const graph = nested();
+    graph.nodes.push(parseGraph({ nodes: [{ id: 'shorten', node_type: 'code', label: 'Outer', config: { code: 'outer' } }], edges: [] }).nodes[0]);
+    await writeProject(dir, graph);
+    expect(await nodeFileOf(dir, 'shorten', 'code.js')).toBe('nodes/shorten/code.js');
+    expect(await nodeFileOf(dir, 'shorten', 'code.js', ['part'])).toBe('nodes/part/nodes/shorten/code.js');
+    expect(await text('nodes/part/nodes/shorten/code.js')).toContain('i.text.slice');
+    // A text nothing was written into is there to open, down there too.
+    expect(await nodeFileOf(dir, 'shorten', 'input.js', ['part'])).toBe('nodes/part/nodes/shorten/input.js');
+    await expect(nodeFileOf(dir, 'shorten', 'code.js', ['nowhere'])).rejects.toThrow(/No graph inside "nowhere"/);
+  });
+
   it('reports a change anywhere inside it as that graph having changed', async () => {
     await writeProject(dir, nested());
     expect(await changesOnDisk(dir)).toEqual([]);

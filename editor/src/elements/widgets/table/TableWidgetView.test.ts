@@ -5,7 +5,7 @@ import TableWidgetView from './TableWidgetView';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 import { SUNKEN } from '@/ui/theme';
 
-const widget = WIDGET_BUILDERS.table.create('Rows');
+const widget = WIDGET_BUILDERS.table.create('rows', 'Rows');
 const shown = (incoming: unknown, value: unknown = undefined) => renderToStaticMarkup(createElement(TableWidgetView, {
   widget, value, incoming, onChange: () => {},
 }));

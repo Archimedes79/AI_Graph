@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import Sidebar from './Sidebar';
+import Sidebar, { paletteGroups } from './Sidebar';
 import { NODE_BUILDERS } from '@/elements/registry';
+import type { NodeGuiBuilder } from '@/elements/NodeGuiBuilder';
 import { showsPage } from '@/document/guiWidgets';
 
 describe('the node palette', () => {
@@ -27,5 +28,23 @@ describe('the node palette', () => {
       expect(button).toMatch(/<span class="hidden xl:inline">[^<]+<\/span>/);
       expect(button).toMatch(/title="[^"]+: [^"]+"/);
     }
+  });
+});
+
+describe('the palette\'s headings', () => {
+  it('are what each kind says it goes under, in the registry\'s order', () => {
+    expect(paletteGroups(Object.values(NODE_BUILDERS))).toEqual([
+      { label: 'Input', types: ['input', 'trigger'] },
+      { label: 'Processing', types: ['ai', 'code', 'data'] },
+      { label: 'Output', types: ['output'] },
+      { label: 'Structure', types: ['subgraph'] },
+    ]);
+  });
+
+  it('take a new kind where it says, with no line written into the palette', () => {
+    // A table of kinds here was one more place a new kind had to be added to.
+    const later = { nodeType: 'vision', paletteGroup: 'Processing' } as unknown as NodeGuiBuilder;
+    const groups = paletteGroups([...Object.values(NODE_BUILDERS), later]);
+    expect(groups.find((group) => group.label === 'Processing')!.types).toContain('vision');
   });
 });

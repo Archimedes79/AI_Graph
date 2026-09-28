@@ -4,7 +4,7 @@ import { blockValue } from './GuiPage';
 import { WIDGET_BUILDERS } from '@/elements/registry';
 
 describe('what the designer shows in a block somebody typed into', () => {
-  const box = { ...WIDGET_BUILDERS.text_io.create('Ask', 'both'), id: 'ask', value: 'hello' };
+  const box = { ...WIDGET_BUILDERS.text_io.create('ask', 'Ask', 'both'), value: 'hello' };
 
   it('is what was typed, over what arrived, while the block holds it', () => {
     const live = liveTypedValues({ ask: 'hello' }, [box]);
@@ -31,12 +31,12 @@ describe('what the designer shows in a block somebody typed into', () => {
   });
 
   it('is what arrived, in a box that only shows', () => {
-    const shows = { ...WIDGET_BUILDERS.text_io.create('Answer', 'output'), id: 'answer', value: 'an older answer' };
+    const shows = { ...WIDGET_BUILDERS.text_io.create('answer', 'Answer', 'output'), value: 'an older answer' };
     expect(blockValue(shows, 'the reply', {})).toBe('the reply');
   });
 
   it('is the new path once the panel has replaced the one browsed on the block', () => {
-    const picker = { ...WIDGET_BUILDERS.input_picker.create('File'), id: 'file', value: 'data/new.csv' };
+    const picker = { ...WIDGET_BUILDERS.input_picker.create('file', 'File'), value: 'data/new.csv' };
     expect(blockValue(picker, undefined, liveTypedValues({ file: 'data/old.csv' }, [picker]))).toBe('data/new.csv');
   });
 

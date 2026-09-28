@@ -82,7 +82,7 @@ export function newBlock(kind: WidgetKind, mode: string | undefined, taken: GuiW
   const labels = new Set(taken.map((block) => block.label));
   let label = named;
   for (let n = 2; label && labels.has(label); n += 1) label = `${named} ${n}`;
-  return { ...builder.create(label, mode), id: freeId(kind, taken.map((block) => block.id)) };
+  return builder.create(freeId(kind, taken.map((block) => block.id)), label, mode);
 }
 
 const PALETTE = GROUPS.map((group) => ({

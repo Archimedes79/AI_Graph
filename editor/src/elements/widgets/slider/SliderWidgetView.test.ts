@@ -10,7 +10,7 @@ describe('a slider on the page', () => {
   it('shows the number the run hands on, after its range was narrowed around it', async () => {
     // The bug: 80 was set, then Max became 50. The run emits 50; the page
     // went on showing 80 beside the handle.
-    const widget = { ...WIDGET_BUILDERS.slider.create('Amount'), value: '80', min: 0, max: 50 };
+    const widget = { ...WIDGET_BUILDERS.slider.create('amount', 'Amount'), value: '80', min: 0, max: 50 };
     const emitted = (await new SliderWidgetRunner().execute(parseWidget(widget)))[`${widget.id}_out`];
     const html = renderToStaticMarkup(createElement(SliderWidgetView, { widget, value: widget.value, onChange: () => {} }));
     expect(emitted).toBe(50);
@@ -21,7 +21,7 @@ describe('a slider on the page', () => {
 
   /** What the page draws and what a run emits, for a block as it was stored. */
   async function both(stored: Record<string, unknown>) {
-    const widget = { ...WIDGET_BUILDERS.slider.create('Amount'), min: undefined, max: undefined, step: undefined, ...stored };
+    const widget = { ...WIDGET_BUILDERS.slider.create('amount', 'Amount'), min: undefined, max: undefined, step: undefined, ...stored };
     const runner = new SliderWidgetRunner();
     const emitted = (await runner.execute(parseWidget(widget)))[`${widget.id}_out`];
     const html = renderToStaticMarkup(createElement(SliderWidgetView, { widget: widget as never, value: widget.value, onChange: () => {} }));

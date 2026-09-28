@@ -27,14 +27,21 @@ export default function FolderListing({ recursive, onRecursive, noFolder, list, 
   const [files, setFiles] = React.useState<string[] | null>(null);
   const [failure, setFailure] = React.useState('');
   const [busy, setBusy] = React.useState(false);
-  React.useEffect(() => { setFiles(null); setFailure(''); }, [of]);
+  // What the listing is of now, for one that comes back after a change: it
+  // is dropped. Shown, "Look into subfolders too" ticked during a slow
+  // listing showed the list from before the tick.
+  const now = React.useRef(of);
+  React.useEffect(() => { now.current = of; setFiles(null); setFailure(''); }, [of]);
 
   const show = async () => {
+    const asked = of;
     setBusy(true);
     setFailure('');
     try {
-      setFiles(await list());
+      const listed = await list();
+      if (now.current === asked) setFiles(listed);
     } catch (error) {
+      if (now.current !== asked) return;
       setFiles(null);
       setFailure(errorText(error, 'The folder could not be listed.'));
     } finally {

@@ -75,9 +75,9 @@ describe('what a node shows of its last result, beside its ports', () => {
 
   it('is, on a page, what each block shows, read by the block: points on a chart are a chart', () => {
     const blank = NODE_KINDS.gui.create('page');
-    const chart = { ...WIDGET_BUILDERS.plot_window.create('Chart'), id: 'chart' };
-    const photo = { ...WIDGET_BUILDERS.image_view.create('Photo'), id: 'photo' };
-    const picker = { ...WIDGET_BUILDERS.input_picker.create('File'), id: 'file' };
+    const chart = WIDGET_BUILDERS.plot_window.create('chart', 'Chart');
+    const photo = WIDGET_BUILDERS.image_view.create('photo', 'Photo');
+    const picker = WIDGET_BUILDERS.input_picker.create('file', 'File');
     const page: GraphNode = syncGuiNodePorts({ ...blank, config: { ...blank.config, gui_widgets: [picker, chart, photo] } });
     const shown = NODE_BUILDERS.gui.resultPreviews(page, ran(
       { file_out: 'data/population.csv' },

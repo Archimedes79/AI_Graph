@@ -117,13 +117,13 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
         └── PlotWindowWidgetRunner   TableWidgetRunner   ImageViewWidgetRunner
 
 ElementGuiBuilder<PanelProps>                    Panel
-├── NodeGuiBuilder                        label · icon · color · hint · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
+├── NodeGuiBuilder                        label · icon · color · hint · paletteGroup · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
 │                                         + definesItself · ownsDescription · portEditing/portHint · wantsOn · restingValue
 │                                           dropPort/withDropped (what a file dropped on the node gives it)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
-└── WidgetGuiBuilder                      create(label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
+└── WidgetGuiBuilder                      create(id, label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
     ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
@@ -341,7 +341,9 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   node whose panel opens is; each once its nodes are measured on a canvas that is on screen. The
   page's panel is the way to the Page tab, where the page is built. The node the person is
   on is `editingNodeId`, which the card, its wires and the bar all read. Delete on the canvas
-  deletes only as pressed there (`deleteKeys`): a key pressed in the panel is the panel's.
+  deletes only as pressed there (`deletes`): a key pressed in the panel is the panel's. It asks
+  one question first where something goes with the nodes -- a page's blocks, their wires -- as
+  a card's ✕ does, and takes them with their wires as one undo step (`askToDelete`).
 - **The bar under the canvas** (`app/ChangeBar.tsx`) says what to change, on the node that is
   selected or on the whole graph. On a node whose body ✨ writes, the words wait for its
   panel in the store (`pendingChange`, `askChange`, `clearChange`); the panel takes them up.

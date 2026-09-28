@@ -17,6 +17,10 @@ export class InputNodeGuiBuilder extends NodeGuiBuilder {
 
   readonly color = 'var(--ui-node-input, #1e3a5f)';
 
+  // Every graph that reads a file or a folder with nobody at a page starts
+  // with one: it had no place in the palette, and could not be made by hand.
+  override readonly paletteGroup = 'Input';
+
   override readonly Panel = lazy(() => import('./InputNodePanel'));
 
   /**

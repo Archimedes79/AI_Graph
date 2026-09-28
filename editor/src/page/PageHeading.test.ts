@@ -53,7 +53,7 @@ describe('the tool\'s name and description, typed above the page', () => {
   it('take an undo step of their own: Undo takes back the description, then the block added before it', () => {
     // They took none: an Undo meant for the block took the description with
     // it, and with nothing before them Undo could not take them back at all.
-    insertBlock({ ...WIDGET_BUILDERS.text_io.create('Box'), id: 'box' });
+    insertBlock(WIDGET_BUILDERS.text_io.create('box', 'Box'));
     store().setMetadata({ description: 'Counts the words in a text.' });
     store().undo();
     expect(store().metadata.description).toBe('');

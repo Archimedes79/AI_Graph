@@ -8,7 +8,7 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, DANGER_TEXT, DIM, MUTED, TEXT } from '@/ui/theme';
-import { blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
+import { blockPort, blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
 import type { RunTrigger } from '@/api/client';
 import RunResult from './RunResult';
 
@@ -27,7 +27,7 @@ import RunResult from './RunResult';
  * properties panel inside a 305 KB chunk it never used. A base class that the
  * runtime extends ships them for the same reason, because the subclass
  * references the base. Only the import graph decides what ends up in a bundle,
- * so the boundary has to be a module boundary — and `runtime.boundary.test.ts`
+ * so the boundary has to be a module boundary — and `runtime/boundary.test.ts`
  * asserts that it stays one.
  *
  * A graph is one tool with one page: the first node that carries an interface
@@ -64,8 +64,8 @@ export function blockValue(
 }
 
 /** What a run put on one block of the page node *nodeId* (`blockShows`). */
-export function shownOn(result: ExecutionResult | null, nodeId: string, widgetId: string): unknown {
-  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widgetId);
+export function shownOn(result: ExecutionResult | null, nodeId: string, widget: GuiWidget): unknown {
+  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widget);
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
@@ -175,7 +175,7 @@ export function GuiBlock({
   );
 }
 
-/** The page itself: what a deployed tool renders, and what the preview shows. */
+/** The page itself: what a deployed tool renders, and the editor's running application. */
 function GuiPage({
   pageId, widgets, onWidgetValue, onWidgetTrigger,
 }: {
@@ -192,7 +192,7 @@ function GuiPage({
     <PageGrid>
       {placements.map((placement) => {
         const { widget } = placement;
-        const incoming = shownOn(executionResult, pageId, widget.id);
+        const incoming = shownOn(executionResult, pageId, widget);
         return (
           <GuiBlock
             key={widget.id}
@@ -237,9 +237,10 @@ export function usePageEvents(onRun: (trigger: RunTrigger) => void) {
   const fire = (widget: GuiWidget, value?: unknown) => {
     if (value !== undefined) setWidgetValue(widget, value);
     const { page } = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
-    if (!page || !widgetFiresRun(widget)) return;
+    const port = blockPort(widget, 'out');
+    if (!page || !port || !widgetFiresRun(widget)) return;
     if (useGraphStore.getState().isExecuting) return;
-    onRun({ node_id: page.id, port_id: `${widget.id}_out` });
+    onRun({ node_id: page.id, port_id: port });
   };
 
   return { setWidgetValue, fire };

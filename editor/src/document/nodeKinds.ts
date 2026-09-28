@@ -42,6 +42,11 @@ const numbered = (kind: string) => (node: GraphNode, others: GraphNode[]): Graph
 
 export interface NodeKind {
   /**
+   * What a new node of this type is called, where that is not its type: the
+   * id `freeId` starts from, numbered only when it is taken.
+   */
+  idBase?: string;
+  /**
    * A node of this type as it is made here: its ports, and the settings
    * (`baseNodeConfig`) with what a new one of the kind starts with that the
    * defaults do not say -- which is what its file then carries.
@@ -164,6 +169,10 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
   },
 
   gui: {
+    // Called what it is, as the examples call theirs: `page.file_out ->
+    // chart.csv` reads in flow.json as what it joins, and `gui` is only the
+    // file format's word for it.
+    idBase: 'page',
     create: (id) => ({
       id,
       node_type: 'gui',
@@ -213,6 +222,8 @@ export const NODE_KINDS: Record<NodeType, NodeKind> = {
  * that default, and loading fills it back in, so nothing is lost either way.
  */
 export function savedNode(node: GraphNode): GraphNode {
+  // A type this editor does not know was never filled in: it is saved as it came.
+  if (!NODE_KINDS[node.node_type]) return node;
   const defaults: Record<string, unknown> = baseNodeConfig();
   const config = Object.fromEntries(Object.entries(node.config)
     .filter(([key, value]) => value !== undefined && JSON.stringify(value) !== JSON.stringify(defaults[key])));

@@ -195,7 +195,7 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       try {
         const folder = project.projectFolderOf(resolve(expandHome(asked.graph_path)));
         if (!folder) throw new Refusal(400, 'Only a project folder keeps files to open: save the graph as one first.');
-        const file = await project.nodeFileOf(folder, asked.node_id, asked.file || undefined);
+        const file = await project.nodeFileOf(folder, asked.node_id, asked.file || undefined, asked.inside ?? []);
         return await files.openExternal(folder, file);
       } catch (error) {
         if (error instanceof Refusal) throw error;

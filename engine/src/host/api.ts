@@ -336,9 +336,11 @@ export const API = {
   /**
    * One of a node's files in a project, in the person's own editor: `file`,
    * named from the node's folder -- `input.js`, `history.md` -- or, without
-   * it, its body (`nodes/<id>/code.js`). Loopback only: it starts a program.
+   * it, its body (`nodes/<id>/code.js`). The node is one of the graph
+   * `inside` leads down to: the ids of the nodes that hold it, outermost
+   * first (`nodeFileOf`). Loopback only: it starts a program.
    */
-  openExternal: route<{ graph_path: string; node_id: string; file?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
+  openExternal: route<{ graph_path: string; inside?: string[]; node_id: string; file?: string }, { path: string; with: string }>('POST', '/api/files/open-external', 'editor'),
 } as const;
 
 export type Api = typeof API;
