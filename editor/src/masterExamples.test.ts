@@ -149,7 +149,7 @@ function shapeOf(graph: Graph): { nodes: string[]; blocks: string[]; wires: stri
     nodes: graph.nodes.map((node) => node.node_type).sort(),
     blocks: graph.nodes.flatMap((node) => (node.config.gui_widgets ?? []).map((widget: GuiWidget) => `${widget.kind}${widget.mode ? `/${widget.mode}` : ''}${widget.run_on_change ? ' ⚡' : ''}`)),
     wires: graph.edges.map((edge) => `${name.get(edge.source_node_id)}.${portName(edge.source_node_id, edge.source_port_id)} -> ${name.get(edge.target_node_id)}.${portName(edge.target_node_id, edge.target_port_id)}`).sort(),
-    // Which inputs a node will not run without, once they are wired: step 1's "needed".
+    // Which inputs a node will not run without, once they are wired: its ports' "needed".
     needed: graph.nodes.flatMap((node) => node.inputs.filter((port) => port.required).map((port) => `${node.node_type}.${port.id}`)).sort(),
     // How each node that authors a body takes a list: what "Run once per item" sets, as a run reads it.
     lists: graph.nodes.filter((node) => node.node_type === 'code' || node.node_type === 'ai')

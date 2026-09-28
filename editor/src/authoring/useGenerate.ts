@@ -28,7 +28,7 @@ export interface GenerateOptions<T> {
 }
 
 /**
- * The ✨ Generate button's state machine, once.
+ * The ✨ buttons' state machine, once.
  *
  * Seven handlers across three files repeated the identical seven steps --
  * guard, set busy, set "Generating…", await, apply, set "✅", catch and format

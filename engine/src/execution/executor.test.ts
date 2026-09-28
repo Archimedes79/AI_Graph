@@ -446,7 +446,7 @@ describe('a node that catches its own failure', () => {
     expect(result.error).toBeNull();
   });
 
-  it('does the same when it is tried by itself, as Try it and run-node try it', async () => {
+  it('does the same when it is run by itself, as run-node runs it', async () => {
     const graph = graphOf([failing({ catch_errors: true })], []);
     const inRun = (await executeGraph(graph, { runtime: nowhere, registry: withBoom as never })).node_results[0];
     const alone = await executeNode(graph, 'bad', {}, { runtime: nowhere, registry: withBoom as never });

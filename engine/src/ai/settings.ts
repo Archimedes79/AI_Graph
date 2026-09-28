@@ -200,7 +200,7 @@ export async function probeLocal(
 
 /**
  * The one AI setting: where every AI call goes that does not name its own
- * provider and model -- ✨ Generate and its probe, ▶ Try, and
+ * provider and model -- ✨ and its probe, ▶ Try, and
  * every run, in the editor, from the command line and in a deployed tool
  * alike. Only a node that pins its own model is answered by
  * anything else.

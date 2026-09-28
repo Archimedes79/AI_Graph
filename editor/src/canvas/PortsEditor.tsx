@@ -170,7 +170,7 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wholeOffered, wire
                 ticks it where nobody has said anything yet (`connect`). */}
             {kind === 'input' && readsFiles && (
               <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                title="The node is handed what the file says, not its path -- on every run, in Try it and when ✨ tries its code">
+                title="The node is handed what the file says, not its path: a run reads the file, and its input.js example holds such a text">
                 <input type="checkbox" checked={port.data_type === 'file_path'} aria-label="Read the file at this path"
                   onChange={(e) => set({ data_type: e.target.checked ? 'file_path' : 'any' }, ONCE)} />
                 Read the file at this path

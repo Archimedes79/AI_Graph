@@ -106,7 +106,7 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
 
   /**
    * What a node wired into this block should hand it, in a sentence for that
-   * node's ✨ Generate -- or nothing, for a block that takes whatever comes.
+   * node's ✨ -- or nothing, for a block that takes whatever comes.
    *
    * Said by the block because it is a fact about the block: a chart takes
    * points, a table takes rows whose keys become its columns. It used to be
