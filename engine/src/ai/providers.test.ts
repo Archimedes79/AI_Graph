@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { aiService, DEFAULT_SETTINGS, EmptyCompletionError, OutOfBudgetError, settingsFromEnv, TimedOutError } from './providers.ts';
+import { lent, type AiService, type ModelChoice } from '../elements/Runtime.ts';
+import {
+  aiService, DEFAULT_SETTINGS, EmptyCompletionError, OutOfBudgetError, settingsFromEnv, TimedOutError, type ProviderSettings,
+} from './providers.ts';
+
+/**
+ * The service as a run asks it: the one AI setting -- here *provider* and
+ * *model* -- filled into each request first, as `nodeRuntime` fills it.
+ */
+function service({ provider, model, ...settings }: Partial<ProviderSettings> & ModelChoice): AiService {
+  const ai = aiService(settings);
+  return { complete: (request) => ai.complete({ ...request, ...lent(request, { provider, model }) }) };
+}
 
 /** A stand-in for the network: what was asked, and what to answer. */
 function stubFetch(replies: (
@@ -28,7 +40,7 @@ const openAiReply = (text: string) => ({ body: { choices: [{ message: { content:
 describe('the OpenAI-style providers', () => {
   it('send system and user as messages, and read the answer back', async () => {
     const calls = stubFetch([openAiReply('the answer')]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
 
     const text = await ai.complete({ prompt: 'the question', system: 'be brief' });
 
@@ -43,25 +55,25 @@ describe('the OpenAI-style providers', () => {
   it('refuses before the request when a required key is missing', async () => {
     // Better than a 401 out of the provider, which reads like a broken URL.
     stubFetch([openAiReply('never asked')]);
-    const ai = aiService({ provider: 'openai', model: 'gpt-x' });
+    const ai = service({ provider: 'openai', model: 'gpt-x' });
     await expect(ai.complete({ prompt: 'x' })).rejects.toThrow(/No OpenAI API key/);
   });
 
   it('says which endpoint is missing rather than posting to nowhere', async () => {
     stubFetch([openAiReply('never asked')]);
-    const ai = aiService({ provider: 'openai_compatible', model: 'm' });
+    const ai = service({ provider: 'openai_compatible', model: 'm' });
     await expect(ai.complete({ prompt: 'x' })).rejects.toThrow(/OpenAI-compatible endpoint/);
   });
 
   it('will not call with no model, because the 404 that follows misleads', async () => {
     stubFetch([openAiReply('never asked')]);
-    const ai = aiService({ provider: 'lmstudio', model: '' });
+    const ai = service({ provider: 'lmstudio', model: '' });
     await expect(ai.complete({ prompt: 'x' })).rejects.toThrow(/No model configured/);
   });
 
   it('does not send a provider the node names the model of the machine\'s own provider', async () => {
     const calls = stubFetch([openAiReply('never asked')]);
-    const ai = aiService({ provider: 'google', model: 'gemini-flash', apiKeys: { openai: 'k' } });
+    const ai = service({ provider: 'google', model: 'gemini-flash', apiKeys: { openai: 'k' } });
     await expect(ai.complete({ prompt: 'x', provider: 'openai', model: '' }))
       .rejects.toThrow(/No model configured for provider 'openai'/);
     expect(calls).toHaveLength(0);
@@ -69,13 +81,13 @@ describe('the OpenAI-style providers', () => {
 
   it('finds each provider\'s key in the slot named after it, GitHub Models\' included', async () => {
     const calls = stubFetch([openAiReply('hi')]);
-    await aiService({ provider: 'github_copilot', model: 'gpt-x', apiKeys: { github_copilot: 'ghp_token' } }).complete({ prompt: 'x' });
+    await service({ provider: 'github_copilot', model: 'gpt-x', apiKeys: { github_copilot: 'ghp_token' } }).complete({ prompt: 'x' });
     expect(calls[0].headers.Authorization).toBe('Bearer ghp_token');
   });
 
   it('still gives the machine\'s model to a node that names the machine\'s own provider', async () => {
     const calls = stubFetch([openAiReply('the answer')]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
     await ai.complete({ prompt: 'x', provider: 'lmstudio' });
     expect(calls[0].body.model).toBe('local');
   });
@@ -84,7 +96,7 @@ describe('the OpenAI-style providers', () => {
 describe('anthropic and ollama, which do not fit the table', () => {
   it('sends anthropic its own shape: system beside the messages, key in a header', async () => {
     const calls = stubFetch([{ body: { content: [{ text: 'hello' }] } }]);
-    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    const ai = service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
 
     expect(await ai.complete({ prompt: 'hi', system: 'be brief' })).toBe('hello');
     expect(calls[0].body.system).toBe('be brief');
@@ -93,7 +105,7 @@ describe('anthropic and ollama, which do not fit the table', () => {
 
   it('asks ollama not to stream, and reads message.content', async () => {
     const calls = stubFetch([{ body: { message: { content: 'hi there' } } }]);
-    const ai = aiService({ provider: 'ollama', model: 'llama' });
+    const ai = service({ provider: 'ollama', model: 'llama' });
 
     expect(await ai.complete({ prompt: 'hi' })).toBe('hi there');
     expect(calls[0].body.stream).toBe(false);
@@ -103,7 +115,7 @@ describe('anthropic and ollama, which do not fit the table', () => {
 
   it('sends anthropic an image as an image block, before the words', async () => {
     const calls = stubFetch([{ body: { content: [{ type: 'text', text: 'a barn' }] } }]);
-    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    const ai = service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
     await ai.complete(picture);
     expect(calls[0].body.messages[0].content).toEqual([
       { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
@@ -113,14 +125,14 @@ describe('anthropic and ollama, which do not fit the table', () => {
 
   it('sends ollama the base64 of an image, not a data URL', async () => {
     const calls = stubFetch([{ body: { message: { content: 'a barn' } } }]);
-    const ai = aiService({ provider: 'ollama', model: 'llava' });
+    const ai = service({ provider: 'ollama', model: 'llava' });
     await ai.complete(picture);
     expect(calls[0].body.messages[0].images).toEqual(['AAAA']);
   });
 
   it('sends no temperature that nobody asked for -- current Anthropic models refuse one', async () => {
     const calls = stubFetch([{ body: { content: [{ type: 'text', text: 'hi' }] } }]);
-    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    const ai = service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
     await ai.complete({ prompt: 'hi' });
     await ai.complete({ prompt: 'hi', temperature: 0.2 });
     expect(calls[0].body).not.toHaveProperty('temperature');
@@ -128,15 +140,15 @@ describe('anthropic and ollama, which do not fit the table', () => {
 
     vi.unstubAllGlobals();
     const local = stubFetch([{ body: { message: { content: 'hi' } } }, openAiReply('hi')]);
-    await aiService({ provider: 'ollama', model: 'llama' }).complete({ prompt: 'hi' });
-    await aiService({ provider: 'lmstudio', model: 'local' }).complete({ prompt: 'hi' });
+    await service({ provider: 'ollama', model: 'llama' }).complete({ prompt: 'hi' });
+    await service({ provider: 'lmstudio', model: 'local' }).complete({ prompt: 'hi' });
     expect(local[0].body).not.toHaveProperty('options');
     expect(local[1].body).not.toHaveProperty('temperature');
   });
 
   it('says an anthropic answer cut off by max_tokens before a word is out of budget, once', async () => {
     const calls = stubFetch([{ body: { stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '' }] } }]);
-    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' }, retryDelay: 0, maxTokens: 512 });
+    const ai = service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' }, retryDelay: 0, maxTokens: 512 });
     await expect(ai.complete({ prompt: 'Summarize.' })).rejects.toBeInstanceOf(OutOfBudgetError);
     expect(calls).toHaveLength(1);
   });
@@ -148,7 +160,7 @@ describe('retrying', () => {
     // local model does this under load, and counted as success it becomes an
     // empty output that everything downstream quietly runs with.
     const calls = stubFetch([openAiReply('   '), openAiReply('second time')]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
+    const ai = service({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
 
     expect(await ai.complete({ prompt: 'x' })).toBe('second time');
     expect(calls).toHaveLength(2);
@@ -156,20 +168,20 @@ describe('retrying', () => {
 
   it('gives up on an empty answer once the attempts are spent', async () => {
     stubFetch([openAiReply('')]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0, attempts: 2 });
+    const ai = service({ provider: 'lmstudio', model: 'local', retryDelay: 0, attempts: 2 });
     await expect(ai.complete({ prompt: 'x' })).rejects.toBeInstanceOf(EmptyCompletionError);
   });
 
   it('retries a 503 and not a 400', async () => {
     // A 400 is a configuration mistake; retrying it only makes the wait longer.
     const busy = stubFetch([{ status: 503, body: { error: 'busy' } }, openAiReply('ok')]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
+    const ai = service({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
     expect(await ai.complete({ prompt: 'x' })).toBe('ok');
     expect(busy).toHaveLength(2);
 
     vi.unstubAllGlobals();
     const bad = stubFetch([{ status: 400, body: { error: { message: 'model not found' } } }]);
-    const ai2 = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
+    const ai2 = service({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
     await expect(ai2.complete({ prompt: 'x' })).rejects.toThrow(/model not found/);
     expect(bad).toHaveLength(1);
   });
@@ -217,7 +229,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
   it('offers the tools, runs the call, and answers with what the model says next', async () => {
     const calls = stubFetch([asksForAdd, openAiReply('It is 5.')]);
     const tools = calculator();
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
 
     expect(await ai.complete({ prompt: 'what is 2+3?', tools })).toBe('It is 5.');
     expect(tools.asked).toEqual([{ name: 'add', args: { a: 2, b: 3 } }]);
@@ -241,7 +253,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
     // Rebuilt from the fields understood here, the message loses the one that
     // is not -- and Gemini 3 answers the second turn with a 400.
     const calls = stubFetch([asksForAdd, openAiReply('5')]);
-    const ai = aiService({ provider: 'google', model: 'gemini-3', apiKeys: { google: 'k' } });
+    const ai = service({ provider: 'google', model: 'gemini-3', apiKeys: { google: 'k' } });
 
     await ai.complete({ prompt: 'what is 2+3?', system: 'be brief', tools: calculator() });
 
@@ -260,7 +272,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
       openAiReply('Sorry, let me just say 5.'),
     ]);
     const tools = calculator();
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
 
     expect(await ai.complete({ prompt: 'x', tools })).toBe('Sorry, let me just say 5.');
     expect(tools.asked).toEqual([]);
@@ -279,7 +291,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
       ] } }] } },
       openAiReply('done'),
     ]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
 
     await ai.complete({ prompt: 'x', tools });
 
@@ -295,7 +307,7 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
   it('stops after eight rounds and asks for an answer with the tools withdrawn', async () => {
     const calls = stubFetch([...Array(8).fill(asksForAdd), openAiReply('From what I have: 5.')]);
     const tools = calculator();
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
 
     expect(await ai.complete({ prompt: 'x', tools })).toBe('From what I have: 5.');
     expect(tools.asked).toHaveLength(8);
@@ -307,14 +319,14 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
 
   it('gives up, clearly, on a model that will not stop calling', async () => {
     stubFetch([asksForAdd]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
+    const ai = service({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
     await expect(ai.complete({ prompt: 'x', tools: calculator() })).rejects.toThrow(/still calling tools after 8 rounds/);
   });
 
   it('retries one empty turn, not the conversation -- a tool is not run twice', async () => {
     const calls = stubFetch([asksForAdd, openAiReply(''), openAiReply('5')]);
     const tools = calculator();
-    const ai = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
+    const ai = service({ provider: 'lmstudio', model: 'local', retryDelay: 0 });
 
     expect(await ai.complete({ prompt: 'x', tools })).toBe('5');
     expect(tools.asked).toHaveLength(1);
@@ -328,13 +340,13 @@ describe('the tool loop, in OpenAI\'s dialect', () => {
     // not pass for one written with it.
     stubFetch([asksForAdd, openAiReply('never reached')]);
     const tools = { ...calculator(), call: async () => { throw new Error('the server exited'); } };
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
     await expect(ai.complete({ prompt: 'x', tools })).rejects.toThrow(/the server exited/);
   });
 
   it('sends the request it always sent when the tool list is empty', async () => {
     const calls = stubFetch([openAiReply('plain')]);
-    const ai = aiService({ provider: 'lmstudio', model: 'local' });
+    const ai = service({ provider: 'lmstudio', model: 'local' });
 
     await ai.complete({ prompt: 'x', tools: { specs: [], call: async () => '' } });
     expect(Object.keys(calls[0].body)).toEqual(['model', 'messages', 'max_tokens']);
@@ -353,7 +365,7 @@ describe('the tool loop, in the other two dialects', () => {
       { body: { stop_reason: 'end_turn', content: [{ type: 'text', text: 'It is 5.' }] } },
     ]);
     const tools = calculator();
-    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    const ai = service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
 
     // The words beside the call are the model thinking aloud, not the answer.
     expect(await ai.complete({ prompt: 'what is 2+3?', tools })).toBe('It is 5.');
@@ -373,7 +385,7 @@ describe('the tool loop, in the other two dialects', () => {
     const asks = { body: { content: [{ type: 'tool_use', id: 'toolu_1', name: 'add', input: {} }] } };
     const calls = stubFetch([...Array(8).fill(asks), { body: { content: [{ type: 'text', text: 'no idea' }] } }]);
     const tools = { ...calculator(), call: async () => 'Tool error: a and b are required' };
-    const ai = aiService({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
+    const ai = service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } });
 
     expect(await ai.complete({ prompt: 'x', tools })).toBe('no idea');
     expect(calls[1].body.messages[2].content[0]).toEqual({
@@ -392,7 +404,7 @@ describe('the tool loop, in the other two dialects', () => {
     };
     const calls = stubFetch([{ body: { message } }, { body: { message: { content: 'It is 5.' } } }]);
     const tools = calculator();
-    const ai = aiService({ provider: 'ollama', model: 'llama' });
+    const ai = service({ provider: 'ollama', model: 'llama' });
 
     expect(await ai.complete({ prompt: 'what is 2+3?', system: 'be brief', tools })).toBe('It is 5.');
     expect(tools.asked).toEqual([{ name: 'add', args: { a: 2, b: 3 } }]);
@@ -414,7 +426,7 @@ describe('settingsFromEnv', () => {
     const settings = settingsFromEnv({ OPENAI_API_KEY: 'k', OLLAMA_BASE_URL: 'http://box:11434' });
     expect(settings.apiKeys).toEqual({ openai: 'k' });
     expect(settings.endpoints).toEqual({ ollama: 'http://box:11434' });
-    expect(settings.provider).toBeUndefined();
+    expect(settings.maxTokens).toBeUndefined();
   });
 });
 
@@ -436,7 +448,7 @@ describe('the clock on a model call', () => {
         asked.push(url);
         return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError'))));
       }));
-      const asking = aiService({ provider: 'lmstudio', model: 'local', retryDelay: 0, timeoutMs: 60_000 }).complete({ prompt: 'x' });
+      const asking = service({ provider: 'lmstudio', model: 'local', retryDelay: 0, timeoutMs: 60_000 }).complete({ prompt: 'x' });
       const failed = expect(asking).rejects.toThrow(
         'The model did not answer within 1 minute, so the call was given up. AI_GRAPH_TIMEOUT_MS sets how long a call may take',
       );
@@ -459,7 +471,7 @@ describe('a model that thinks its budget away', () => {
         choices: [{ finish_reason: 'length', message: { content: '', reasoning_content: 'Let me think about this. '.repeat(40) } }],
       }), { status: 200 });
     });
-    const ai = aiService({ provider: 'lmstudio', model: 'thinker', retryDelay: 0, maxTokens: 512 });
+    const ai = service({ provider: 'lmstudio', model: 'thinker', retryDelay: 0, maxTokens: 512 });
     await expect(ai.complete({ prompt: 'Summarize.' })).rejects.toThrow(/whole budget of 512 tokens thinking/);
     expect(asked).toBe(1);
     vi.unstubAllGlobals();

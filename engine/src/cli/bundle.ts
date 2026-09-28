@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
 import { withoutAuthoring } from '../authoring/handedOn.ts';
+import { installFolder } from '../ai/settings.ts';
 import { NODE_MAJOR, runCmd, runSh, zipMode } from './launchers.ts';
 
 /** `engine/src`: the tree a bundle copies. This file sits in its `cli/`. */
@@ -130,6 +131,23 @@ async function engineFiles(dir = ENGINE_ROOT): Promise<string[]> {
 }
 
 /**
+ * Where a bundle keeps the built page, beside its `graph.json`. Not `page/`:
+ * in a project folder that is the page itself, its blocks in `page.json`.
+ */
+export const WEB_DIR = 'web';
+
+/**
+ * The page this checkout built, when it has one: what a bundle carries, what
+ * `--serve` serves a graph that brings none, and the editor's Deploy. Looked
+ * up rather than passed, because the person writing a bundle should not have
+ * to know where a build lands.
+ */
+export function builtPage(): string | undefined {
+  const dist = join(installFolder(), 'editor', 'dist');
+  return existsSync(join(dist, 'runtime.html')) ? dist : undefined;
+}
+
+/**
  * The built page a deployed tool serves, and only the files it references.
  *
  * Parsed out of `runtime.html` rather than listed: the editor's own chunks live
@@ -155,14 +173,14 @@ async function pageFiles(pageDir: string): Promise<string[]> {
 export async function writeBundle(
   graph: Graph,
   target: string,
-  options: { name?: string; pageDir?: string; dataFrom?: string } = {},
+  options: { pageDir?: string; dataFrom?: string } = {},
 ): Promise<string[]> {
   // A bundle is something handed to someone else. One of a graph with no nodes
   // is a zip that starts, does nothing and says nothing -- and the person who
   // opens it has no way to tell that from a tool that failed.
   if (!graph.nodes.length) throw new Error('This graph has no nodes: there is nothing to hand over.');
   const needs = bundleNeeds(graph);
-  const name = options.name || graph.metadata.name || 'graph';
+  const name = graph.metadata.name || 'graph';
   const written: string[] = [];
 
   const put = async (relativePath: string, content: string): Promise<void> => {
@@ -189,7 +207,7 @@ export async function writeBundle(
   let servesPage = false;
   if (needs.interface && options.pageDir) {
     for (const file of await pageFiles(options.pageDir)) {
-      const relativePath = join('page', file).replace(/\\/g, '/');
+      const relativePath = join(WEB_DIR, file).replace(/\\/g, '/');
       const path = resolve(target, relativePath);
       await mkdir(dirname(path), { recursive: true });
       await copyFile(join(options.pageDir, file), path);

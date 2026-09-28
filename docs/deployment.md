@@ -23,11 +23,11 @@ node engine/src/main.ts examples/folder_summaries
 They ask for their path before running, so any other location works too — the value in
 the graph is only the default.
 
-The same rule bites once more after deployment: **a bundle ships the tool, not the
-data.** It reads its `graph.json` from its own directory, so a relative data path in the
-graph resolves inside the bundle, where the file is not. Either pick the file on the
-tool's own page (what a graph with a picker or a `prompt_at_runtime` input is for),
-or store an absolute path before deploying.
+The same rule holds after deployment: a bundle runs from its own directory, so a relative
+data path in the graph resolves inside the bundle. That is why **a bundle carries the files
+the graph starts on**, at the same relative place (see [What a bundle carries](#what-a-bundle-carries));
+an absolute path, or a file over 50 MB, is the recipient's to bring -- or to pick on the
+tool's own page, which is what a graph with a picker or a `prompt_at_runtime` input is for.
 
 Override an input node:
 
@@ -51,6 +51,9 @@ Serve the graph's own page instead of running it once:
 ```bash
 node engine/src/main.ts my_graph.json --serve --port 8123
 ```
+
+A bundle serves the page it carries, in `web/` beside its `graph.json`; a graph or a
+project in a checkout is served the page the checkout built (`npm run build`).
 
 ---
 
@@ -107,14 +110,16 @@ curl -X POST http://localhost:8000/api/deploy/bundle \
 See [engine/src/cli/bundle.ts](../engine/src/cli/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
 
-A call like this one must say `Content-Type: application/json`, and on a server bound to
-this machine it must be addressed to `localhost`, `127.0.0.1` or `[::1]` with the server's
-own port: the server answers its own page and scripts on this machine, not a web page
-elsewhere in the browser that found the port.
+A call like this one must say `Content-Type: application/json`, and it must be addressed
+to `localhost`, `127.0.0.1` or `[::1]` — with the server's own port on a server bound to
+this machine — or, on one bound wider, by a name `AI_GRAPH_ALLOWED_HOSTS` lists: the
+server answers its own page and scripts on this machine, not a web page elsewhere in the
+browser that found the port.
 
 ### What a bundle carries
 
-The graph, a verbatim copy of the engine, the page when the graph has one — and **the
+The graph, a verbatim copy of the engine, the page when the graph has one (built, in
+`web/`: a project's `page/` is the page itself, its blocks) — and **the
 files the graph starts on**: what its file pickers and folder inputs name as defaults, copied
 to the same relative place, so a tool handed to someone opens on its example data rather
 than on "no such file". Only relative paths inside the project are carried; an absolute
@@ -127,8 +132,9 @@ check for Node 24 before starting and say so when it is missing or too old, `run
 out of the zip executable, and a double-clicked `run.cmd` that fails keeps its window open
 until the reason has been read.
 
-A bundle's server also keeps the graph's own clock (*⚙ Settings → What starts this graph*):
-`on start` and `every 5m` run with nobody watching, and the page shows the latest result.
+A bundle's server also keeps the clock of the graph's trigger nodes: a trigger ticked to
+fire when the tool starts, or given an interval such as `5m`, runs with nobody watching,
+and the page shows the latest result.
 
 **Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
 server to stop rather than ending it where it stands: no new round starts, runs in flight

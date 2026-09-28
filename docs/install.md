@@ -114,9 +114,15 @@ Builds the editor, runs it on :8000 beside an Ollama container, and keeps
 docker exec -it ai_graph-ollama-1 ollama pull llama3
 ```
 
-The container binds `--host 0.0.0.0` because its loopback is its own. On a
-non-loopback bind the file browser switches itself off rather than expose the host's
-filesystem listing to the network; everything else works.
+The container binds `--host 0.0.0.0` because its loopback is its own, and Compose
+publishes it on the host's loopback only (`127.0.0.1:8000:8000`). Keep it that way: the
+editor runs code, reads and writes files and saves keys for whoever reaches it, and asks
+nobody who they are, so a port published on every interface hands all of that to your
+network. On such a bind the server also answers only a request addressed to `localhost`,
+`127.0.0.1` or `[::1]`, whatever port led there, so a web page that points a name of its
+own at the machine gets nowhere; a name you reach it by yourself — a reverse proxy's —
+goes in `AI_GRAPH_ALLOWED_HOSTS`, comma-separated. The file browser switches itself off
+there rather than list the host's filesystem.
 
 ### The published image
 
@@ -124,7 +130,7 @@ Every push to `main` that passes CI is built and pushed to GitHub's own registry
 checkout is not required to run the editor in a container:
 
 ```bash
-docker run -p 8000:8000 -v ./data:/app/data ghcr.io/archimedes79/ai_graph:latest
+docker run -p 127.0.0.1:8000:8000 -v ./data:/app/data ghcr.io/archimedes79/ai_graph:latest
 ```
 
 A tagged release (`vX.Y.Z`) additionally publishes that version and its `X.Y`/`X`
@@ -141,7 +147,10 @@ It runs in its own process, started with Node's permission system on: files stay
 readable and writable, because that is most of what a body is for, while starting
 other programs, loading native addons, spawning workers and opening a debugger port
 are refused. The network is not covered — Node has no flag for it — so a body can
-still reach out. `engine/src/host/sandbox.test.ts` asserts the policy.
+still reach out. Its environment leaves out every variable named like a key, a token or
+a password, so an `OPENAI_API_KEY` set for the engine is not a body's to read; a file
+is, though, `ai-settings.json` included. `engine/src/host/sandbox.test.ts` asserts the
+policy.
 
 ## Tests
 

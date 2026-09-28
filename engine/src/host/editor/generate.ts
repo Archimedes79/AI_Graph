@@ -124,13 +124,26 @@ const SYSTEMS: Record<PromptKind, string> = {
     + 'it. Output the data in one fenced block, and nothing the request does not ask for.',
 };
 
-export function firstCodeBlock(text: string): string {
-  // Any info string (`javascript `, `js title="x"`, `c++`), Windows line ends,
-  // and a close at the start of a line: code that writes "```" into a string
-  // does not end its own block there. A close mid-line only when there is none.
+/**
+ * A fenced block after any info string (`javascript `, `js title="x"`, `c++`),
+ * closed at the start of a line by a fence at least as long as the one that
+ * opened it: code that writes "```" into a string does not end its own block
+ * there, and a ```json example in instructions fenced with four backticks does
+ * not end theirs.
+ */
+const FENCED = /(?<!`)(`{3,})[^\n`]*\n([\s\S]*?)\n[ \t]*\1`*/;
+/** The same closed mid-line: only where no block is closed at the start of one. */
+const FENCED_MID_LINE = /(?<!`)(`{3,})[^\n`]*\n([\s\S]*?)\1`*/;
+
+/** An answer's first fenced block, Windows line ends and all, and what the answer says after it. */
+function firstBlock(text: string): { code: string; after: string } | undefined {
   const plain = text.replace(/\r\n/g, '\n');
-  const block = /```[^\n`]*\n([\s\S]*?)\n[ \t]*```/.exec(plain) ?? /```[^\n`]*\n([\s\S]*?)```/.exec(plain);
-  return block?.[1].trim() ?? '';
+  const block = FENCED.exec(plain) ?? FENCED_MID_LINE.exec(plain);
+  return block ? { code: block[2].trim(), after: plain.slice(block.index + block[0].length).trim() } : undefined;
+}
+
+export function firstCodeBlock(text: string): string {
+  return firstBlock(text)?.code ?? '';
 }
 
 /** The file a model wrote, out of its answer: its first fenced block, or the whole answer where it wrote none. */
@@ -138,9 +151,9 @@ function fileIn(reply: string): string {
   return firstCodeBlock(reply) || reply.trim();
 }
 
-/** Every fenced block of an answer, in order, each closed at the start of a line (`firstCodeBlock`). */
+/** Every fenced block of an answer, in order, each closed at the start of a line (`FENCED`). */
 function codeBlocks(reply: string): string[] {
-  return [...reply.replace(/\r\n/g, '\n').matchAll(/```[^\n`]*\n([\s\S]*?)\n[ \t]*```/g)].map((match) => match[1].trim());
+  return [...reply.replace(/\r\n/g, '\n').matchAll(new RegExp(FENCED, 'g'))].map((match) => match[2].trim());
 }
 
 /** Said last in a request to change a body, so the node's text changes with it. */
@@ -167,6 +180,8 @@ interface Shape {
   /** A list arrives one item at a time. */
   perItem: boolean;
   definitions: Definitions | undefined;
+  /** The body is kept as JSON, the element says (`TextFile.json`): a data node holding structure. */
+  json: boolean;
 }
 
 const quoted = (ids: string[]): string => ids.map((id) => `"${id}"`).join(', ');
@@ -213,7 +228,7 @@ const EMPTY_INPUT = 'Handle an input that is missing or empty as well as a full 
  * frame that said "and nothing else" would forbid; *asked*: an output.js may
  * come back after the body too (`OutputAsked`).
  */
-function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boolean, asked: OutputAsked): string {
+function frame(kind: PromptKind, shape: Shape, restating: boolean, asked: OutputAsked): string {
   const { inputs, outputs, wired, reads, perItem } = shape;
   const lines = ['## How to answer'];
   switch (kind) {
@@ -285,7 +300,7 @@ function frame(kind: PromptKind, shape: Shape, node: GraphNode, restating: boole
     }
     case 'data': {
       const after = restating ? ' -- then, after the block, the node\'s text restated as asked above, and nothing else' : ', and nothing else';
-      lines.push(node.config.data_format === 'structure'
+      lines.push(shape.json
         ? `Answer with what the node holds, in one \`\`\`json block, as plain JSON${after}.`
         : `Answer with what the node holds, in one \`\`\`text block, the text itself${after}.`);
       break;
@@ -632,6 +647,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     reads: filePorts(node, deps.elements),
     perItem: runsPerItem(node, element.batchMode(node)),
     definitions,
+    json: element.texts(node).some((text) => text.field === spec.fields.body && text.json === true),
   };
   const own = (node.config.prompts as Partial<Record<string, string>> | undefined)?.[write];
   const template = own?.trim() ? own : STANDARD_PROMPTS[kind];
@@ -651,7 +667,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     const held = left.output ? { ...shape, outputs: definitionKeys(left.output), definitions: { input: shape.definitions?.input ?? '', output: left.output } } : shape;
     return [
       fillPrompt(template, left.description || left.output ? variables({ ...request, node: now }, shape.reads) : values),
-      evidence, frame(kind, held, now, !!request.refine?.change?.trim(), asked),
+      evidence, frame(kind, held, !!request.refine?.change?.trim(), asked),
     ].filter(Boolean).join('\n\n');
   };
 
@@ -700,7 +716,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     const reply = await ai.complete({ prompt: prompt(evidence, asked), system: SYSTEMS[kind], ...deps.target });
     const { description, rest } = descriptionIn(reply);
     const text = fileIn(rest);
-    if (kind === 'data' && node.config.data_format === 'structure') {
+    if (shape.json) {
       try {
         JSON.parse(text);
       } catch (error) {
@@ -837,8 +853,10 @@ export async function generateGraph(
   } catch (error) {
     throw new GenerationFailed(error instanceof Error ? error.message : String(error), calls);
   }
-  const fenced = /```json\n([\s\S]*?)```/.exec(raw);
-  const candidate = fenced ? fenced[1].trim() : raw.trim();
+  // Read as every other answer is: a code node's body in the document may
+  // write "```" into a string, and the block does not end there.
+  const fenced = firstBlock(raw);
+  const candidate = fenced ? fenced.code : raw.trim();
   let graph: unknown;
   try {
     graph = JSON.parse(candidate);
@@ -848,7 +866,7 @@ export async function generateGraph(
   }
   return {
     graph: current ? keptFrom(current, graph, exchangeEntry(`Change of the graph: ${description}`, calls, new Date())) : graph,
-    explanation: fenced ? raw.slice(fenced.index + fenced[0].length).trim() : '',
+    explanation: fenced?.after ?? '',
     calls,
   };
 }

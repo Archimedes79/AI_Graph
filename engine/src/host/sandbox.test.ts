@@ -39,6 +39,18 @@ describe('a code body', () => {
     `;
     await expect(nodeCode.run(body, {})).rejects.toThrow(/ERR_ACCESS_DENIED|not allowed|ERR_REQUIRE|Error/);
   });
+
+  it('is handed no key of the process that runs it: it asks through node.llm', async () => {
+    // Fake values, set for this test only: what matters is which names arrive.
+    const planted = { OPENAI_API_KEY: 'sk-planted', GITHUB_TOKEN: 'ghp-planted', SERVICE_PASSWORD: 'planted', AI_GRAPH_PLAIN: 'kept' };
+    Object.assign(process.env, planted);
+    try {
+      const body = `export function run() { return { names: Object.keys(process.env).filter((name) => ${JSON.stringify(Object.keys(planted))}.includes(name)) }; }`;
+      expect(await nodeCode.run(body, {})).toEqual({ names: ['AI_GRAPH_PLAIN'] });
+    } finally {
+      for (const name of Object.keys(planted)) delete process.env[name];
+    }
+  });
 });
 
 describe('how a body may be written', () => {

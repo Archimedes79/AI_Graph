@@ -1,8 +1,10 @@
 services:
   ai-graph:
     build: .
+    # On this machine only: the editor runs code, writes files and keeps keys for
+    # whoever reaches it, and asks nobody who they are.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}

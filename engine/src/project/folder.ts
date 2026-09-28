@@ -43,7 +43,7 @@ import { parseGraph, type Graph, type GraphNode } from '../graph.ts';
 import { NESTED_GRAPH_FIELD, type TextChange } from './changes.ts';
 import { registry } from '../elements/registry.ts';
 import { describeInterface, INTERFACE_FILE } from './interfaceFile.ts';
-import { FLOW_FILE, flowOf, graphFrom } from './flow.ts';
+import { FLOW_FILE, flowOf, graphFrom, sorted } from './flow.ts';
 import { folderName } from './names.ts';
 import { NotAGraph, NotFound } from '../errors.ts';
 
@@ -230,11 +230,13 @@ function heldIn(content: string, text: ProjectText, path: string): { value: unkn
   }
 }
 
-/** Nothing written: no file for it. A JSON value that is an empty object says nothing either. */
+/**
+ * Nothing written: no file for it, or its stub. An empty record is not
+ * nothing -- a data node's map nobody has put anything in yet -- and taken for
+ * it, it came back null.
+ */
 function isBlank(value: unknown): boolean {
-  if (value === undefined || value === null) return true;
-  if (typeof value === 'string') return !value.trim();
-  return typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0;
+  return value === undefined || value === null || (typeof value === 'string' && !value.trim());
 }
 
 // ---------------------------------------------------------------------------
@@ -398,11 +400,6 @@ export async function loadGraph(path: string, guard?: Guard): Promise<Graph> {
 // ---------------------------------------------------------------------------
 // Writing
 // ---------------------------------------------------------------------------
-
-/** Keys in one order, so saving an unchanged graph changes nothing in the file. */
-function sorted<T extends Record<string, unknown>>(record: T): T {
-  return Object.fromEntries(Object.keys(record).sort().map((key) => [key, record[key]])) as T;
-}
 
 /**
  * Write *graph* as the project folder *folder*.
@@ -643,18 +640,21 @@ export async function nodeFileOf(folder: string, nodeId: string, file?: string):
 // What changed on disk
 // ---------------------------------------------------------------------------
 
-export type { TextChange };
-
 /**
  * The texts of the project in *folder* whose files changed since this process
  * last read or wrote them -- edited in another editor, restored by git,
  * deleted -- with what they say now. Each is then taken as seen: asking twice
  * reports it once. Only texts are watched; the flow, or a node's settings or
  * ports, changing under an open editor is a reload, not a patch.
+ *
+ * Taken as seen only once every one has been read, as `changedUnder` does: a
+ * JSON text caught half-written throws, and a change marked seen on the way to
+ * that was never handed over -- nor refused by the next save, which wrote over it.
  */
 export async function changesOnDisk(folder: string): Promise<TextChange[]> {
   const { graph } = await readStructure(folder);
   const changes: TextChange[] = [];
+  const looked = new Map<string, string>();
   for (const text of projectTexts(graph)) {
     const path = join(folder, text.path);
     const known = seen.get(path);
@@ -662,7 +662,7 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
     if (known === undefined || known === now) continue;
     const held = now === ABSENT ? undefined : heldIn(await readFile(path, 'utf8'), text, text.path);
     const value = held ? held.value : text.json ? null : '';
-    seen.set(path, now);
+    looked.set(path, now);
     changes.push({ node_id: text.node_id, field: text.field, value });
   }
   // A node that holds a graph: anything changed in its folder is that graph
@@ -684,6 +684,7 @@ export async function changesOnDisk(folder: string): Promise<TextChange[]> {
       if (!(error instanceof NotAGraph || error instanceof NotFound)) throw error;
     }
   }
+  for (const [path, signed] of looked) seen.set(path, signed);
   return changes;
 }
 

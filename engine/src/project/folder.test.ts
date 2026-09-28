@@ -318,6 +318,21 @@ describe('a project folder', () => {
     expect(read.nodes.map((node) => node.config.data_value)).toEqual([{ count: 2, names: ['Ada'] }, 'Line one.\nLine two.', '{\n  "count": 3\n}']);
   });
 
+  it('reads an empty record back as the record it is, and a structure holding nothing as nothing', async () => {
+    // A map nobody has put anything in yet came back null, which `inputs.input.seen` fails on.
+    const data = (id: string, value: unknown) => ({
+      id, node_type: 'data', label: id, inputs: [port('input', 'input')], outputs: [port('output', 'output')],
+      config: { data_format: 'structure', data_value: value },
+    });
+    await writeProject(dir, parseGraph({ metadata: { name: 'Empty' }, nodes: [data('seen', {}), data('fresh', null)], edges: [] }));
+    expect(await text('nodes/seen/data.json')).toBe('{}\n');
+    expect(await text('nodes/fresh/data.json')).toBe('null\n');
+    forgetSeen();
+    const read = await readProject(dir);
+    expect(read.nodes[0].config.data_value).toEqual({});
+    expect(read.nodes[1].config.data_value).toBeUndefined();
+  });
+
   it('reads a count a run left in a text node back as a count: the node holds structure from then on', async () => {
     // A counter: a data node, kept as text as a new one is, and a code node adding one.
     const graph = parseGraph({
@@ -571,6 +586,18 @@ describe('two editors on one folder', () => {
     // A change taken in is no conflict for the next save.
     const graph = await readProject(dir);
     await expect(writeProject(dir, graph)).resolves.toBeUndefined();
+  });
+
+  it('hands over a change that came with a file caught half-written, once that file is whole', async () => {
+    // Marked seen and never handed over, code.js's change was not refused by
+    // the next save either: the editor wrote its old code over it.
+    await writeProject(dir, sample());
+    await touch(join(dir, 'nodes/count/code.js'), 'function run() { return { total: 7 }; }\n');
+    await touch(join(dir, 'page/page.json'), '[{ "id": "chart", ');
+    await expect(changesOnDisk(dir)).rejects.toThrow(NotAGraph);
+
+    await touch(join(dir, 'page/page.json'), '[{ "id": "chart", "kind": "plot_window", "label": "Sales" }]\n');
+    expect((await changesOnDisk(dir)).map((change) => change.field)).toEqual(['code', 'gui_widgets']);
   });
 
   it('does not overwrite a node\'s interface changed outside since it was read', async () => {

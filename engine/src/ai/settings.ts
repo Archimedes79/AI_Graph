@@ -19,7 +19,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_SETTINGS, settingsFromEnv, type ProviderSettings } from './providers.ts';
 import type { McpServerConfig } from './mcp.ts';
@@ -40,14 +40,38 @@ export function candidatePaths(
   env: Record<string, string | undefined> = process.env,
 ): string[] {
   if (env.AI_GRAPH_SETTINGS) return [env.AI_GRAPH_SETTINGS];
-  const beside = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..');
   return [...new Set([
     join(cwd, FILENAME),
     // Beside the bundle, which is the deployed equivalent of a config file:
     // a recipient drops one next to `run.sh` and never sets a variable.
-    join(beside, FILENAME),
+    join(installFolder(), FILENAME),
     join(homedir(), '.ai-graph', 'settings.json'),
   ])];
+}
+
+/**
+ * The folder the engine came in, with its launchers: the one holding
+ * `engine/` -- a checkout, the downloadable package, a bundle. Found by name,
+ * not counted: a bundle keeps `engine/src`'s files in `engine/` itself, and
+ * four folders up from here was the folder above the bundle.
+ */
+export function installFolder(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  while (basename(dir) !== 'engine' && dirname(dir) !== dir) dir = dirname(dir);
+  return dirname(dir);
+}
+
+/**
+ * The file that is in use, or would be written.
+ *
+ * `AI_GRAPH_SETTINGS` wins outright, whether or not the file exists yet: "use
+ * this file" has to hold for the first write too, or a save silently lands
+ * somewhere else. Otherwise the first candidate that exists, else the first
+ * candidate, which is where a save creates it.
+ */
+export function settingsPath(cwd = process.cwd(), env: Record<string, string | undefined> = process.env): string {
+  const candidates = candidatePaths(cwd, env);
+  return candidates.find((path) => existsSync(path)) ?? candidates[0];
 }
 
 export interface SettingsFile {
@@ -91,33 +115,28 @@ export function readSettingsFile(path: string): SettingsFile {
   }
 }
 
-/** The first settings file that exists, as provider settings, or nothing. */
+/** The settings file in use, as provider settings, or nothing. */
 export function fromFile(
   cwd = process.cwd(),
   env: Record<string, string | undefined> = process.env,
 ): Partial<ProviderSettings> {
-  for (const path of candidatePaths(cwd, env)) {
-    if (!existsSync(path)) continue;
-    const parsed = readSettingsFile(path);
-    // Malformed reads as empty, and empty means "nothing configured here" --
-    // not "keys and endpoints, both blank", which would look configured.
-    if (Object.keys(parsed).length === 0) return {};
-    return {
-      ...(parsed.ai?.provider ? { provider: parsed.ai.provider } : {}),
-      ...(parsed.ai?.model ? { model: parsed.ai.model } : {}),
-      apiKeys: parsed.api_keys ?? {},
-      // A blank address is no address: the provider's own default stands.
-      endpoints: Object.fromEntries(Object.entries(parsed.endpoints ?? {}).filter(([, url]) => String(url ?? '').trim())),
-    };
-  }
-  return {};
+  const parsed = readSettingsFile(settingsPath(cwd, env));
+  // Missing and malformed read as empty, and empty means "nothing configured
+  // here" -- not "keys and endpoints, both blank", which would look configured.
+  if (Object.keys(parsed).length === 0) return {};
+  return {
+    apiKeys: parsed.api_keys ?? {},
+    // A blank address is no address: the provider's own default stands.
+    endpoints: Object.fromEntries(Object.entries(parsed.endpoints ?? {}).filter(([, url]) => String(url ?? '').trim())),
+  };
 }
 
 /**
  * The file, then the environment on top of it.
  *
- * An explicitly set variable wins, which is what makes `AI_GRAPH_AI_MODEL=x`
- * on one command a usable thing to do without editing the file.
+ * An explicitly set variable wins, which is what makes `OLLAMA_BASE_URL=x`
+ * on one command a usable thing to do without editing the file. Which model
+ * to ask is not here: that is the one AI setting (`aiSetting`).
  */
 export function configuredSettings(
   env: Record<string, string | undefined> = process.env,
@@ -215,22 +234,24 @@ export async function probeLocal(
  * 404 that read like a broken endpoint.
  */
 export async function aiSetting(cwd = process.cwd(), env: Env = process.env): Promise<ModelChoice> {
-  const configured = configuredSettings(env, cwd);
-  let provider = configured.provider ?? '';
+  // Each of the two on its own: a variable naming the model leaves the file's provider standing.
+  const saved = readSettingsFile(settingsPath(cwd, env)).ai;
+  let provider = env.AI_GRAPH_AI_PROVIDER || saved?.provider || '';
+  const model = env.AI_GRAPH_AI_MODEL || saved?.model || '';
   if (!provider) {
     for (const local of LOCAL_PROVIDERS) {
       if (await probeLocal(local, { cwd, env })) { provider = local; break; }
     }
   }
-  provider ||= DEFAULT_SETTINGS.provider;
-  if (configured.model) return { provider, model: configured.model };
+  provider ||= 'ollama';
+  if (model) return { provider, model };
   const served = await probeLocal(provider, { cwd, env });
   return { provider, model: served?.[0] ?? DEFAULT_MODELS[provider] ?? '' };
 }
 
 /**
- * The tool servers this machine has configured, from the first settings file
- * that exists -- the same file the key comes from, found the same way.
+ * The tool servers this machine has configured, from the settings file in
+ * use -- the same file the key comes from, found the same way.
  *
  * This is the only source there is, and that is the point of it. A graph names
  * a tool server; what the name *starts* is written here, by whoever owns the
@@ -248,19 +269,15 @@ export function configuredMcpServers(
   env: Record<string, string | undefined> = process.env,
   cwd = process.cwd(),
 ): Record<string, McpServerConfig> {
-  for (const path of candidatePaths(cwd, env)) {
-    if (!existsSync(path)) continue;
-    const listed = readSettingsFile(path).mcp_servers;
-    if (!listed || typeof listed !== 'object' || Array.isArray(listed)) return {};
+  const listed = readSettingsFile(settingsPath(cwd, env)).mcp_servers;
+  if (!listed || typeof listed !== 'object' || Array.isArray(listed)) return {};
 
-    const servers: Record<string, McpServerConfig> = {};
-    for (const [name, entry] of Object.entries(listed)) {
-      const { command, url } = (entry ?? {}) as { command?: unknown; url?: unknown };
-      if ((typeof command === 'string' && command) || (typeof url === 'string' && url)) servers[name] = entry;
-    }
-    return servers;
+  const servers: Record<string, McpServerConfig> = {};
+  for (const [name, entry] of Object.entries(listed)) {
+    const { command, url } = (entry ?? {}) as { command?: unknown; url?: unknown };
+    if ((typeof command === 'string' && command) || (typeof url === 'string' && url)) servers[name] = entry;
   }
-  return {};
+  return servers;
 }
 
 export { FILENAME as SETTINGS_FILENAME };

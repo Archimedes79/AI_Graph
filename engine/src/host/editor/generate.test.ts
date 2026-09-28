@@ -480,6 +480,11 @@ describe('the code in a model\'s answer', () => {
     const code = 'function run() {\n  return { md: "' + fence + 'json\\n{}\\n' + fence + '" };\n}';
     expect(firstCodeBlock(`${fence}js\n${code}\n${fence}`)).toBe(code);
   });
+
+  it('does not end at a shorter fence inside it: instructions fenced with four hold an example fenced with three', () => {
+    const instructions = `Answer with the figure, like this:\n${fence}json\n{ "kind": "bars" }\n${fence}\nNothing else.`;
+    expect(firstCodeBlock(`${fence}\`md\n${instructions}\n${fence}\`\nDone.`)).toBe(instructions);
+  });
 });
 
 describe('a preview', () => {
@@ -518,6 +523,14 @@ describe('a whole graph', () => {
     const ai = scripted(['```json\n{"metadata":{"name":"g"},"nodes":[],"edges":[]}\n```\nDone.']);
     const reply = await generateGraph('anything', { ai, target });
     expect(reply.graph).toEqual({ metadata: { name: 'g' }, nodes: [], edges: [] });
+    expect(reply.explanation).toBe('Done.');
+  });
+
+  it('does not end the document at a fence a code node writes into a string', async () => {
+    const document = { metadata: { name: 'g' }, nodes: [{ id: 'c', node_type: 'code', config: { code: 'const md = "```js";' } }], edges: [] };
+    const ai = scripted([`\`\`\`json\n${JSON.stringify(document, null, 2)}\n\`\`\`\nDone.`]);
+    const reply = await generateGraph('anything', { ai, target });
+    expect(reply.graph).toEqual(document);
     expect(reply.explanation).toBe('Done.');
   });
 

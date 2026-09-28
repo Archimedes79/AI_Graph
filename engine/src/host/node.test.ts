@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { nodeCode, nodeFiles } from './node.ts';
+import { nodeCode, nodeFiles, nodeRuntime } from './node.ts';
+import { aiSetting } from '../ai/settings.ts';
 
 describe('writing a file', () => {
   it('makes the folders it goes into, as an output writing into a new folder needs', async () => {
@@ -125,4 +126,36 @@ describe('a body that does not keep to the protocol', () => {
     const body = 'function run() { return new Promise(() => {}); }';
     await expect(nodeCode.run(body, {}, undefined, { calls: { llm: async () => 'x' } })).rejects.toThrow();
   });
+});
+
+/**
+ * The one AI setting is read once, by `aiSetting`, and a call is sent where
+ * it says -- or where the node pins. The provider layer used to read the
+ * setting's model again and hand it to a provider the setting had not chosen.
+ */
+describe('where a model call goes', () => {
+  it('does not hand a provider a node pins, with no model named, the model the one AI setting names for another', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-one-setting-'));
+    const file = join(dir, 'ai-settings.json');
+    // A model and no provider: the provider is the local one that answers -- LM Studio, here -- and the model is its.
+    await writeFile(file, JSON.stringify({ ai: { model: 'the-settings-model' } }));
+    for (const [name, value] of Object.entries({ AI_GRAPH_SETTINGS: file, AI_GRAPH_AI_PROVIDER: '', AI_GRAPH_AI_MODEL: '', OLLAMA_BASE_URL: '', LMSTUDIO_BASE_URL: '' })) {
+      vi.stubEnv(name, value);
+    }
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(String(url));
+      if (String(url).endsWith('/v1/models')) return new Response(JSON.stringify({ data: [{ id: 'loaded' }] }));
+      throw new Error(`nothing answers at ${url}`);
+    });
+    try {
+      expect(await aiSetting()).toEqual({ provider: 'lmstudio', model: 'the-settings-model' });
+      await expect(nodeRuntime().ai.complete({ prompt: 'x', provider: 'ollama' })).rejects.toThrow("No model configured for provider 'ollama'");
+      expect(asked.filter((url) => url.includes('/api/chat'))).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

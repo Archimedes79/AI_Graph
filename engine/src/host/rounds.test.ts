@@ -46,6 +46,23 @@ describe('Rounds', () => {
     await expect(rounds.turn(named('a'), async () => { throw new Error('no'); })).rejects.toThrow('no');
     expect(await rounds.turn(named('a'), async () => 'next')).toBe('next');
   });
+
+  it('lets a round stopped while it waits go at once, and the next in line still wait for the one ahead', async () => {
+    const rounds = new Rounds();
+    let release = (): void => {};
+    const ahead = rounds.turn(named('a'), () => new Promise<void>((done) => { release = done; }));
+    const stop = new AbortController();
+    const seen: string[] = [];
+    const stopped = rounds.turn(named('a'), async () => { seen.push('stopped'); }, stop.signal);
+    const next = rounds.turn(named('a'), async () => { seen.push('next'); });
+    stop.abort();
+    await expect(stopped).rejects.toThrow('Stopped.');
+    await wait(20);
+    expect(seen).toEqual([]);
+    release();
+    await Promise.all([ahead, next]);
+    expect(seen).toEqual(['next']);
+  });
 });
 
 describe('RunBoard', () => {
@@ -65,19 +82,4 @@ describe('RunBoard', () => {
     expect(ended(second) - ended(first)).toBeGreaterThanOrEqual(250);
   }, 30_000);
 
-  it('stops a whole run a caller is waiting for, and waits for it, when everything stops', async () => {
-    // What `/api/execute/` starts, and a shutdown must not leave running.
-    const SLOW = 'async function run() { await new Promise((r) => setTimeout(r, 3000)); return { done: "finished anyway" }; }';
-    const runs = new RunBoard();
-    const whole = runs.whole(parseGraph({
-      metadata: { name: 'whole' },
-      nodes: [{ id: 'slow', node_type: 'code', inputs: [], outputs: [{ id: 'done', name: 'done' }], config: { code: SLOW } }],
-      edges: [],
-    }));
-    await wait(300);
-    expect(await runs.stopAll()).toBe(1);
-    const result = await whole;
-    expect(result.status).toBe('cancelled');
-    expect(JSON.stringify(result)).not.toContain('finished anyway');
-  }, 30_000);
 });

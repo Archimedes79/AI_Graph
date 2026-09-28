@@ -441,8 +441,10 @@ other knows, it imports it or replays its result:
    it, and `shutdown()` stops them in that order — what makes work before what carries it:
    the schedule, the runs (`RunBoard.stopAll`), then HTTP, which meanwhile still answers a
    page watching its run and refuses anything new with 503. Each step gets what is left of
-   eight seconds; what would not stop is named. A scheduled round that was cut off is not
-   recorded, so `<graph>.last-run.json` keeps the last round that finished. The CLI maps
+   eight seconds; what would not stop is named. A round of the clock still waiting behind a
+   page's run goes at once (`Rounds.turn` is handed its signal). A scheduled round that was
+   cut off is not recorded, so the file the last round is kept in keeps the last one that
+   finished. The CLI maps
    Ctrl+C, SIGTERM, SIGHUP and Ctrl+Break to it (`untilStopped`); a second signal exits at
    once. `serve()` itself installs no signal handler: it is a library function.
 
@@ -662,25 +664,34 @@ or a page that has them can do the same.
 
 ## Security boundaries
 
-- Everything binds to loopback; file browsing and a file chip's opening of a node's file in
-  the person's own editor switch off otherwise.
-- The server answers its own page, not every page in the browser: on loopback a request must
-  name 127.0.0.1, localhost or [::1] with the server's port (no DNS rebinding); an API call
-  that says where it comes from must come from the server's own origin, one the browser
-  marks cross-site is refused, and a body is read only when it is sent as `application/json`
-  (`foreignRequest` and `readJson` in `host/http.ts`).
+- Everything binds to loopback. Nothing asks who is calling: bound wider -- a container's
+  `0.0.0.0` -- every route of the table is open to whoever reaches the port, which is why
+  the container is published on the host's loopback only (`docker-compose.yml`). File
+  browsing and a file chip's opening of a node's file in the person's own editor switch off
+  on such a bind.
+- The server answers its own page, not every page in the browser: a request must name
+  127.0.0.1, localhost or [::1] (no DNS rebinding) -- with the server's port on loopback;
+  bound wider, with any port, or the address it was bound to, or a name
+  `AI_GRAPH_ALLOWED_HOSTS` lists. An API call that says where it comes from must come
+  from the server's own origin, one the browser marks cross-site is refused, and a body is
+  read only when it is sent as `application/json` (`foreignRequest` and `readJson` in
+  `host/http.ts`).
 - The `for` column of the contract is the line between a deployed tool and the editor: a
   deployed tool answers its graph, run/watch/stop, a file picker and a read-only view of
   its AI settings — no generation, no editing, no writing settings.
 - A code body runs in a separate Node process under `--permission`: files yes; child
   processes, addons, workers no. The network is **not** closed (Node has no flag for it).
-  It never holds a key: a model call is *asked for* (`node.llm`) and made by the process
-  that started it, at most 25 times each time it runs. A `code.js` from a folder somebody
-  handed you is never run in the trusted process.
+  Its process is handed no key: its environment is the engine's without a provider's
+  credential or anything named like one (`bodyEnvironment` in `host/node.ts`), and a model
+  call is *asked for* (`node.llm`) and made by the process that started it, at most 25
+  times each time it runs. That is the process, not the disk: a body reads files, and
+  `ai-settings.json`, keys and all, is a file. A `code.js` from a folder somebody handed
+  you is never run in the trusted process.
 - A graph can *name* an MCP tool server; only `ai-settings.json` can say which program a
   name starts. A URL is called directly.
-- The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root, writes
-  only `.json` graphs, never reads settings, and filters keys out of everything it returns.
+- The MCP **server** (`host/editor/mcpServer.ts`) confines every path to one root and takes
+  only a `.json` path -- a graph file, or a project's `flow.json`, whose nodes' files are
+  written with it --, never reads settings, and filters keys out of everything it returns.
 
 ## Keeping it clean
 
@@ -750,6 +761,7 @@ There are no import cycles through values, and none between the engine and the e
   context, hands back its last outputs when its definition and every input (files already
   read) are unchanged ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)). A node with
   nothing wired in reads the outside world and always runs; a whole-graph Run reuses nothing.
-- **A scheduled tool remembers its last round across restarts**, in
-  `<graph>.last-run.json` beside the graph. It is still a clock around a run: no history
+- **A scheduled tool remembers its last round across restarts**, in `flow.last-run.json`
+  inside a project folder, or `<file>.last-run.json` beside a graph file -- a bundle's
+  `graph.json.last-run.json`. It is still a clock around a run: no history
   and no ingest endpoint, because a monitoring system is a different product.

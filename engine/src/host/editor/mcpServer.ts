@@ -28,8 +28,10 @@
 //      refusal. Checked twice: as written, and again where the path *really*
 //      leads once links are followed, because a link inside the root is a door
 //      out of it.
-//   2. Only `.json` is read or written, and never under a dot-folder or
+//   2. Only a `.json` path is taken, and never under a dot-folder or
 //      `node_modules`: what `list_graphs` would not show, nothing else touches.
+//      A project is named by its `flow.json`, and its nodes' files -- code.js,
+//      prompt.md, history.md -- are read and written with it, inside the root.
 //   3. A file that exists is overwritten only if it is already a graph. That is
 //      what stops `save_graph` from being "write any JSON file" -- it cannot
 //      replace `package.json`, because `package.json` has no `nodes`.
@@ -64,7 +66,7 @@ import { registry } from '../../elements/registry.ts';
 import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
 import { aiSetting, candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
 import { message } from '../http.ts';
-import { nodeRuntime } from '../node.ts';
+import { nodeRuntime, SECRET_NAME } from '../node.ts';
 import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { withoutAuthoring } from '../../authoring/handedOn.ts';
@@ -160,7 +162,7 @@ function mustBeInside(root: string, full: string, given: string): void {
     throw new Refused(`"${given}" is under a dot-folder, node_modules or dist. Graphs do not live there, and this server does not go there.`);
   }
   if (extname(full).toLowerCase() !== '.json') {
-    throw new Refused(`"${given}" is not a .json file. A graph is a .json file, and that is the only kind this server reads or writes.`);
+    throw new Refused(`"${given}" is not a .json file. A graph is a .json file -- a project is named by its flow.json -- and that is the only path this server takes.`);
   }
   const settings = candidatePaths(root).map((path) => fold(resolve(path)));
   if (basename(full).toLowerCase() === SETTINGS_FILENAME || settings.includes(fold(full))) {
@@ -243,8 +245,9 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'save_graph',
-    description: 'Validate a graph and write it as pretty JSON. Refuses, and returns the problems, when validation finds '
-      + 'any. Only .json files inside the server\'s folder; an existing file is replaced only if it is already a graph.',
+    description: 'Validate a graph and write it: as one pretty-printed .json file, or -- given a project\'s flow.json -- as that '
+      + 'project, each node\'s files in its folder. Refuses, and returns the problems, when validation finds any. Only .json '
+      + 'paths inside the server\'s folder; an existing file is replaced only if it is already a graph.',
     parameters: {
       type: 'object',
       properties: {
@@ -881,14 +884,13 @@ export function serveStdio(
 /** Every string on this machine that a result must not contain. Read fresh each time: keys change while a server runs. */
 function machineSecrets(): string[] {
   const found: string[] = Object.values(configuredSettings().apiKeys ?? {});
-  const secretive = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH/i;
   for (const [name, value] of Object.entries(process.env)) {
-    if (value && secretive.test(name)) found.push(value);
+    if (value && SECRET_NAME.test(name)) found.push(value);
   }
   for (const server of Object.values(configuredMcpServers())) {
     if ('headers' in server) found.push(...Object.values(server.headers ?? {}));
     if ('env' in server) {
-      for (const [name, value] of Object.entries(server.env ?? {})) if (secretive.test(name)) found.push(value);
+      for (const [name, value] of Object.entries(server.env ?? {})) if (SECRET_NAME.test(name)) found.push(value);
     }
   }
   return found.filter((value) => typeof value === 'string' && value.length >= 8);

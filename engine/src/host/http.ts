@@ -131,30 +131,54 @@ function originOf(address: string): string | null {
   }
 }
 
+/** *name* as a URL says it -- lower case, an IPv6 address in brackets -- or null when it names nothing. */
+export function hostnameOf(name: string): string | null {
+  try {
+    return new URL(`http://${name.includes(':') && !name.startsWith('[') ? `[${name}]` : name}`).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The names a server bound to *host* answers as, besides this machine's own:
+ * the address it was bound to, and each one `AI_GRAPH_ALLOWED_HOSTS` lists
+ * (comma-separated) -- a reverse proxy's, a machine's name on the network.
+ * Said outright, because nothing else tells a name someone chose from the
+ * name of a page that pointed its own site at this address.
+ */
+export function namesFor(host: string, env: Record<string, string | undefined> = process.env): Set<string> {
+  const listed = (env.AI_GRAPH_ALLOWED_HOSTS ?? '').split(',').map((name) => name.trim()).filter(Boolean);
+  return new Set([host, ...listed].map(hostnameOf).filter((name): name is string => name !== null));
+}
+
 /**
  * Why a request did not come from this server's own page, or null when it did.
  *
  * The server runs code, writes files and holds keys for whoever is at this
  * machine, and a web page open in the same browser can address it too. So:
- * on loopback the request must name this machine and this port (a page that
- * renamed its own site to 127.0.0.1 -- DNS rebinding -- still says its own
- * name here); a call to the API that says where it comes from must come from
- * this server's own origin; and one the browser marks cross-site is refused.
- * Served on the network (`--host 0.0.0.0`), any name reaches it, and the origin
- * must be the one that was asked for.
+ * the request must name this machine (a page that renamed its own site to
+ * 127.0.0.1 -- DNS rebinding -- still says its own name here), on loopback
+ * with this port; a call to the API that says where it comes from must come
+ * from this server's own origin; and one the browser marks cross-site is
+ * refused. Served beyond loopback (`--host 0.0.0.0`, a container's), a name
+ * is this machine's, the address it was bound to or one of *names*, on any
+ * port: a container is reached through a port its host chose.
  */
 export function foreignRequest(
   request: IncomingMessage,
-  server: { loopback: boolean; port: number },
+  server: { loopback: boolean; port: number; names: ReadonlySet<string> },
   api: boolean,
 ): string | null {
   const host = request.headers.host ?? '';
   const asked = originOf(`http://${host}`);
+  const url = asked ? new URL(asked) : null;
   if (server.loopback) {
-    const url = asked ? new URL(asked) : null;
     if (!url || !LOOPBACK_NAMES.has(url.hostname) || Number(url.port || 80) !== server.port) {
       return `This server answers only as localhost:${server.port}, not as "${host}".`;
     }
+  } else if (!url || !(LOOPBACK_NAMES.has(url.hostname) || server.names.has(url.hostname))) {
+    return `This server answers as localhost, not as "${host}". A name of its own goes in AI_GRAPH_ALLOWED_HOSTS.`;
   }
   if (!api) return null;
   const origin = request.headers.origin;

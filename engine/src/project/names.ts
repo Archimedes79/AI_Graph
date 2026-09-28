@@ -1,6 +1,6 @@
 // What an id is called on disk.
 //
-// Its own file so that whatever *describes* a project folder (`flowFile.ts`) and
+// Its own file so that whatever *describes* a project folder (`flow.ts`) and
 // whatever reads and writes one (`folder.ts`) name a node's folder the same way,
 // without the one importing the other.
 
