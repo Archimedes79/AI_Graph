@@ -20,6 +20,8 @@ import { nodeDescription, type Variable } from '../../authoring/prompts.ts';
 import { definitionsIn } from '../../authoring/definition.ts';
 import type { GraphNode, Port } from '../../graph.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
+import { runsPerItem } from '../../execution/batching.ts';
+import { registry } from '../../elements/registry.ts';
 import type { GenerateRequest } from '../api.ts';
 
 /** How much of each part is shown, in characters. */
@@ -55,9 +57,9 @@ function typeWords(port: Port, reads: boolean): string {
   return base === 'list' ? 'a list' : base;
 }
 
-/** Whether a list reaching *node* is handed over an item at a time, one call each. */
+/** Whether a list reaching *node* is handed over an item at a time, one call each: the executor's rule. */
 function perItem(node: GraphNode): boolean {
-  return node.config.batch_mode === 'per_item' && node.inputs.some((port) => port.multi);
+  return runsPerItem(node, registry.node(node.node_type)?.batchMode(node) ?? 'whole');
 }
 
 /**

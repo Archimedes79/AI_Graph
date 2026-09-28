@@ -34,6 +34,7 @@ import type { Generation } from '../../authoring/generation.ts';
 import { STANDARD_PROMPTS, fillPrompt, type PromptKind } from '../../authoring/prompts.ts';
 import { definitionExample, misfits, type Definitions } from '../../authoring/definition.ts';
 import { filePorts } from '../../execution/fileInputs.ts';
+import { runsPerItem } from '../../execution/batching.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import type { GraphNode } from '../../graph.ts';
 import { renderSkeleton } from './skeleton.ts';
@@ -502,7 +503,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
     outputs: node.outputs.map((port) => port.id).filter((id) => id !== ERROR_PORT),
     wired: Object.keys(request.output_targets ?? {}).filter((id) => id !== ERROR_PORT),
     reads: filePorts(node, deps.elements),
-    perItem: element.batchMode(node) === 'per_item',
+    perItem: runsPerItem(node, element.batchMode(node)),
     definitions,
   };
   const own = (node.config.prompts as Partial<Record<string, string>> | undefined)?.[write];
