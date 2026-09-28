@@ -3,6 +3,7 @@ import { InputPickerWidgetRunner } from './InputPickerWidgetRunner.ts';
 import { parseWidget } from '../../nodes/gui/GuiNodeRunner.ts';
 import { nodeFiles } from '../../../host/node.ts';
 import type { Runtime } from '../../Runtime.ts';
+import type { RawConfig } from '../../../graph.ts';
 
 /**
  * Exercised through `parseWidget`, the one place a real `Widget` is built,
@@ -37,5 +38,21 @@ describe('a file picker', () => {
     const element = new InputPickerWidgetRunner();
     const result = await element.execute(widget, {}, runtime);
     expect(String(result.w1_out)).toContain('x.csv');
+  });
+
+  it('is a question while nothing is chosen, and keeps the answer as what it holds', () => {
+    const element = new InputPickerWidgetRunner();
+    const unchosen = parseWidget({ id: 'w1', kind: 'input_picker', label: 'Folder', mode: 'directory' });
+    expect(element.runtimeRequirements(unchosen)).toEqual([{ label: 'Folder', kind: 'directory', direction: 'input', current: '' }]);
+    expect(element.runtimeRequirements(parseWidget({ id: 'w1', kind: 'input_picker', value: 'a.csv' }))).toEqual([]);
+    const stored: RawConfig = { id: 'w1', kind: 'input_picker' };
+    element.applyRuntimeValue(stored, '/data');
+    expect(stored.value).toBe('/data');
+  });
+
+  it('names the file it starts on, for a bundle to carry', () => {
+    const element = new InputPickerWidgetRunner();
+    expect(element.referencedPaths(parseWidget({ id: 'w1', kind: 'input_picker', value: 'data.csv' }))).toEqual(['data.csv']);
+    expect(element.referencedPaths(parseWidget({ id: 'w1', kind: 'input_picker' }))).toEqual([]);
   });
 });

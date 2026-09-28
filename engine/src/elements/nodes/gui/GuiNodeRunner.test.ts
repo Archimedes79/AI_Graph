@@ -120,3 +120,20 @@ describe('what a page starts', () => {
     expect(new GuiNodeRunner().eventPorts(starts)).toEqual(['go_out', 'q_out']);
   });
 });
+
+describe('what a page asks before it runs', () => {
+  it('is what its blocks ask, each under its own key -- and an answer goes only to a block that asked', () => {
+    // The page wrote an answer into whichever block had the id, a heading's
+    // text included; now each block says what it asks and keeps what it is told.
+    const asks = page([{ id: 'pick', kind: 'input_picker', label: 'Folder', mode: 'directory' }, { id: 'title', kind: 'text', value: 'Heading' }]);
+    const element = new GuiNodeRunner();
+    expect(element.runtimeRequirements(asks)).toEqual([{ key: 'page::pick', label: 'Folder', kind: 'directory', direction: 'input', current: '' }]);
+    element.applyRuntimeValue(asks, 'pick', '/data');
+    element.applyRuntimeValue(asks, 'title', 'written over');
+    expect(asks.config.gui_widgets).toEqual([
+      expect.objectContaining({ id: 'pick', value: '/data' }),
+      expect.objectContaining({ id: 'title', value: 'Heading' }),
+    ]);
+    expect(element.referencedPaths(asks)).toEqual(['/data']);
+  });
+});
