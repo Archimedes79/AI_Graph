@@ -3,7 +3,7 @@ import { errorText } from '@/api/errorText';
 import { ApiError, watchGeneration, type AICall } from '@/api/client';
 
 /** Said when ✨ was stopped: what it wrote before stays, what was on its way does not come. */
-export const STOPPED = '⏹ Stopped: what was still on its way is not written.';
+const STOPPED = '⏹ Stopped: what was still on its way is not written.';
 
 export interface GenerateOptions<T> {
   /**
