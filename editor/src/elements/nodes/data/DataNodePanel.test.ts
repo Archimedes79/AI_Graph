@@ -21,7 +21,8 @@ describe('a data node\'s dialog', () => {
     node.config.data_format = 'structure';
     node.config.data_value = { count: 2 };
     const html = panel(node);
-    const at = ['aria-label="What it should do"', 'aria-label="Kind"', 'aria-label="What it holds"', '>✨ Data</button>', 'data.json ↗', 'history.md ↗']
+    // Its ✨ Data row: the button, the prompt, the file's chip, and the box it is edited in -- the kind and the value.
+    const at = ['aria-label="What it should do"', '>✨ Data</button>', 'aria-label="✨ Data prompt"', 'data.json ↗', 'aria-label="Kind"', 'aria-label="What it holds"', 'history.md ↗']
       .map((mark) => html.indexOf(mark));
     expect(at.every((index) => index >= 0), String(at)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));

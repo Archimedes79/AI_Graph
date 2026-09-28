@@ -10,10 +10,11 @@ import AiNodePanel from './ai/AiNodePanel';
 
 /**
  * A code and an ai node's panel, drawn: its kind and id, its text, a row per
- * ✨ -- the button, the file it writes, the prompt it is written with -- the
- * files ✨ Input and ✨ Output write from, ▶ Try, and its history. Nothing
- * else: its ports, once per item, failures and the model are folded away under
- * Advanced, which the dialog draws. The heading is the dialog's too.
+ * ✨ -- the button, the prompt it is written with, and the file it writes:
+ * its content in a box, and a chip beside it -- the files ✨ Input and ✨
+ * Output write from, ▶ Try, and its history. Nothing else: its ports, once per
+ * item, failures and the model are folded away under Advanced, which the
+ * dialog draws. The heading is the dialog's too.
  *
  * The panels are imported directly, because the builders register them
  * lazily; everything else a panel is handed comes from the builder, as the
@@ -42,13 +43,16 @@ describe.each([
 ] as const)('a %s node\'s panel', (type, kind, body, file) => {
   it('is its kind and id, its text, a row per ✨, ▶ Try and its history -- in that order, which is the order Tab takes', () => {
     const html = panel(made(type));
+    // Each row: its button, its prompt, its file's chip and the box its content is edited in.
+    const box = (from: string) => html.indexOf('data-code-field', html.indexOf(from));
     const at = [
       `>${kind}</span>`, `>${type}</code>`, 'aria-label="What it should do"',
-      '>✨ Input</button>', 'input.js ↗', 'aria-label="✨ Input prompt"', 'Example files:', '⟳ From the graph', '📂 Add a file…',
-      '>✨ Output</button>', 'output.js ↗', 'aria-label="✨ Output prompt"', 'Output files:',
-      `>${body}</button>`, `${file} ↗`, `aria-label="${body} prompt"`,
-      '▶ Try', 'history.md ↗',
+      '>✨ Input</button>', 'aria-label="✨ Input prompt"', 'input.js ↗', 'aria-label="Files ✨ Input writes from"', '⟳ From the graph', '📂 Add a file…',
+      '>✨ Output</button>', 'aria-label="✨ Output prompt"', 'output.js ↗', 'aria-label="Files ✨ Output writes from"',
+      `>${body}</button>`, `aria-label="${body} prompt"`, `${file} ↗`,
+      'aria-label="Try"', 'history.md ↗',
     ].map((mark) => html.indexOf(mark));
+    expect([box('input.js ↗'), box('output.js ↗'), box(`${file} ↗`)].every((index, n, all) => index > 0 && (n === 0 || index > all[n - 1]))).toBe(true);
     expect(at.every((index) => index >= 0), String(at)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));
   });
@@ -70,6 +74,14 @@ describe.each([
     expect(changed).toContain('Its prompt, changed');
     expect(changed).toContain('>Reset</button>');
     expect(changed).toMatch(/<textarea[^>]*>Mine, as typed <\/textarea>/);
+  });
+
+  it('shows each file\'s content in its row, as the node holds it -- a space at its end included -- its stub while it is empty', () => {
+    const html = panel(made(type, { input_definition: 'module.exports = { "input": "a b " };' }));
+    expect(html.match(/data-code-field=""/g)).toHaveLength(3);
+    expect(html).toContain('module.exports = { &quot;input&quot;: &quot;a b &quot; };</textarea>');
+    // Empty, a box shows what its file is and which ✨ writes it.
+    expect(html).toMatch(/<textarea[^>]*placeholder="\/\*\*\n \* output\.js/);
   });
 
   it('shows each file before it is written: greyed, saying when it will be', () => {

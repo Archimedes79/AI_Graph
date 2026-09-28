@@ -6,10 +6,12 @@ import { useGraphStore } from '@/store/graphStore';
 import FileBrowserDialog from '@/dialogs/FileBrowserDialog';
 import { ONCE, type NodePanelProps } from '@/elements/NodeGuiBuilder';
 import { STANDARD_PROMPTS, VARIABLES, type PromptKind } from '@engine/authoring/prompts.ts';
+import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { headingFromText, isNumberedHeading } from '@/document/heading';
 import { bodyOf, hasDefinitions, isWritten, writeName, type Write } from './generation';
 import { filesOf } from '@/document/givenFiles';
 import FileChip from './FileChip';
+import CodeField from './CodeField';
 import GenerationTranscript, { SentPart, useLiveGeneration } from './GenerationTranscript';
 import LiveGeneration from './LiveGeneration';
 import TryExample, { useTryExample, whatCameOf } from './TryExample';
@@ -17,14 +19,15 @@ import { carriesFiles, droppedFile, droppedPath } from './droppedFile';
 import { fileValue } from './readAsRun';
 import { ACCENT_FILL, ACCENT_TEXT, DIMMER, FIELD, LINE, MUTED, NEUTRAL_BUTTON, SUCCESS, TEXT } from '@/ui/theme';
 
-/** The file a node keeps what *write*'s ✨ writes in. */
-function fileOf(node: GraphNode, write: Write): string {
-  if (write === 'input') return 'input.js';
-  if (write === 'output') return 'output.js';
-  const kind = bodyOf(node)?.kind;
-  if (kind === 'prompt') return 'prompt.md';
-  if (kind === 'data') return node.config.data_format === 'structure' ? 'data.json' : 'data.txt';
-  return 'code.js';
+/**
+ * Where a node keeps what *write*'s ✨ writes: the setting, and the file it is
+ * kept in with that file's stub -- asked of the engine's element, which says
+ * which of a node's settings are files (`NodeRunner.texts`).
+ */
+function keptIn(node: GraphNode, write: Write): { field: string; file: string; stub: string } {
+  const field = write === 'input' ? 'input_definition' : write === 'output' ? 'output_definition' : bodyOf(node)?.field ?? 'code';
+  const text = engineRegistry.node(node.node_type)?.texts(node as never).find((candidate) => candidate.field === field);
+  return { field, file: text?.file ?? field, stub: text?.standard ?? '' };
 }
 
 /** The standard prompt a ✨ is written with, where the node keeps no prompt of its own for it. */
@@ -208,11 +211,35 @@ function FilesLine({ node, side, setConfig, graphFile }: {
 }
 
 /**
- * One of what ✨ writes for a node, as a row: its ✨, the file it writes --
- * a chip that opens it, whether or not it is written yet -- and the prompt it
- * is written with, in sight.
+ * What *write*'s ✨ wrote, in its file's own kind of editor -- JavaScript for
+ * the definitions and code.js, Markdown for prompt.md -- edited here as in the
+ * file: what is typed is written as typed. A few lines high until it holds
+ * more, and ⤢ opens it across the window. Empty, it shows the file's stub:
+ * what the file is, and which ✨ writes it.
  */
-function Row({ node, write, setConfig, onGenerate, generating, preview, before, children }: {
+function FileBox({ node, write, setConfig }: { node: GraphNode; write: Write; setConfig: NodePanelProps['setConfig'] }) {
+  const { field, file, stub } = keptIn(node, write);
+  const held = (node.config as Record<string, unknown>)[field];
+  return (
+    <CodeField
+      value={typeof held === 'string' ? held : ''}
+      onChange={(text) => setConfig(field, text)}
+      language={file.endsWith('.md') ? 'markdown' : 'javascript'}
+      placeholder={stub}
+      minHeight={72}
+      title={`${node.label || node.id} -- ${file}`}
+    />
+  );
+}
+
+/**
+ * One of what ✨ writes for a node, as a row: its ✨, the prompt it is written
+ * with, and the file -- its content, edited in place, and a chip beside it
+ * that opens it in the person's own editor -- all in sight, whether or not
+ * anything is written yet. *box* stands in for the file's editor where the
+ * node draws its own (what a data node holds).
+ */
+function Row({ node, write, setConfig, onGenerate, generating, preview, before, box, children }: {
   node: GraphNode;
   write: Write;
   setConfig: NodePanelProps['setConfig'];
@@ -220,9 +247,10 @@ function Row({ node, write, setConfig, onGenerate, generating, preview, before, 
   generating: boolean;
   preview?: (write: Write) => Promise<AICall[]>;
   before: () => void;
+  box?: ReactNode;
   children?: ReactNode;
 }) {
-  const file = fileOf(node, write);
+  const { file } = keptIn(node, write);
   return (
     <section className="space-y-1.5 pt-2" style={{ borderTop: `1px solid ${LINE}` }} aria-label={writeName(node, write)}>
       <div className="flex items-center gap-2 flex-wrap">
@@ -238,9 +266,10 @@ function Row({ node, write, setConfig, onGenerate, generating, preview, before, 
         >
           {writeName(node, write)}
         </button>
-        <FileChip nodeId={node.id} file={file} written={isWritten(node, write)} before={before} />
       </div>
       <PromptBox node={node} write={write} setConfig={setConfig} preview={preview} />
+      <FileChip nodeId={node.id} file={file} written={isWritten(node, write)} before={before} />
+      {box ?? <FileBox node={node} write={write} setConfig={setConfig} />}
       {children}
     </section>
   );
@@ -252,7 +281,8 @@ function Row({ node, write, setConfig, onGenerate, generating, preview, before, 
  * writes from that, a row each: its input definition, its output definition,
  * its body (code.js, prompt.md, or what a data node holds). Then ▶ Try, and
  * the node's history.md. The heading is the dialog's; the Advanced settings
- * too. *holds* is what a data node holds, drawn after its text.
+ * too. *holds* is what a data node holds, drawn in its ✨ Data row as the
+ * box its file is edited in.
  *
  * "Say what to change" is the bar under the canvas: when it is asked of this
  * node (`pendingChange`), the body is changed here, as said, with what the
@@ -303,7 +333,6 @@ export default function NodeDefinition({ builder, node, setConfig, updateNode, s
           aria-label="What it should do"
         />
       </div>
-      {holds}
       {defined && (
         <Row node={node} write="input" setConfig={setConfig} onGenerate={onGenerate} generating={generating} preview={shell?.preview} before={before}>
           <FilesLine node={node} side="input" setConfig={setConfig} graphFile={shell?.graphFile} />
@@ -314,7 +343,7 @@ export default function NodeDefinition({ builder, node, setConfig, updateNode, s
           <FilesLine node={node} side="output" setConfig={setConfig} />
         </Row>
       )}
-      <Row node={node} write="body" setConfig={setConfig} onGenerate={onGenerate} generating={generating} preview={shell?.preview} before={before} />
+      <Row node={node} write="body" setConfig={setConfig} onGenerate={onGenerate} generating={generating} preview={shell?.preview} before={before} box={holds} />
       {generating && <LiveGeneration calls={liveCalls} minHeight={80} />}
       {message && (
         <div className="text-xs px-2 py-1.5 rounded" style={{ background: ACCENT_FILL, color: ACCENT_TEXT }}>{message}</div>

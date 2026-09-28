@@ -24,9 +24,9 @@ export async function holdDropped(file: Dropped, setConfig: NodePanelProps['setC
 }
 
 /**
- * A data node: its text, what it holds -- its kind, and the value -- and ✨
- * Data, which writes the value from the text, shaped as the nodes it feeds
- * want it.
+ * A data node: its text, and ✨ Data, which writes what it holds from the text,
+ * shaped as the nodes it feeds want it -- its kind and the value, edited in
+ * that row as its file is.
  */
 export default function DataNodePanel(props: NodePanelProps) {
   return <NodeDefinition {...props} holds={<DataValue node={props.node} setConfig={props.setConfig} />} />;
