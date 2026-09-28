@@ -58,8 +58,8 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         </button>
       </div>
 
-      <div className="mb-3">
-        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Label</label>
+      <label className="block mb-3">
+        <span className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Label</span>
         <input
           className="w-full rounded-lg px-2 py-1.5 text-sm"
           style={FIELD_ON_SURFACE}
@@ -67,7 +67,7 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
           onChange={(e) => onChange({ label: e.target.value })}
           placeholder="What it says above the block"
         />
-      </div>
+      </label>
 
       {/* What starts the graph. A button or a chat always does; anything else
           with an output can be told to. */}
@@ -116,17 +116,19 @@ Select a block on the page — or press <kbd>/</kbd> to add one.
         <div className="px-3 pb-3 pt-1">
           {/* A closed set, not a colour picker: every value comes from the one
               palette, so no combination can look wrong. */}
-          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Style</label>
-          <select
-            className="w-full rounded-lg px-2 py-1.5 text-sm mb-2"
-            style={FIELD_ON_SURFACE}
-            value={(widget.tone as Tone) ?? 'raised'}
-            onChange={(e) => onChange({ tone: e.target.value as Tone })}
-          >
-            {TONES.map((tone) => (
-              <option key={tone} value={tone}>{TONE_LABELS[tone]}</option>
-            ))}
-          </select>
+          <label className="block mb-2">
+            <span className="block text-xs font-medium mb-1" style={{ color: MUTED }}>Style</span>
+            <select
+              className="w-full rounded-lg px-2 py-1.5 text-sm"
+              style={FIELD_ON_SURFACE}
+              value={(widget.tone as Tone) ?? 'raised'}
+              onChange={(e) => onChange({ tone: e.target.value as Tone })}
+            >
+              {TONES.map((tone) => (
+                <option key={tone} value={tone}>{TONE_LABELS[tone]}</option>
+              ))}
+            </select>
+          </label>
 
           {/* On top of the style: a frame or not, and a colour of your own. Unset
               means the style decides, which is what "Default" puts back. */}

@@ -12,8 +12,8 @@ export default function SliderWidgetPanel({ widget, onUpdate }: WidgetPanelProps
   return (
     <div className="grid grid-cols-3 gap-2">
       {([['min', 'Min'], ['max', 'Max'], ['step', 'Step']] as const).map(([field, label]) => (
-        <div key={field}>
-          <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>{label}</label>
+        <label key={field} className="block">
+          <span className="block text-xs font-medium mb-1" style={{ color: MUTED }}>{label}</span>
           <input
             type="number"
             className="w-full rounded-lg px-2 py-1.5 text-sm"
@@ -21,7 +21,7 @@ export default function SliderWidgetPanel({ widget, onUpdate }: WidgetPanelProps
             value={typed(widget[field], shown[field])}
             onChange={(e) => onUpdate({ [field]: e.target.value === '' ? undefined : Number(e.target.value) } as Partial<GuiWidget>)}
           />
-        </div>
+        </label>
       ))}
     </div>
   );

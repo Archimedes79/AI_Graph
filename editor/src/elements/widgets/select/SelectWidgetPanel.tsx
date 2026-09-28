@@ -6,10 +6,10 @@ export default function SelectWidgetPanel({ widget, onUpdate }: WidgetPanelProps
 
   return (
     <div className="space-y-2">
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
+      <label className="block">
+        <span className="block text-xs font-medium mb-1" style={{ color: MUTED }}>
           Options — one per line
-        </label>
+        </span>
         <textarea
           className="w-full rounded-lg px-2 py-1.5 text-sm font-mono"
           style={{ ...FIELD_ON_SURFACE, minHeight: 90 }}
@@ -17,7 +17,7 @@ export default function SelectWidgetPanel({ widget, onUpdate }: WidgetPanelProps
           onChange={(e) => onUpdate({ options: e.target.value })}
           placeholder={'Small\nMedium\nLarge'}
         />
-      </div>
+      </label>
       <p className="text-xs" style={{ color: DIM }}>
         Emits whichever option is selected on the page. The first line is the default.
       </p>
