@@ -37,8 +37,6 @@ export const RAISE = 'var(--ui-raise, rgba(255,255,255,0.03))';
 export const HOVER = 'var(--ui-hover, rgba(255,255,255,0.06))';
 /** Behind a modal. */
 export const SCRIM = 'var(--ui-scrim, rgba(0,0,0,0.70))';
-/** A node's title bar, over the node's own tint. */
-export const HEADER = 'var(--ui-header, rgba(0,0,0,0.30))';
 
 export const TEXT = 'var(--ui-text, #e2e8f0)';
 /** Labels and secondary text. */

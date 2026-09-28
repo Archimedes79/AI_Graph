@@ -56,8 +56,3 @@ export default function ToolbarButton({
     </button>
   );
 }
-
-/** A hairline between two groups of related controls. */
-export function ToolbarSeparator() {
-  return <div aria-hidden="true" style={{ width: 1, height: 20, background: LINE, flexShrink: 0 }} />;
-}

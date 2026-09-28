@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { LINE, MUTED, SURFACE } from './theme';
 
 /** Wide enough for a code editor and a result, narrow enough that the canvas stays usable beside it at 1024 pixels. */
-export const SIDE_PANEL_WIDTH = 440;
+const SIDE_PANEL_WIDTH = 440;
 
 /**
  * Whether Escape is the panel's to act on: only while it is on screen -- its

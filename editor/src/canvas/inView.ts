@@ -1,5 +1,5 @@
 /** A box on screen, in pixels: where it starts and how big it is. */
-export interface Box { x: number; y: number; width: number; height: number }
+interface Box { x: number; y: number; width: number; height: number }
 
 /**
  * How far to move the canvas so *node* is in *view*, *margin* from its edges

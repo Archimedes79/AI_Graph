@@ -44,8 +44,6 @@ export interface Scheme {
   hover: string;
   /** Behind a modal. */
   scrim: string;
-  /** A node's title bar, over the node's own tint. */
-  header: string;
 
   // ---- text -----------------------------------------------------------------
   text: string;
@@ -77,7 +75,7 @@ export const SCHEMES: Scheme[] = [
     label: 'Night — dark blue',
     sunken: '#0f1117', surface: '#1a1d2e', line: '#2d3148',
     raise: 'rgba(255,255,255,0.03)', hover: 'rgba(255,255,255,0.06)',
-    scrim: 'rgba(0,0,0,0.70)', header: 'rgba(0,0,0,0.30)',
+    scrim: 'rgba(0,0,0,0.70)',
     text: '#e2e8f0', muted: '#94a3b8', dim: '#64748b', dimmer: '#475569',
     accent: '#6366f1', accentText: '#a5b4fc', accentFill: 'rgba(99,102,241,0.10)', onAccent: '#ffffff',
     success: '#22c55e', danger: '#ef4444', dangerText: '#fca5a5',
@@ -92,7 +90,7 @@ export const SCHEMES: Scheme[] = [
     // stays legible both as a 1px border and as a filled button.
     sunken: '#efece3', surface: '#faf9f5', line: '#dcd8cb',
     raise: 'rgba(60,50,30,0.035)', hover: 'rgba(60,50,30,0.06)',
-    scrim: 'rgba(35,32,26,0.45)', header: 'rgba(60,50,30,0.07)',
+    scrim: 'rgba(35,32,26,0.45)',
     text: '#22201c', muted: '#6b6760', dim: '#8b877e', dimmer: '#a9a59b',
     accent: '#c05f38', accentText: '#8f4526', accentFill: 'rgba(192,95,56,0.10)', onAccent: '#ffffff',
     success: '#2f7d32', danger: '#b3261e', dangerText: '#8c1d18',
@@ -107,7 +105,7 @@ export const SCHEMES: Scheme[] = [
     // "this is the control", so nothing has to be learned.
     sunken: '#f4f5f7', surface: '#ffffff', line: '#d8dbe0',
     raise: 'rgba(16,24,40,0.03)', hover: 'rgba(16,24,40,0.06)',
-    scrim: 'rgba(16,24,40,0.45)', header: 'rgba(16,24,40,0.05)',
+    scrim: 'rgba(16,24,40,0.45)',
     text: '#1a1d23', muted: '#5a6270', dim: '#7c8595', dimmer: '#a3abb8',
     accent: '#2563eb', accentText: '#1d4ed8', accentFill: 'rgba(37,99,235,0.08)', onAccent: '#ffffff',
     success: '#15803d', danger: '#b42318', dangerText: '#912018',
@@ -120,7 +118,7 @@ export const SCHEMES: Scheme[] = [
     // second window beside one that is already dark.
     sunken: '#0a0a0b', surface: '#141416', line: '#28282c',
     raise: 'rgba(255,255,255,0.035)', hover: 'rgba(255,255,255,0.07)',
-    scrim: 'rgba(0,0,0,0.78)', header: 'rgba(0,0,0,0.40)',
+    scrim: 'rgba(0,0,0,0.78)',
     text: '#ededf0', muted: '#9a9aa2', dim: '#71717a', dimmer: '#4f4f57',
     accent: '#8b93ff', accentText: '#b4b9ff', accentFill: 'rgba(139,147,255,0.12)', onAccent: '#111119',
     success: '#4ade80', danger: '#fb7185', dangerText: '#fda4af',
@@ -131,7 +129,7 @@ export const SCHEMES: Scheme[] = [
     label: 'Graphite — neutral dark',
     sunken: '#111113', surface: '#1b1b1f', line: '#33333a',
     raise: 'rgba(255,255,255,0.04)', hover: 'rgba(255,255,255,0.07)',
-    scrim: 'rgba(0,0,0,0.70)', header: 'rgba(0,0,0,0.35)',
+    scrim: 'rgba(0,0,0,0.70)',
     text: '#e8e8ea', muted: '#a1a1a8', dim: '#79797f', dimmer: '#57575d',
     accent: '#2dd4bf', accentText: '#5eead4', accentFill: 'rgba(45,212,191,0.12)', onAccent: '#06231f',
     success: '#34d399', danger: '#f87171', dangerText: '#fca5a5',
@@ -178,7 +176,6 @@ export function schemeVars(id: string | undefined): React.CSSProperties {
     '--ui-raise': s.raise,
     '--ui-hover': s.hover,
     '--ui-scrim': s.scrim,
-    '--ui-header': s.header,
     '--ui-text': s.text,
     '--ui-muted': s.muted,
     '--ui-dim': s.dim,

@@ -61,7 +61,7 @@ export function overlay(base: GraphNode, edited: GraphNode, fields: Iterable<str
   return node;
 }
 
-export interface NodePanel {
+interface NodePanel {
   /** The node as the panel shows it: the graph's, with what was changed and not yet written on top. Undefined once it is gone. */
   node(): GraphNode | undefined;
   /**

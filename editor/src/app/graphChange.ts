@@ -35,7 +35,7 @@ export function graphRequest(target: GraphNode | null, text: string): string {
 }
 
 /** What a change of the whole graph changes: nodes by id, and wires by what they join. */
-export interface GraphChange {
+interface GraphChange {
   added: GraphNode[];
   removed: GraphNode[];
   /** Kept, and different in what they say or hold -- as the change has them. */

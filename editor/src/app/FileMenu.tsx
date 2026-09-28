@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { DIM, LINE, MUTED, PANEL, TEXT } from '@/ui/theme';
 
 /** One entry of the File menu: what it says, whether it can be chosen now -- and if not, why. */
-export interface FileAction {
+interface FileAction {
   label: string;
   /** A second line, smaller: what it is for. */
   hint?: string;
