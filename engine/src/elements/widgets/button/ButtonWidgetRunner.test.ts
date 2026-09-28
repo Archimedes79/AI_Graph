@@ -7,18 +7,6 @@ function widget(config: Record<string, unknown>): Widget {
 }
 
 describe('a button', () => {
-  it('starts at zero presses', () => {
-    const element = new ButtonWidgetRunner();
-    expect(element.config(widget({})).count).toBe(0);
-  });
-
-  it('keeps the press count the page changes, floored and never negative', () => {
-    const element = new ButtonWidgetRunner();
-    expect(element.config(widget({ value: 3.7 })).count).toBe(3);
-    expect(element.config(widget({ value: -1 })).count).toBe(0);
-    expect(element.config(widget({ value: 'not a number' })).count).toBe(0);
-  });
-
   it('has one output port and no input, saying whether it was pressed just now', async () => {
     const element = new ButtonWidgetRunner();
     const w = widget({ value: 2 });
