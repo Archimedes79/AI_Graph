@@ -193,6 +193,10 @@ export default function GraphCanvas({ active = true, onOpenPage }: { active?: bo
           setRFNodes(applyNodeChanges(kept, rfNodes) as typeof rfNodes);
         }}
         onNodeDragStart={() => commit()}
+        // A drag begins once the node moves, not when the button goes down:
+        // at ReactFlow's 0 every click on a node began one, and so was an
+        // undo step -- Redo thrown away, and the next Ctrl+Z undoing nothing.
+        nodeDragThreshold={1}
         onEdgesChange={(changes: EdgeChange[]) => {
           if (changes.some((c) => c.type === 'remove')) commit();
           setRFEdges(applyEdgeChanges(changes, rfEdges));
