@@ -1,5 +1,7 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { createElement } from 'react';
+import { act, createElement, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Port } from '@/graph';
 import { port } from '@engine/elements/port.ts';
@@ -65,5 +67,45 @@ describe('the ports editor', () => {
     expect(drawn(true, [words, { ...stop, multi: true }]).match(/aria-label="whole list"/g)).toHaveLength(2);
     expect(drawn(false, [words, stop])).not.toContain('whole list');
     expect(drawn(true, [words])).not.toContain('whole list');
+  });
+});
+
+describe('a port renamed in the ports editor', () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  it('takes a name another port had, kept back until then, once that port is gone', async () => {
+    // Typed "b" over "a" while there was a "b": said, and kept back. "b" then
+    // removed, the row still showed "b" with nothing wrong -- and the port was "a".
+    let ports = { inputs: [] as Port[], outputs: [port('a', 'a', 'output', 'any'), port('b', 'b', 'output', 'any')] };
+    function Held() {
+      const [now, setNow] = useState(ports);
+      ports = now;
+      return createElement(PortsEditor, {
+        inputs: now.inputs, outputs: now.outputs, onChange: setNow,
+        editing: { inputs: 'edit', outputs: 'edit' }, hints: {}, wiring: { inputs: {}, outputs: {} },
+        readsFiles: false, compact: true, perItem: false, caught: false,
+      });
+    }
+    const screen = document.createElement('div');
+    document.body.appendChild(screen);
+    const root = createRoot(screen);
+    await act(async () => { root.render(createElement(Held)); });
+
+    const field = screen.querySelector<HTMLInputElement>('[aria-label="output name"]')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setter.call(field, 'b');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(screen.textContent).toContain('Two outputs are both called "b".');
+    expect(ports.outputs.map((one) => one.id)).toEqual(['a', 'b']);
+
+    await act(async () => { screen.querySelector<HTMLButtonElement>('[aria-label="Remove output b"]')!.click(); });
+    expect(ports.outputs.map((one) => one.id)).toEqual(['b']);
+    expect(screen.querySelector<HTMLInputElement>('[aria-label="output name"]')!.value).toBe('b');
+    expect(screen.textContent).not.toContain('both called');
+
+    await act(async () => { root.unmount(); });
+    screen.remove();
   });
 });

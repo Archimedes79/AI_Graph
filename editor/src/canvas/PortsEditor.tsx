@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { DataType, Port } from '@/graph';
 import { ONCE, type PortEditing, type UndoStep } from '@/elements/NodeGuiBuilder';
 import { useTyped } from '@/authoring/useTyped';
@@ -115,6 +116,15 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wholeOffered, wire
   });
   const shown = codeName(typed);
   const problem = shown === port.id ? '' : problemIf(shown);
+  // A name kept back because another port had it is this one's once that
+  // port is renamed or removed: the row showed it, with no reason left, and
+  // the node went on calling the port what it was.
+  const blocked = useRef(problem);
+  useEffect(() => {
+    const was = blocked.current;
+    blocked.current = problem;
+    if (was && !problem && shown !== port.id) type(typed);
+  });
 
   return (
     <div className="space-y-1" aria-label={`${kind} ${port.id}`}>
