@@ -60,9 +60,12 @@ describe('a data node is its value', () => {
   });
 
   it('is named by check when it is kept as text and holds structure, set so by hand or by a model: it would come back as text', () => {
-    expect(element.problems(dataNode({ data_format: 'text', data_value: [1, 2] }), undefined, 'Node "store"')).toEqual([
-      expect.objectContaining({ where: 'Node "store"', problem: expect.stringContaining('comes back from data.txt as text') }),
-    ]);
+    expect(element.problems(dataNode({ data_format: 'text', data_value: [1, 2] }), undefined, 'Node "store"')).toEqual([{
+      where: 'Node "store"',
+      problem: expect.stringContaining('comes back from data.txt as text'),
+      // Said as a person changes it, in its panel; the field only for a graph file.
+      fix: 'Set its Kind to Structure (JSON) in its panel (data_format "structure" in a graph file): it is kept in data.json then.',
+    }]);
     for (const fine of [{ data_format: 'text', data_value: 'hello' }, { data_format: 'text' }, { data_format: 'structure', data_value: [1] }]) {
       expect(element.problems(dataNode(fine), undefined, 'Node "store"')).toEqual([]);
     }

@@ -137,10 +137,11 @@ export class CodeNodeRunner extends NodeRunner<CodeConfig> {
 
   override problems(node: GraphNode, _elements: unknown, where: string): Problem[] {
     if (String(node.config.code ?? '').trim()) return [];
+    // Said as a person meets it -- the file -- and the field only where a graph file is what is read.
     return [{
       where,
-      problem: 'Its code.js holds no code yet (config.code is empty): it fails the moment it runs.',
-      fix: `Write it with ✨ Code from the node's text -- or put "function run(inputs) { ... }" in config.code, returning an object keyed by this node's output port ids.`,
+      problem: 'Its code.js holds no code yet: it fails the moment it runs.',
+      fix: 'Write it with ✨ Code, or write function run(inputs) { … } in code.js (config.code in a graph file), returning an object keyed by its outputs.',
     }];
   }
 

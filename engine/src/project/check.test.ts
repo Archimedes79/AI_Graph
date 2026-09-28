@@ -77,6 +77,16 @@ describe('what check finds in a graph', () => {
     expect(problem.fix).toMatch(/✨ Output/);
   });
 
+  it('finds a code node with no code, said as a person meets it: its code.js', () => {
+    const made = graph();
+    made.nodes[0].config.code = '';
+    expect(problemsIn(made)).toEqual([{
+      where: 'node "count"',
+      problem: 'Its code.js holds no code yet: it fails the moment it runs.',
+      fix: 'Write it with ✨ Code, or write function run(inputs) { … } in code.js (config.code in a graph file), returning an object keyed by its outputs.',
+    }]);
+  });
+
   it('finds two output nodes under one label, with the keys the run really uses', () => {
     const made = graph();
     made.nodes[2].label = 'Answer';

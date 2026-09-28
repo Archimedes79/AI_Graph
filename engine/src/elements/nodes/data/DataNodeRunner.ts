@@ -105,7 +105,7 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
     return [{
       where,
       problem: 'It is kept as text but holds structured data: saved, it comes back from data.txt as text.',
-      fix: 'Set config.data_format to "structure" -- in its panel, Structure (JSON).',
+      fix: 'Set its Kind to Structure (JSON) in its panel (data_format "structure" in a graph file): it is kept in data.json then.',
     }];
   }
 }
