@@ -4,7 +4,7 @@
   "config": {
     "batch_mode": "per_item",
     "input_files": [
-      "examples\\data\\portfolio\\2026-03-31_depotauszug.pdf"
+      "examples/data/portfolio/2026-03-31_depotauszug.pdf"
     ]
   }
 }
