@@ -88,9 +88,10 @@ too old; on Windows the window stays open until you have read it.
     run.sh, run.cmd   start it
     VERSION     what this was built from
     engine/     the engine and the editor's server, as source
-    editor/dist the editor's page, built
+    editor/dist the editor's page, built; its licenses.txt names the
+                packages it is built from, each with its licence
     examples/   project folders to open from the editor's Open dialog
-    LICENSE
+    LICENSE     the terms AI-Graph comes under
 
 A graph you build here can be handed on with the Deploy button, which writes a
 folder of its own -- that one holds a single graph and no editor.

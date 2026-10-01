@@ -136,6 +136,11 @@ check for Node 24 before starting and say so when it is missing or too old, `run
 out of the zip executable, and a double-clicked `run.cmd` that fails keeps its window open
 until the reason has been read.
 
+And the terms: `LICENSE`, which whoever is handed the engine has to be handed with it, and
+`web/licenses.txt` beside the page -- every package the page is built from, with its
+licence ([Licences](licenses.md)). The bundle's README says which part comes under what:
+the graph, its page and its nodes belong to whoever built them.
+
 A bundle's server also keeps the clock of the graph's trigger nodes: a trigger ticked to
 fire when the tool starts, or given an interval such as `5m`, runs with nobody watching,
 and the page shows the latest result.

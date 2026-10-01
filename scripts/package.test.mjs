@@ -124,7 +124,7 @@ test('the zip holds what a person runs', () => {
     : spawnSync('unzip', ['-q', zip, '-d', work], { encoding: 'utf8' });
   assert.equal(unpacked.status, 0, unpacked.stderr);
 
-  for (const file of ['run.sh', 'run.cmd', 'README.md', 'VERSION', 'LICENSE', 'engine/src/main.ts', 'editor/dist/index.html']) {
+  for (const file of ['run.sh', 'run.cmd', 'README.md', 'VERSION', 'LICENSE', 'engine/src/main.ts', 'editor/dist/index.html', 'editor/dist/licenses.txt']) {
     assert.ok(existsSync(join(folder, file)), `${file} is in the zip`);
   }
   assert.match(readFileSync(join(folder, 'VERSION'), 'utf8'), /^AI-Graph test\ncommit \S+\nbuilt /);

@@ -96,6 +96,16 @@ describe('a bundle', () => {
     }
   }, 120_000);
 
+  it('carries the terms its engine comes under: whoever is handed a copy is handed those', async () => {
+    const dir = await bundleOf(MINIMAL);
+    try {
+      expect(await readFile(join(dir, 'LICENSE'), 'utf8')).toBe(await readFile(join(REPO, 'LICENSE'), 'utf8'));
+      expect(await readFile(join(dir, 'README.md'), 'utf8')).toContain('under the terms in LICENSE');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it('looks for its AI settings beside run.sh, where a recipient drops them, from wherever it is started', async () => {
     // The bundle's own copy is asked: it keeps engine/src's files in engine/ itself.
     const dir = await bundleOf(MINIMAL);
@@ -130,6 +140,8 @@ describe('a bundle', () => {
       const page = written.filter((p) => p.startsWith('web/'));
       expect(page).toContain('web/runtime.html');
       expect(page.some((p) => p.endsWith('.js'))).toBe(true);
+      // The page is made of packages whose notice has to go with every copy.
+      expect(await readFile(join(dir, 'web', 'licenses.txt'), 'utf8')).toMatch(/^react-dom \S+ \(MIT\)$/m);
       // run.sh serves, because there is something to serve.
       expect(await readFile(join(dir, 'run.sh'), 'utf8')).toContain('--serve');
       // The recipient's first command is ./run.sh; on Windows there is no bit to set.

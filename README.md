@@ -5,6 +5,10 @@
 **Wire nodes on a canvas into an AI workflow — then hand the result to someone else<br>
 as a tool that runs on their machine: offline, on a local model, with no account and no cloud bill.**
 
+Visual programming for AI workflows and small local apps: say in plain words what each node
+should do, and AI writes its code or its prompt; give the graph a page — a file picker, a
+chat, a chart — and 🚀 Deploy packs it into a folder someone else can run.
+
 [Quick start](#quick-start) · [Examples](#the-examples) · [Documentation](#documentation) · [Licence](#licence)
 
 <img src="docs/images/hero.png" alt="The AI-Graph editor with the population plotter graph, and the same graph delivered as a tool that draws a bar chart" width="100%">
@@ -17,7 +21,7 @@ as a tool that runs on their machine: offline, on a local model, with no account
 
 | | |
 |---|---|
-| 🔒 **Your data stays on the machine** | Ollama and LM Studio are the default, not a fallback. Everything binds to `127.0.0.1`, and there is no telemetry. Contracts, records or personnel files are processed where they already are. |
+| 🔒 **Your data stays on the machine** | A model on your own machine is the default, not a fallback. Everything binds to `127.0.0.1`, and there is no telemetry. Contracts, records or personnel files are processed where they already are. |
 | 💶 **It is free to run** | A 7B model on an ordinary workstation classifies, extracts, summarises and rewrites. Where that is not enough, pin *one* node to a paid provider instead of moving the whole pipeline into the cloud. |
 | ✨ **No AI expertise required** | Describe in plain language what a node should do, and ✨ writes the rest: what goes in, what comes out, and the JavaScript or the prompt. No prompt engineering, no vector store, no framework, no glue code. |
 | 🚀 **You ship a tool, not a prototype** | 🚀 Deploy packages the graph with the real execution engine. The recipient needs Node and nothing else, and the code nodes run there too. A graph with a page deploys *with its page*. |
@@ -41,7 +45,7 @@ as a tool that runs on their machine: offline, on a local model, with no account
   summarises each one, an Output node that writes the results back to disk.
 - **Charts from your own data** — choose a CSV, see the chart: a page with a file picker
   and a chart, and one Code node that says what to plot; see [examples/population_plotter/](examples/population_plotter/).
-- **Local-LLM chat or report tool** — an AI node on Ollama/LM Studio that reads a file
+- **Local-LLM chat or report tool** — an AI node on a local model that reads a file
   at its input, paired with a text block on the page: a runnable front-end with zero UI code.
 - **A graph as a standalone tool** — once it works in the editor, 🚀 Deploy hands a
   non-technical user or a CI job something that runs without the AI-Graph editor at all.
@@ -68,7 +72,7 @@ Nothing leaves the machine unless the graph itself sends it there.
 
 ## What's in it
 
-- **Visual graph editor** — a ReactFlow canvas with undo/redo; drop a graph `.json` file
+- **Visual graph editor** — a node canvas with undo/redo; drop a graph `.json` file
   or a project folder on the window to open it, or use **Open**; every example in
   `examples/` is a project folder.
 - **Eight node types** — Input (a text, or a folder's listing), AI, Code (JavaScript),
@@ -118,7 +122,7 @@ Nothing leaves the machine unless the graph itself sends it there.
   several outputs or a value that is not text.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor, and your own** — each file is shown and edited in its row
-  (CodeMirror, full-window on ⤢), or opened in your own editor with one click; what you
+  (highlighted, full-window on ⤢), or opened in your own editor with one click; what you
   save there comes back by itself.
 - **The same way everywhere** — an AI node and a code node are built alike: its text,
   then ✨ Input, ✨ Output and ✨ Code (or ✨ Prompt), each with its prompt and its file.
@@ -127,9 +131,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   output.js. Then say what to change in one line — ✨ changes the body and the node's
   text together — or press ✨ Fix where it failed. There is no Save in a node's panel:
   a change is in the graph at once, and Undo takes it back.
-- **An MCP server** — `--mcp` lets Claude Code or Claude Desktop generate, validate, save
-  and run graphs, confined to one folder.
-- **Deployment** — a self-contained bundle, a Docker Compose stack, or one executable.
+- **An MCP server** — `--mcp` lets an AI assistant generate, validate, save and run
+  graphs, confined to one folder.
+- **Deployment** — a self-contained bundle, or a container.
 - **Graph Runner CLI** — run any saved graph from the command line.
 
 ## How a tool lives
@@ -180,8 +184,8 @@ Each is a project folder: `flow.json` for the wiring, the page in `page/page.jso
 every node's settings, ports, code and prompts as files of their own under `nodes/` — open
 `nodes/chart/code.js` and it is plain JavaScript. The ones that
 need a model call the one you choose in **⚙ Settings → AI** (or in `ai-settings.json`,
-see [docs/ai-providers.md](docs/ai-providers.md)) — Google's free
-`gemini-flash-lite-latest` with a key, or a local LM Studio or Ollama.
+see [docs/ai-providers.md](docs/ai-providers.md)) — a hosted model with an API key, or
+one running on your own machine.
 
 A path inside a graph resolves against the working directory, so run the examples from
 the repository root:
@@ -206,7 +210,7 @@ or a versioned `ai-graph-vX.Y.Z.zip` from the
 [releases page](https://github.com/Archimedes79/AI_Graph/releases), unzip, and run
 `run.cmd` / `./run.sh`. By hand it is `npm ci`, `npm run build`, `npm start`. The editor opens at <http://127.0.0.1:8000>. `npm run
 dev` is the same with live reload; `docker compose up --build` the same in a container
-beside Ollama. Details in [docs/install.md](docs/install.md).
+beside a local model server. Details in [docs/install.md](docs/install.md).
 
 **Running a graph needs no editor at all:**
 
@@ -223,28 +227,29 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | [docs/install.md](docs/install.md) | Running the editor, working on it, containers, tests and CI |
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, the page and its blocks |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the one AI setting and a node's own, where the API key goes |
-| [docs/deployment.md](docs/deployment.md) | Deploy bundles, Docker, the Graph Runner CLI |
-| [docs/mcp-server.md](docs/mcp-server.md) | Letting Claude (or any MCP client) generate, check, save and run graphs |
+| [docs/deployment.md](docs/deployment.md) | Deploy bundles, containers, the Graph Runner CLI |
+| [docs/mcp-server.md](docs/mcp-server.md) | Letting an AI assistant (any MCP client) generate, check, save and run graphs |
+| [docs/licenses.md](docs/licenses.md) | The licence check: AI-Graph's own terms, every package it is built from, and how each copy carries them |
 | [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and what is deliberately left out; diagrams mapped to files in [arch/](arch/overview.md) |
 
 ## Project structure
 
 ```
 AI-Graph/
-├── engine/src/             # Runs a graph, serves the editor, ships as a bundle. No React.
+├── engine/src/             # Runs a graph, serves the editor, ships as a bundle. No UI framework.
 │   ├── elements/           #   one folder per element: nodes/<kind>/<Kind>NodeRunner.ts, widgets/<kind>/<Kind>WidgetRunner.ts
 │   ├── execution/          #   the executor and what starts a run
 │   ├── authoring/          #   what ✨ writes for a node, and how its files are read
 │   └── host/  ai/  cli/    #   the server and its contract, model providers, the command line
-├── editor/src/             # The page: React + ReactFlow, built on the engine
+├── editor/src/             # The page in the browser, built on the engine
 │   ├── elements/           #   the same folders: <Kind>NodeGuiBuilder.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
 │   ├── authoring/          #   a node's text and a row per ✨, ▶ Try, the live transcript
 │   └── app/  canvas/  page/  store/  api/  runtime/  ui/
 ├── examples/               # Example projects, one folder each: flow.json + nodes/
 ├── docs/                   # The documents linked above
 ├── arch/                   # Architecture diagrams, every box mapped to its files
-├── scripts/dev.mjs         # npm run dev: engine and Vite in one terminal
-└── Dockerfile              # docker compose up: the editor beside Ollama
+├── scripts/dev.mjs         # npm run dev: engine and page dev server in one terminal
+└── Dockerfile              # docker compose up: the editor beside a local model server
 ```
 
 ---
@@ -260,11 +265,18 @@ AI-Graph is **source-available, not open source**: [PolyForm Noncommercial
   issue to ask for one.
 
 **What you build with AI-Graph is yours.** Your graph, and the code generated
-into it, belong to you. A deploy bundle contains nothing but that plus the
-runtime engine — no part of the editor (the canvas, the generator, the deploy
-tool itself) ever travels in one, and `engine/src/cli/bundle.test.ts`
-fails if one starts to. Every bundle carries a copy of the licence, because
-whoever receives the software has to receive the terms with it.
+into it, belong to you. A deploy bundle contains nothing but that, the
+runtime engine and its page — no part of the editor (the canvas, the generator,
+the deploy tool itself) ever travels in one, and `engine/src/cli/bundle.test.ts`
+fails if one starts to. It also carries a copy of the licence, because whoever
+receives the software has to receive the terms with it; the same test fails
+without it.
+
+**No licence conflicts.** What AI-Graph hands on that was not written here —
+the packages its page is built from — is open source under MIT, ISC or BSD
+terms, and every copy of the page carries their notices in `licenses.txt`. No
+copyleft anywhere, no copied code: [docs/licenses.md](docs/licenses.md) is the
+check, and CI repeats it on every push.
 
 Licensing is not final. If you want to use AI-Graph commercially, open an
 issue — that conversation is welcome.
