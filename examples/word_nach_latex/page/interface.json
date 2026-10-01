@@ -1,0 +1,16 @@
+{
+  "inputs": [
+    {
+      "port": "text_io_in",
+      "name": "LaTeX",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "input_picker_out",
+      "name": "Word-Dokument",
+      "type": "file_path"
+    }
+  ]
+}

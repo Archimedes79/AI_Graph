@@ -1,0 +1,5 @@
+{
+  "label": "Portfolio",
+  "description": "Fasst die Positionen aller Auszüge zusammen (input: eine flache Liste aller Positionen). Gibt die Tabelle des neuesten Stichtags mit prozentualem Anteil, ein entsprechendes Diagramm nach Wahl sowie alle Positionen als CSV zurück.",
+  "config": {}
+}

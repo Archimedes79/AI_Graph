@@ -1,0 +1,14 @@
+{
+  "name": "Word nach LaTeX",
+  "description": "Wähle ein Word-Dokument (.docx); die KI macht daraus ein übersetzbares LaTeX-Dokument und speichert es als .tex.",
+  "nodes": {
+    "page": "gui",
+    "ai": "ai",
+    "output": "output"
+  },
+  "wires": [
+    "page.input_picker_out -> ai.prompt",
+    "ai.output -> page.text_io_in",
+    "ai.output -> output.value"
+  ]
+}

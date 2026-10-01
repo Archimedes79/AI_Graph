@@ -143,3 +143,16 @@ export function standardRunPrompt(definition: string): string {
   }
   return `${start}, and answer with the data mapped onto this output definition: only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n{Output Definition}`;
 }
+
+/**
+ * *definition* with how to answer it said first: what {Output Definition}
+ * is filled with in a prompt.md of the node's own. Such a prompt names the
+ * definition -- "Output format: {Output Definition}" -- without saying how to
+ * answer it, and a model shown output.js and nothing else answered with the
+ * file: `module.exports = { "output": "\\documentclass..." }` for a LaTeX text.
+ */
+export function answeredAs(definition: string): string {
+  return textOutput(definition) !== undefined
+    ? `Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file.\n${definition}`
+    : `Answer with only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n${definition}`;
+}

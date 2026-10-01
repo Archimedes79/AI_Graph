@@ -116,9 +116,9 @@ const TYPE_WORDS: Record<string, string> = {
   string: 'text', integer: 'a number', number: 'a number', boolean: 'true or false', array: 'a list', object: 'an object', null: 'empty',
 };
 
-/** Types in words, each once -- an integer is "a number" too, unless *whole* asks to tell the two apart. */
-function typeWords(types: string[], whole = false): string {
-  return [...new Set(types.map((type) => (whole && type === 'integer' ? 'a whole number' : TYPE_WORDS[type] ?? type)))].join(' or ');
+/** Types in words, each once -- an integer is "a number" too. */
+function typeWords(types: string[]): string {
+  return [...new Set(types.map((type) => TYPE_WORDS[type] ?? type))].join(' or ');
 }
 
 /**
@@ -143,14 +143,15 @@ export function mismatches(value: unknown, schema: Schema, path: string[] = [], 
   if (found.length >= 5 || !schema.type) return found;
   const actual = typeOf(value);
   const allowed = [schema.type].flat();
-  const fits = allowed.includes(actual) || (actual === 'integer' && allowed.includes('number'));
+  // A number is a number: an example that happened to hold 120 does not
+  // promise whole numbers, and 135.5 shares of a fund broke the check for it.
+  const numeric = (type: string): string => (type === 'integer' ? 'number' : type);
+  const fits = allowed.map(numeric).includes(numeric(actual));
   if (!fits) {
     const place = placeOf(path);
-    // Null where something was expected is a missing value, and said as such;
-    // a fraction where only whole numbers were is the one case "a number" does not tell.
+    // Null where something was expected is a missing value, and said as such.
     found.push(actual === 'null' ? `${place} is empty; output.js says ${typeWords(allowed)}`
-      : actual === 'number' && allowed.includes('integer') ? `${place} is a number with a fraction; output.js says ${typeWords(allowed, true)}`
-        : `${place} is ${typeWords([actual])}; output.js says ${typeWords(allowed)}`);
+      : `${place} is ${typeWords([actual])}; output.js says ${typeWords(allowed)}`);
     return found;
   }
   if (actual === 'object') {

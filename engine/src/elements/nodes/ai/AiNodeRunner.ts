@@ -5,7 +5,7 @@ import type { GraphNode } from '../../../graph.ts';
 import type { LogicFields } from '../../../authoring/logic.ts';
 import type { Generation } from '../../../authoring/generation.ts';
 import { DEFINITION_TEXTS, definitionExample, definitionsIn, textOutput, type Definitions } from '../../../authoring/definition.ts';
-import { fillPrompt, nodeDescription, standardRunPrompt } from '../../../authoring/prompts.ts';
+import { answeredAs, fillPrompt, nodeDescription, standardRunPrompt } from '../../../authoring/prompts.ts';
 import { askModel, type AskSettings } from './ask.ts';
 
 /** Where an ai node keeps its body: the instructions it runs with, `prompt.md`. */
@@ -87,11 +87,17 @@ export class AiNodeRunner extends NodeRunner<AiConfig> {
   config(node: GraphNode): AiConfig {
     const c = node.config;
     const output = definitionsIn(node).output.trim();
-    const own = String(c.prompt ?? '');
+    const own = String(c.prompt ?? '').trim();
+    // A prompt.md of its own that never names the definition still gets it,
+    // last: one ✨ wrote ended "Respond with JSON matching this structure:"
+    // and nothing after, and its model was never shown the structure.
+    const template = !own ? standardRunPrompt(output) : output && !own.includes('{Output Definition}') ? `${own}\n\n{Output Definition}` : own;
     return {
-      instructions: fillPrompt(own.trim() ? own : standardRunPrompt(output), {
+      instructions: fillPrompt(template, {
         'Node Description': nodeDescription(node),
-        'Output Definition': output || NO_DEFINITION,
+        // The standard instructions say how to answer; a prompt.md of the
+        // node's own is handed the definition with that said first (`answeredAs`).
+        'Output Definition': !output ? NO_DEFINITION : own ? answeredAs(output) : output,
       }),
       textOn: output ? textOutput(output) ?? null : ANSWER,
       provider: String(c.ai_provider ?? ''),

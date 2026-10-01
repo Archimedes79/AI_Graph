@@ -39,9 +39,9 @@ const EXAMPLES = readdirSync(resolve(REPO, 'examples'), { withFileTypes: true })
   .filter((entry) => entry.isDirectory() && entry.name !== 'data').map((entry) => entry.name).sort();
 
 /**
- * An endpoint that answers with a summary of what it was sent, in plain text:
- * every example's ai node has one output that holds text, and its answer is
- * that text.
+ * An endpoint that answers with a summary of what it was sent, in plain text --
+ * an ai node with one output that holds text is answered with that text -- or,
+ * where its instructions ask for JSON, with the example of its output.js.
  */
 function startModel(): Promise<{ url: string; server: Server; asked: string[] }> {
   const asked: string[] = [];
@@ -52,11 +52,16 @@ function startModel(): Promise<{ url: string; server: Server; asked: string[] }>
       const parsed = JSON.parse(body || '{}');
       const user = parsed.messages?.find((m: { role: string }) => m.role === 'user')?.content ?? '';
       asked.push(String(user));
+      // The instructions, wherever they went: the system message, or the
+      // message itself where a file is all that arrived.
+      const said = (parsed.messages ?? []).map((m: { content: unknown }) => (Array.isArray(m.content)
+        ? m.content.map((part: { text?: string }) => part.text ?? '').join('\n') : String(m.content ?? ''))).join('\n');
+      const json = said.includes('only a JSON object') ? /module\.exports\s*=\s*([\s\S]*?)\s*;\s*(?:\n|$)/.exec(said)?.[1] : undefined;
       // Derived from the prompt, so a change in how one is assembled shows up
       // as different text rather than passing unnoticed.
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({
-        choices: [{ message: { content: `summary(${String(user).length} chars)` } }],
+        choices: [{ message: { content: json ?? `summary(${String(user).length} chars)` } }],
       }));
     });
   });
@@ -92,13 +97,19 @@ async function load(name: string): Promise<Graph> {
 
 const stub = () => aiService({ endpoints: { openai_compatible: model.url } });
 
+// What an example saves -- a CSV, a .tex -- lands here rather than in the
+// working directory a test happens to run in.
+const saved = await mkdtemp(join(tmpdir(), 'ai-graph-example-saves-'));
+afterAll(() => rm(saved, { recursive: true, force: true }));
+const files = { ...nodeFiles, write: (path: string, content: string, mode?: 'text' | 'binary') => nodeFiles.write(isAbsolute(path) ? path : join(saved, path), content, mode) };
+
 function runGraph(graph: Graph, trigger: Trigger | null = null, latch?: Latch) {
   return executeGraph(graph, {
     registry,
     trigger,
     latch,
     runtime: {
-      files: nodeFiles,
+      files,
       code: nodeCode,
       // The one AI setting, filled in as `nodeRuntime` fills it: the stub model.
       ai: { complete: (request) => stub().complete({ ...request, ...lent(request, { provider: 'openai_compatible', model: 'stub-model' }) }) },

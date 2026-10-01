@@ -1,0 +1,30 @@
+{
+  "inputs": [
+    {
+      "port": "plot_window_in",
+      "name": "Portfolio",
+      "type": "any",
+      "list": true
+    },
+    {
+      "port": "table_in",
+      "name": "Positionen",
+      "type": "any",
+      "list": true
+    }
+  ],
+  "outputs": [
+    {
+      "port": "input_picker_out",
+      "name": "Ordner mit Depotauszügen",
+      "type": "file_path",
+      "list": true
+    },
+    {
+      "port": "select_out",
+      "name": "Darstellung",
+      "type": "text",
+      "description": "one of: Nach Anlageklasse, Nach Wertpapier, Verlauf je Stichtag"
+    }
+  ]
+}

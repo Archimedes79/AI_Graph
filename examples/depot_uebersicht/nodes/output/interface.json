@@ -1,0 +1,17 @@
+{
+  "inputs": [
+    {
+      "port": "value",
+      "name": "Value",
+      "type": "any",
+      "list": true
+    },
+    {
+      "port": "path",
+      "name": "Path",
+      "type": "file_path",
+      "description": "Optional: a wired file or folder path, used instead of the one set above."
+    }
+  ],
+  "outputs": []
+}

@@ -88,7 +88,22 @@ describe('what an AI node sends', () => {
     const { runtime, asked } = recording();
     const node = { ...aiNode({ prompt: 'Task:\n{Node Description}\nAnswer as:\n{Output Definition}\nNot {Context}.', output_definition: 'module.exports = { "n": 1 };' }), description: 'Count.' };
     await element.execute(node, { text: 'a b' }, runtime).catch(() => undefined);
-    expect(asked[0].system).toBe('Task:\n# Ask (ID ai, ai node)\n\nCount.\nAnswer as:\nmodule.exports = { "n": 1 };\nNot {Context}.');
+    expect(asked[0].system).toBe('Task:\n# Ask (ID ai, ai node)\n\nCount.\nAnswer as:\n'
+      + 'Answer with only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n'
+      + 'module.exports = { "n": 1 };\nNot {Context}.');
+  });
+
+  it('hands its own instructions the output definition last where they never name it', async () => {
+    const { runtime, asked } = recording();
+    await element.execute(aiNode({ prompt: 'Read the statement.', output_definition: 'module.exports = { "rows": [1] };' }), { text: 'a' }, runtime).catch(() => undefined);
+    expect(asked[0].system).toBe('Read the statement.\n\nAnswer with only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\nmodule.exports = { "rows": [1] };');
+  });
+
+  it('tells its own instructions to answer a text output with the text, not with output.js', async () => {
+    // Shown the file and nothing else, a model answered with the file.
+    const { runtime, asked } = recording();
+    await element.execute(aiNode({ prompt: 'Write LaTeX.\nOutput format:\n{Output Definition}', output_definition: 'module.exports = { "output": "\\\\documentclass{article}" };' }), { text: 'a' }, runtime);
+    expect(asked[0].system).toMatch(/Output format:\nAnswer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file\.\nmodule\.exports/);
   });
 
   it('sends a list as paragraphs, not as a serialised list', async () => {

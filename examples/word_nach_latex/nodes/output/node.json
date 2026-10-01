@@ -1,0 +1,7 @@
+{
+  "label": "TeX-Datei",
+  "config": {
+    "value": "output/dokument.tex",
+    "write_mode": "file"
+  }
+}

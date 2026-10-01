@@ -104,7 +104,10 @@ export function toFigure(data: unknown): Figure | null {
     const points = toPoints(object.points ?? object.values ?? object.data);
     const title = String(object.title ?? '');
     if (!points || (!points.length && !title.trim())) return null;
-    const asked = String(object.kind ?? '').toLowerCase();
+    // What else a kind is called -- a model writing the figure says "pie" or
+    // "doughnut" as often as "donut", and was drawn columns for it.
+    const said = String(object.kind ?? '').toLowerCase();
+    const asked = ({ pie: 'donut', doughnut: 'donut', bar: 'bars', column: 'columns', lines: 'line' } as Record<string, string>)[said] ?? said;
     const kind = KINDS.includes(asked as PlotKind) ? asked as PlotKind
       : points.length > 12 ? 'line' : 'columns';
     return { kind, title, points };

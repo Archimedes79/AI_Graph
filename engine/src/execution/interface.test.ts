@@ -66,8 +66,8 @@ describe('holding a run to its interface', () => {
       .toEqual(['output "rows" at [0].Population is text; output.js says a number']);
     expect(mismatches({ rows: [] }, schema)).toEqual(['output "count" is missing']);
     expect(mismatches({ rows: 'none', count: 1 }, schema)).toEqual(['output "rows" is text; output.js says a list']);
-    // The one place "a number" does not tell: a fraction where only whole numbers were.
-    expect(mismatches({ rows: [], count: 2.5 }, schema)).toEqual(['output "count" is a number with a fraction; output.js says a whole number']);
+    // A whole number in the example promises a number, not a whole one: 135.5 shares are shares.
+    expect(mismatches({ rows: [], count: 2.5 }, schema)).toEqual([]);
   });
 
   it('reports a few problems, not one per row', () => {

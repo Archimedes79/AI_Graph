@@ -129,6 +129,11 @@ describe('a figure: what a node sends a chart', () => {
     expect(toFigure(Array.from({ length: 30 }, (_, i) => i))?.kind).toBe('line');
   });
 
+  it('knows a kind by its other names: a pie or a doughnut is a donut', () => {
+    for (const kind of ['pie', 'doughnut', 'Donut']) expect(toFigure({ kind, points: [{ label: 'a', value: 1 }] })?.kind).toBe('donut');
+    expect(toFigure({ kind: 'bar', points: [{ label: 'a', value: 1 }] })?.kind).toBe('bars');
+  });
+
   it('ignores a kind it cannot draw rather than drawing nothing', () => {
     expect(toFigure({ kind: 'sunburst', points: [{ label: 'a', value: 1 }] })?.kind).toBe('columns');
   });

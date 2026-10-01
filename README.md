@@ -120,6 +120,9 @@ Nothing leaves the machine unless the graph itself sends it there.
   sends, word for word; an AI node's instructions are its `prompt.md`. It answers in
   plain text -- in JSON, each key on its own output, only where its `output.js` names
   several outputs or a value that is not text.
+- **Files as they are** — a node that reads a file is handed what is in it: a Word
+  document as its text, headings, lists and tables kept; a picture or a PDF as itself,
+  which an AI node sends to its model, so a statement in any layout is read as it came.
 - **Tools (MCP)** — an AI node can call the tools of MCP servers while it answers.
 - **A real editor, and your own** — each file is shown and edited in its row
   (highlighted, full-window on ⤢), or opened in your own editor with one click; what you
@@ -172,6 +175,8 @@ built *is* the example, and runs it.
 | [file_summarizer](examples/file_summarizer/) | Read a file and summarize it; each control on the page starts the graph where it is wired to | yes |
 | [paper_review_panel](examples/paper_review_panel/) | Several AI reviewers (scientific, adversarial, claims, references, figures) read a manuscript in parallel; a judge merges their findings into ranked advice | yes |
 | [nested_statistics](examples/nested_statistics/) | A part of the work built as its own graph: the counting lives inside one node, and the graph above it reads as a sentence | no |
+| [depot_uebersicht](examples/depot_uebersicht/) | Choose a folder of portfolio statements as PDFs, in layouts nobody agreed on: a model reads each into rows, a code node sums them up, and the page shows a table and a chart by asset class, by security or over time — and saves the rows as CSV | yes, one that reads PDFs |
+| [word_nach_latex](examples/word_nach_latex/) | Choose a Word document, get a LaTeX document that compiles: headings, lists, emphasis and tables kept, special characters escaped, saved as `.tex` | yes |
 
 **Every example is held to the same three things by the test suite**
 (`engine/src/examples.test.ts`), and an example added to the folder is held to them
