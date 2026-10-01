@@ -1,0 +1,9 @@
+{
+  "label": "Nach LaTeX",
+  "description": "Bekommt den Text eines Word-Dokuments als Markdown (# Titel, ## Abschnitt, ### Unterabschnitt, Listen, **fett**, *kursiv*, Tabellen) und schreibt daraus ein vollständiges, übersetzbares LaTeX-Dokument: documentclass article, deutsche Sprache (babel ngerman), UTF-8, Titel mit maketitle, section/subsection, itemize/enumerate, textbf/textit, Tabellen als tabular mit booktabs. Sonderzeichen wie % $ & # _ { } werden maskiert, Formeln und griechische Buchstaben in Mathe-Modus gesetzt. Antwortet nur mit dem LaTeX-Quelltext, ohne Erklärung und ohne Codeblock.",
+  "config": {
+    "input_files": [
+      "examples/data/word/bodenfeuchte.docx"
+    ]
+  }
+}

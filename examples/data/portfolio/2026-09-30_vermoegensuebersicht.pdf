@@ -1,0 +1,66 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Length 1502 >>
+stream
+BT /F2 15 Tf 50 790 Td (Vermoegensuebersicht) Tj ET
+BT /F1 9 Tf 50 772 Td (Stichtag 30.09.2026 - Musterbank eG - Beispieldaten, fiktiv) Tj ET
+BT /F2 11 Tf 50 740 Td (Aktien) Tj ET
+BT /F1 9 Tf 60 724 Td (6.447,00 EUR) Tj ET
+BT /F1 9 Tf 160 724 Td (Muster Technologie AG) Tj ET
+BT /F1 9 Tf 360 724 Td (30 Stk. zu 214,90) Tj ET
+BT /F1 8 Tf 500 724 Td (DE000TEST0004) Tj ET
+BT /F1 9 Tf 60 710 Td (3.607,50 EUR) Tj ET
+BT /F1 9 Tf 160 710 Td (Gruene Energie SE) Tj ET
+BT /F1 9 Tf 360 710 Td (150 Stk. zu 24,05) Tj ET
+BT /F1 8 Tf 500 710 Td (DE000TEST0005) Tj ET
+BT /F2 11 Tf 50 686 Td (Investmentfonds und ETF) Tj ET
+BT /F1 9 Tf 60 670 Td (15.731,18 EUR) Tj ET
+BT /F1 9 Tf 160 670 Td (Welt Aktien ETF) Tj ET
+BT /F1 9 Tf 360 670 Td (150,250 Stk. zu 104,70) Tj ET
+BT /F1 8 Tf 500 670 Td (DE000TEST0001) Tj ET
+BT /F1 9 Tf 60 656 Td (9.630,00 EUR) Tj ET
+BT /F1 9 Tf 160 656 Td (Europa Dividende Fonds) Tj ET
+BT /F1 9 Tf 360 656 Td (300 Stk. zu 32,10) Tj ET
+BT /F1 8 Tf 500 656 Td (DE000TEST0002) Tj ET
+BT /F2 11 Tf 50 632 Td (Anleihen) Tj ET
+BT /F1 9 Tf 60 616 Td (5.020,00 EUR) Tj ET
+BT /F1 9 Tf 160 616 Td (Bundesanleihe 2,5% 2034) Tj ET
+BT /F1 9 Tf 360 616 Td (50 Stk. zu 100,40) Tj ET
+BT /F1 8 Tf 500 616 Td (DE000TEST0003) Tj ET
+BT /F2 11 Tf 50 592 Td (Rohstoffe) Tj ET
+BT /F1 9 Tf 60 576 Td (1.626,00 EUR) Tj ET
+BT /F1 9 Tf 160 576 Td (Gold ETC) Tj ET
+BT /F1 9 Tf 360 576 Td (20 Stk. zu 81,30) Tj ET
+BT /F1 8 Tf 500 576 Td (DE000TEST0006) Tj ET
+BT /F2 11 Tf 50 542 Td (Summe Vermoegen: 42.061,68 EUR) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000348 00000 n 
+0000000450 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2004
+%%EOF

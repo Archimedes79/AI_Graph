@@ -1,0 +1,138 @@
+[
+  {
+    "extensions": ".pdf",
+    "h": 3,
+    "id": "input_picker",
+    "kind": "input_picker",
+    "label": "Ordner mit Depotauszügen",
+    "mode": "directory",
+    "recursive": false,
+    "run_on_change": true,
+    "tone": "sunken",
+    "value": "examples/data/portfolio",
+    "w": 16
+  },
+  {
+    "h": 2,
+    "id": "select",
+    "kind": "select",
+    "label": "Darstellung",
+    "options": "Nach Anlageklasse\nNach Wertpapier\nVerlauf je Stichtag",
+    "run_on_change": true,
+    "tone": "sunken",
+    "value": "Nach Anlageklasse",
+    "w": 6
+  },
+  {
+    "h": 4,
+    "id": "plot_window",
+    "kind": "plot_window",
+    "label": "Portfolio",
+    "tone": "plain",
+    "value": {
+      "kind": "doughnut",
+      "title": "Kurswerte nach Anlageklasse",
+      "points": [
+        {
+          "label": "Fonds/ETF",
+          "value": 35566.68
+        },
+        {
+          "label": "Aktie",
+          "value": 10054.5
+        },
+        {
+          "label": "Anleihe",
+          "value": 5020
+        },
+        {
+          "label": "Rohstoff",
+          "value": 1626
+        }
+      ]
+    },
+    "w": 8
+  },
+  {
+    "h": 4,
+    "id": "table",
+    "kind": "table",
+    "label": "Positionen",
+    "tone": "plain",
+    "value": [
+      {
+        "bezeichnung": "Welt Aktien ETF",
+        "isin": "DE000TEST0001",
+        "anlageklasse": "Fonds/ETF",
+        "stueck": 150.25,
+        "kurs": 104.7,
+        "kurswert": 15731.18,
+        "anteil": 30.1
+      },
+      {
+        "bezeichnung": "Europa Dividende Fonds",
+        "isin": "DE000TEST0002",
+        "anlageklasse": "Fonds/ETF",
+        "stueck": 300,
+        "kurs": 32.1,
+        "kurswert": 9630,
+        "anteil": 18.42
+      },
+      {
+        "bezeichnung": "Muster Technologie AG",
+        "isin": "DE000TEST0004",
+        "anlageklasse": "Aktie",
+        "stueck": 30,
+        "kurs": 214.9,
+        "kurswert": 6447,
+        "anteil": 12.33
+      },
+      {
+        "bezeichnung": "Emerging Markets ETF",
+        "isin": "IE00TEST0008",
+        "anlageklasse": "Fonds/ETF",
+        "stueck": 210,
+        "kurs": 27.95,
+        "kurswert": 5869.5,
+        "anteil": 11.23
+      },
+      {
+        "bezeichnung": "Bundesanleihe 2,5% 2034",
+        "isin": "DE000TEST0003",
+        "anlageklasse": "Anleihe",
+        "stueck": 50,
+        "kurs": 100.4,
+        "kurswert": 5020,
+        "anteil": 9.6
+      },
+      {
+        "bezeichnung": "Global Small Caps ETF",
+        "isin": "IE00TEST0007",
+        "anlageklasse": "Fonds/ETF",
+        "stueck": 80,
+        "kurs": 54.2,
+        "kurswert": 4336,
+        "anteil": 8.3
+      },
+      {
+        "bezeichnung": "Gruene Energie SE",
+        "isin": "DE000TEST0005",
+        "anlageklasse": "Aktie",
+        "stueck": 150,
+        "kurs": 24.05,
+        "kurswert": 3607.5,
+        "anteil": 6.9
+      },
+      {
+        "bezeichnung": "Gold ETC",
+        "isin": "DE000TEST0006",
+        "anlageklasse": "Rohstoff",
+        "stueck": 20,
+        "kurs": 81.3,
+        "kurswert": 1626,
+        "anteil": 3.11
+      }
+    ],
+    "w": 16
+  }
+]

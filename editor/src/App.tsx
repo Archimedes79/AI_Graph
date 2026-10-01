@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { showsPage } from '@/document/guiWidgets';
+import { slugOf } from '@/document/ids';
 import { ReactFlowProvider } from 'reactflow';
 
 import Toolbar from '@/app/Toolbar';
@@ -241,7 +242,7 @@ export default function App() {
 
   // A project folder by default: a name without .json. Typing .json saves one file instead.
   const suggestedFileName = () =>
-    useGraphStore.getState().metadata.name.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'my_graph';
+    slugOf(useGraphStore.getState().metadata.name) || 'my_graph';
 
   // The folder the last graph was opened from or saved to -- '' before one
   // was: the folder the server was started in. Where the file browser starts

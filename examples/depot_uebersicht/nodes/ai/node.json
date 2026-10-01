@@ -1,0 +1,10 @@
+{
+  "label": "Jeder Auszug",
+  "description": "Liest einen Depotauszug (ein PDF, das Format ist nicht bekannt) und gibt jede Position als Zeile zurück: Stichtag (JJJJ-MM-TT), Bezeichnung, ISIN, Anlageklasse (Aktie, Fonds/ETF, Anleihe, Rohstoff oder Liquidität), Stück, Kurs und Kurswert in EUR als Zahlen. Ein Konto- oder Verrechnungsguthaben ist eine Position der Klasse Liquidität. Summenzeilen sind keine Positionen.",
+  "config": {
+    "batch_mode": "per_item",
+    "input_files": [
+      "examples/data/portfolio/2026-03-31_depotauszug.pdf"
+    ]
+  }
+}

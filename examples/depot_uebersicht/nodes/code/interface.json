@@ -1,0 +1,28 @@
+{
+  "inputs": [
+    {
+      "port": "input",
+      "name": "Input",
+      "type": "any"
+    },
+    {
+      "port": "darstellung",
+      "name": "Darstellung",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "tabelle",
+      "type": "list"
+    },
+    {
+      "port": "diagramm",
+      "type": "json"
+    },
+    {
+      "port": "csv",
+      "type": "text"
+    }
+  ]
+}

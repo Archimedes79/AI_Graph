@@ -433,10 +433,12 @@ async function toolLoop(
  * An image as its media type and bare base64, however it arrived: a data URL,
  * or the base64 alone (taken as PNG). Each dialect wants it put differently.
  */
-function imageData(image: string): { mediaType: string; data: string } {
-  const match = /^data:([^;,]+);base64,/.exec(image);
-  return match ? { mediaType: match[1], data: image.slice(match[0].length) } : { mediaType: 'image/png', data: image };
+function fileData(file: string): { mediaType: string; data: string } {
+  const match = /^data:([^;,]+);base64,/.exec(file);
+  return match ? { mediaType: match[1], data: file.slice(match[0].length) } : { mediaType: 'image/png', data: file };
 }
+
+const isPdf = (file: string): boolean => fileData(file).mediaType === 'application/pdf';
 
 /**
  * The temperature a request asked for, and nothing when it asked for none.
@@ -456,14 +458,18 @@ function outOfBudget(provider: string, model: string, maxTokens: number, thought
   );
 }
 
-function messages(request: AiRequest): unknown[] {
-  const content = request.images?.length
+/**
+ * The OpenAI way of saying it. A PDF is a `file` part to OpenAI itself; every
+ * other server of this shape that reads PDFs -- Gemini's among them -- takes it
+ * as it takes a picture, by its `data:` URL.
+ */
+function messages(request: AiRequest, provider = ''): unknown[] {
+  const content = request.files?.length
     ? [
         { type: 'text', text: request.prompt },
-        ...request.images.map(imageData).map(({ mediaType, data }) => ({
-          type: 'image_url',
-          image_url: { url: `data:${mediaType};base64,${data}` },
-        })),
+        ...request.files.map((file) => (isPdf(file) && provider === 'openai'
+          ? { type: 'file', file: { filename: 'document.pdf', file_data: file } }
+          : { type: 'image_url', image_url: { url: file } })),
       ]
     : request.prompt;
   return [
@@ -489,7 +495,7 @@ function openAiStyle(
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const history = messages(request);
+  const history = messages(request, provider);
   const offered = request.tools?.specs.map(functionTool) ?? [];
   let said: unknown;
   let calls: ToolCall[] = [];
@@ -555,11 +561,11 @@ function anthropic(request: AiRequest, settings: ProviderSettings): Conversation
   const key = settings.apiKeys.anthropic ?? '';
   if (!key) throw new Error('No Anthropic API key configured (ANTHROPIC_API_KEY).');
 
-  // Images first, then the words, as Anthropic asks; an empty text block is refused.
-  const content = request.images?.length
+  // Files first, then the words, as Anthropic asks; an empty text block is refused.
+  const content = request.files?.length
     ? [
-        ...request.images.map(imageData).map(({ mediaType, data }) => ({
-          type: 'image', source: { type: 'base64', media_type: mediaType, data },
+        ...request.files.map(fileData).map(({ mediaType, data }) => ({
+          type: mediaType === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data },
         })),
         ...(request.prompt ? [{ type: 'text', text: request.prompt }] : []),
       ]
@@ -628,10 +634,13 @@ function anthropic(request: AiRequest, settings: ProviderSettings): Conversation
 }
 
 function ollama(request: AiRequest, settings: ProviderSettings): Conversation {
+  if (request.files?.some(isPdf)) {
+    throw new Error('Ollama reads pictures, not PDFs: send the PDFs of this node to a provider that reads them.');
+  }
   const history: unknown[] = [
     ...(request.system ? [{ role: 'system', content: request.system }] : []),
-    // Ollama takes the base64 alone, not a data URL.
-    { role: 'user', content: request.prompt, ...(request.images?.length ? { images: request.images.map((image) => imageData(image).data) } : {}) },
+    // Ollama takes the base64 alone, not a data URL -- and pictures only.
+    { role: 'user', content: request.prompt, ...(request.files?.length ? { images: request.files.map((file) => fileData(file).data) } : {}) },
   ];
   const offered = request.tools?.specs.map(functionTool) ?? [];
   let said: unknown;

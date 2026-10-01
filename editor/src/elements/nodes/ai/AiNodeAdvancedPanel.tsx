@@ -87,12 +87,13 @@ export default function AiNodeAdvancedPanel({ node, setConfig, updateNode, ports
             checked={!!node.config.send_images}
             onChange={(e) => setConfig('send_images', e.target.checked)}
           />
-          Send image inputs as images (vision)
+          Send image and PDF paths as files
         </label>
         <p className="text-xs mt-1" style={{ color: DIMMER }}>
-          An input that is an image file is sent to the model as a picture instead of as a path
-          in the prompt. Needs a model that can see. Leave &ldquo;Read the file at this path&rdquo;
-          unticked for those inputs, above.
+          An input that names a picture or a PDF is sent to the model as that file instead of
+          as a path in the prompt. An input that reads its file (&ldquo;Read the file at this
+          path&rdquo;, above) sends a picture or a PDF as a file anyway. Needs a model that
+          reads them.
         </p>
       </div>
 

@@ -111,7 +111,7 @@ describe('anthropic and ollama, which do not fit the table', () => {
     expect(calls[0].body.stream).toBe(false);
   });
 
-  const picture = { prompt: 'What is in this picture?', images: ['data:image/jpeg;base64,AAAA'] };
+  const picture = { prompt: 'What is in this picture?', files: ['data:image/jpeg;base64,AAAA'] };
 
   it('sends anthropic an image as an image block, before the words', async () => {
     const calls = stubFetch([{ body: { content: [{ type: 'text', text: 'a barn' }] } }]);
@@ -128,6 +128,23 @@ describe('anthropic and ollama, which do not fit the table', () => {
     const ai = service({ provider: 'ollama', model: 'llava' });
     await ai.complete(picture);
     expect(calls[0].body.messages[0].images).toEqual(['AAAA']);
+  });
+
+  const statement = { prompt: 'What is the total?', files: ['data:application/pdf;base64,JVBE'] };
+
+  it('sends a PDF as each provider takes one: a file part to OpenAI, a data URL to Gemini, a document block to Anthropic', async () => {
+    const calls = stubFetch([openAiReply('1'), openAiReply('2'), { body: { content: [{ type: 'text', text: '3' }] } }]);
+    await service({ provider: 'openai', model: 'gpt', apiKeys: { openai: 'k' } }).complete(statement);
+    await service({ provider: 'google', model: 'gemini', apiKeys: { google: 'k' } }).complete(statement);
+    await service({ provider: 'anthropic', model: 'claude', apiKeys: { anthropic: 'k' } }).complete(statement);
+    expect(calls[0].body.messages[0].content[1]).toEqual({ type: 'file', file: { filename: 'document.pdf', file_data: statement.files[0] } });
+    expect(calls[1].body.messages[0].content[1]).toEqual({ type: 'image_url', image_url: { url: statement.files[0] } });
+    expect(calls[2].body.messages[0].content[0]).toEqual({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBE' } });
+  });
+
+  it('says so when a PDF goes to Ollama, which reads pictures only', async () => {
+    stubFetch([{ body: { message: { content: 'never' } } }]);
+    await expect(service({ provider: 'ollama', model: 'llava', retryDelay: 0 }).complete(statement)).rejects.toThrow(/not PDFs/);
   });
 
   it('sends no temperature that nobody asked for -- current Anthropic models refuse one', async () => {

@@ -6,6 +6,7 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
   Connection,
+  OnConnectStartParams,
   NodeChange,
   EdgeChange,
   BackgroundVariant,
@@ -133,8 +134,27 @@ export default function GraphCanvas({ active, onOpenPage }: { active: boolean; o
   // to ask for one, and a test is another.
   const onConnect = useCallback((params: Connection) => {
     if (!params.source || !params.target || !params.sourceHandle || !params.targetHandle) return;
+    wired.current = true;
     connect({ source: params.source, sourceHandle: params.sourceHandle, target: params.target, targetHandle: params.targetHandle });
   }, [connect]);
+
+  // A wire let go over a node rather than over one of its dots: a new input
+  // there, named after what arrives (`connectToNewInput`). Before, it was
+  // dropped, and a second input meant the node's Advanced and "+ input" first.
+  const started = useRef<OnConnectStartParams | null>(null);
+  const wired = useRef(false);
+  const onConnectStart = useCallback((_: unknown, params: OnConnectStartParams) => {
+    started.current = params;
+    wired.current = false;
+  }, []);
+  const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
+    const start = started.current;
+    started.current = null;
+    if (!start?.nodeId || !start.handleId || start.handleType !== 'source' || wired.current) return;
+    const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+    const target = document.elementFromPoint(point.clientX, point.clientY)?.closest('.react-flow__node')?.getAttribute('data-id');
+    if (target) useGraphStore.getState().connectToNewInput({ source: start.nodeId, sourceHandle: start.handleId, target });
+  }, []);
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -189,6 +209,8 @@ export default function GraphCanvas({ active, onOpenPage }: { active: boolean; o
         nodeDragThreshold={1}
         onEdgesChange={(changes: EdgeChange[]) => setRFEdges(applyEdgeChanges(changes, rfEdges))}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
         // One click on a node is the node the person is on: its panel opens
         // beside the canvas, and the bar under it speaks of it. With Shift or
         // Ctrl held a click only adds to what is selected, to move or delete.

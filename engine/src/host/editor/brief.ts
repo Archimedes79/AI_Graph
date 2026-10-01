@@ -87,9 +87,16 @@ const saidOf = (port: Port): string => port.description?.replace(/\s+/g, ' ').tr
  * comes from and what arrives there: what an input definition is written
  * from, and what code is written to read.
  */
+/**
+ * An example with each file handed as itself (`documents.ts`) said by its
+ * kind, not its bytes: a model writing from it reads no base64, and a PDF of
+ * megabytes would be the whole prompt.
+ */
+export const withoutBytes = (text: string): string => text.replace(/("data:[\w.+/-]+;base64,)[A-Za-z0-9+/=]{64,}"/g, '$1..."');
+
 export function inputDefinition(request: GenerateRequest, reads: string[]): string {
   const { node } = request;
-  const written = definitionsIn(node).input.trim();
+  const written = withoutBytes(definitionsIn(node).input.trim());
   if (!node.inputs.length) return written || 'It has no inputs: nothing is handed to it.';
   const lines = ['Its inputs, as wired:'];
   for (const port of node.inputs) {

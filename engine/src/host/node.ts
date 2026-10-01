@@ -49,8 +49,10 @@ export const nodeFiles: FileService = {
     if ((await stat(path)).isDirectory()) await walk(path);
     // Sorted, because a directory listing is an input: two runs over the same
     // folder must hand the graph the same order or nothing downstream is
-    // reproducible.
-    return found.sort();
+    // reproducible. With `/`, which Windows reads as well: a path that came
+    // from a listing ends up in a graph -- an example file, a value kept --
+    // and a graph is opened elsewhere.
+    return found.sort().map((full) => full.replace(/\\/g, '/'));
   },
 };
 

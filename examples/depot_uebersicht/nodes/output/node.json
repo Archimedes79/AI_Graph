@@ -1,0 +1,7 @@
+{
+  "label": "Positionen speichern",
+  "config": {
+    "value": "output/depot_positionen.csv",
+    "write_mode": "file"
+  }
+}

@@ -1,0 +1,25 @@
+[
+  {
+    "extensions": ".docx",
+    "h": 3,
+    "id": "input_picker",
+    "kind": "input_picker",
+    "label": "Word-Dokument",
+    "mode": "file",
+    "recursive": false,
+    "run_on_change": true,
+    "tone": "sunken",
+    "value": "examples/data/word/bodenfeuchte.docx",
+    "w": 16
+  },
+  {
+    "h": 4,
+    "id": "text_io",
+    "kind": "text_io",
+    "label": "LaTeX",
+    "mode": "output",
+    "tone": "plain",
+    "value": "",
+    "w": 16
+  }
+]

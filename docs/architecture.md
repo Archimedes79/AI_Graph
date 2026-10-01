@@ -375,6 +375,9 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
 
 ## Five rules
 
+Decisions, each with its reason -- not laws. When one stands in the way, say so and
+argue it: a rule changes when its reason no longer holds.
+
 **1. An element owns everything about its kind.** Its settings (`config()`), its ports,
 what it does (`execute`), what it shows (`display`), how an AI writes its body
 (`generation()`) — in its own class. Adding a kind adds one folder on each side and one

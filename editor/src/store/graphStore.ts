@@ -17,7 +17,7 @@ import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { withoutAuthoring } from '@engine/authoring/handedOn.ts';
-import { freeId } from '@/document/ids';
+import { freeId, slugOf } from '@/document/ids';
 import { graphEdge } from '@/document/wires';
 import { wireOf } from '@engine/project/flow.ts';
 
@@ -147,6 +147,13 @@ export interface GraphStore {
    * build one -- without a mouse. The same wire twice is one wire.
    */
   connect: (wire: { source: string; sourceHandle: string; target: string; targetHandle: string }) => void;
+  /**
+   * Wire an output to a new input of *target*, named after what arrives: what
+   * dropping a wire on a node rather than on one of its dots does. Only on a
+   * node whose inputs are its own to name -- a code or AI node -- and not on
+   * the node the wire starts at. Whether it wired anything.
+   */
+  connectToNewInput: (wire: { source: string; sourceHandle: string; target: string }) => boolean;
   /**
    * Take *nodeIds* off the graph with every wire into or out of them, and the
    * wires *wireIds* besides: one undo step, however much goes. What is worth
@@ -570,6 +577,25 @@ export const useGraphStore = create<GraphStore>()(
           if (from.multi) to.multi = true;
         }
       });
+    },
+
+    connectToNewInput: (wire) => {
+      const nodeOf = (id: string) => get().rfNodes.find((node: RFNode) => node.id === id)?.data.graphNode as GraphNode | undefined;
+      const target = nodeOf(wire.target);
+      if (!target || wire.target === wire.source || derivedNodePorts(target) !== null
+        || engineRegistry.node(target.node_type)?.readsFileInputs !== true) return false;
+      const from = nodeOf(wire.source)?.outputs.find((port) => port.id === wire.sourceHandle);
+      const name = from?.name || wire.sourceHandle;
+      // An id a body can use as a key.
+      const stem = slugOf(name).replace(/-/g, '_') || 'input';
+      const taken = new Set(target.inputs.map((port) => port.id));
+      let id = stem;
+      for (let n = 2; taken.has(id); n += 1) id = `${stem}${n}`;
+      get().updateNode(target.id, {
+        inputs: [...target.inputs, { id, name, kind: 'input', data_type: 'any', multi: false, required: false, description: '' }],
+      });
+      get().connect({ ...wire, targetHandle: id });
+      return true;
     },
 
     updateNode: (nodeId, updates, renamed, coalesce) => {

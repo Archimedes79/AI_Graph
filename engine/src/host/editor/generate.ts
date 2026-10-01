@@ -36,6 +36,7 @@ import type { Generation } from '../../authoring/generation.ts';
 import { STANDARD_PROMPTS, fillPrompt, type PromptKind } from '../../authoring/prompts.ts';
 import { definitionExample, definitionKeys, misfits, textOutput, unreadableOutput, type Definitions } from '../../authoring/definition.ts';
 import { filePorts } from '../../execution/fileInputs.ts';
+import { fileContent, isInlineFile } from '../../elements/documents.ts';
 import { runsPerItem } from '../../execution/batching.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import { parseGraph, type Graph, type GraphNode } from '../../graph.ts';
@@ -606,17 +607,49 @@ interface GenerateDeps {
 /** What `GenerateRequest.write` may ask for. */
 const WRITES = ['input', 'output', 'body'] as const;
 
-/** Each file's text, the start of it, read here where the request did not bring it; one that cannot be read, said so. */
+/**
+ * Each file's text, the start of it, read here where the request did not bring
+ * it, as a run reads it (`documents.ts`); one that cannot be read, said so. A
+ * picture or a PDF is handed on as itself, so what is written from it is told
+ * the shape a run hands over -- a `data:` URL -- and not its bytes.
+ */
 async function withTexts(given: { path: string; text?: string }[] | undefined, files: FileService | undefined): Promise<{ path: string; text?: string }[] | undefined> {
   if (!given?.length || !files) return given;
   return Promise.all(given.map(async (file) => {
     if (file.text !== undefined || !file.path.trim()) return file;
     try {
-      return { path: file.path, text: (await files.read(file.path)).slice(0, BUDGET.files + 1) };
+      const content = await fileContent(file.path, files);
+      return {
+        path: file.path,
+        text: isInlineFile(content)
+          ? `${content.slice(0, content.indexOf(',') + 1)}... -- the file itself, as a data: URL; an AI node sends it to the model as the file it is`
+          : content.slice(0, BUDGET.files + 1),
+      };
     } catch {
       return file;
     }
   }));
+}
+
+/**
+ * *text*, an input.js, with each file handed as itself whole in its example.
+ * The model was shown no more than the start of each (`withTexts`), and may
+ * write that start or an invented text in its place, but ▶ Try and `test`
+ * run the node on the example, and a run hands such a port the file itself:
+ * the example of each port that reads (*ports*) is set, in order, to the
+ * pictures and PDFs it was given.
+ */
+async function wholeFiles(text: string, given: { path: string }[] | undefined, ports: string[], files: FileService | undefined): Promise<string> {
+  if (!given?.length || !ports.length || !files) return text;
+  const inline = (await Promise.all(given.map((file) => fileContent(file.path, files).catch(() => '')))).filter(isInlineFile);
+  const at = text.indexOf('module.exports');
+  if (at < 0) return text;
+  let example = text.slice(at);
+  ports.forEach((port, index) => {
+    if (!inline[index]) return;
+    example = example.replace(new RegExp(String.raw`("${port}"\s*:\s*)"(?:[^"\\]|\\.)*"`), (_, key: string) => `${key}${JSON.stringify(inline[index])}`);
+  });
+  return text.slice(0, at) + example;
 }
 
 /** Write one of a node's files, whatever kind of node it is: its input definition, its output definition, or its body. */
@@ -694,6 +727,7 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
         const left = definitionFaults(write, again, shape);
         if (left.length <= faults.length) [text, faults] = [again, left];
       }
+      if (write === 'input') text = await wholeFiles(text, given.input_files, shape.reads, deps.files);
       return { result: text, probe: faults.length ? { status: 'failed', error: '', problems: faults } : notProbed(), calls };
     }
     // What may come back besides the body (`OutputAsked`): the output.js a change

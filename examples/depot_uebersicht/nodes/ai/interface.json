@@ -1,0 +1,20 @@
+{
+  "inputs": [
+    {
+      "port": "auszug",
+      "name": "Prompt",
+      "type": "file_path",
+      "list": true,
+      "description": "What to ask."
+    }
+  ],
+  "outputs": [
+    {
+      "port": "output",
+      "name": "Output",
+      "type": "text",
+      "list": true,
+      "description": "The answer."
+    }
+  ]
+}
