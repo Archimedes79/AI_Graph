@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "The graph engine: reads a graph, runs it, and knows nothing about a browser.",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "engines": {
     "node": ">=24"
   },

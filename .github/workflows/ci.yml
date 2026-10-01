@@ -26,6 +26,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      # Every installed package against the licences it may come under, so a
+      # dependency on other terms fails the push that brings it in
+      # (docs/licenses.md).
+      - name: Licences
+        run: npm run licenses
+
       # `npm test` is vitest, which does not type-check: for a while a push
       # could be green while `npm run build` was broken, and the first anyone
       # heard of it was at release time.

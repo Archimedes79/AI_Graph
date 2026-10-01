@@ -268,6 +268,10 @@ export async function writeBundle(
     await copyFile(file, path);
     written.push(relativePath);
   }
+  // And the terms it comes under: whoever is handed any part of the engine is
+  // handed those with it (LICENSE, "Notices").
+  await copyFile(join(installFolder(), 'LICENSE'), resolve(target, 'LICENSE'));
+  written.push('LICENSE');
 
   // The page, if this graph has one and a build is at hand. A bundle without
   // it still runs -- on the terminal, asking for what the blocks would have
@@ -384,6 +388,18 @@ function readme(name: string, needs: BundleNeeds, servesPage = false, data: Carr
       ...data.map((file) => `- \`${file.place}\``),
     );
   }
+
+  lines.push(
+    '', '## Licence', '',
+    ...(servesPage
+      ? [
+        'The engine in engine/ and the page in web/ come under the terms in LICENSE,',
+        'except the packages the page is built from: web/licenses.txt names each,',
+        'with its own licence.',
+      ]
+      : ['The engine in engine/ comes under the terms in LICENSE.']),
+    'The tool itself -- flow.json, page/ and nodes/ -- belongs to whoever built it.',
+  );
 
   lines.push('');
   return lines.join('\n');
