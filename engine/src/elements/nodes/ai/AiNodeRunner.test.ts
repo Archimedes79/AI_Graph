@@ -102,7 +102,7 @@ describe('what an AI node sends', () => {
     await withImage(async (path) => {
       const { runtime, asked } = recording();
       await element.execute(aiNode({ send_images: true }), { picture: path }, runtime);
-      expect(asked[0].images?.[0]?.startsWith('data:image/png;base64,')).toBe(true);
+      expect(asked[0].files?.[0]?.startsWith('data:image/png;base64,')).toBe(true);
       expect(asked[0].prompt).not.toContain(path);
     });
   });
@@ -112,7 +112,7 @@ describe('what an AI node sends', () => {
     await withImage(async (path) => {
       const { runtime, asked } = recording();
       await element.execute(aiNode({ send_images: true }), { pictures: [path, path] }, runtime);
-      expect(asked[0].images).toHaveLength(2);
+      expect(asked[0].files).toHaveLength(2);
     });
   });
 
@@ -121,7 +121,7 @@ describe('what an AI node sends', () => {
     await withImage(async (path) => {
       const { runtime, asked } = recording();
       await element.execute(aiNode({ send_images: true }), { photos: [path, 'caption: a red barn'] }, runtime);
-      expect(asked[0].images).toHaveLength(1);
+      expect(asked[0].files).toHaveLength(1);
       expect(asked[0].prompt).toBe('caption: a red barn');
     });
   });
@@ -139,8 +139,16 @@ describe('what an AI node sends', () => {
       const { runtime, asked } = recording();
       await element.execute(aiNode(), { picture: path }, runtime);
       expect(asked[0].prompt).toBe(path);
-      expect(asked[0].images).toBeUndefined();
+      expect(asked[0].files).toBeUndefined();
     });
+  });
+
+  it('sends a PDF a file port read as the file it is, toggle or not', async () => {
+    // A statement in a layout nobody agreed on: the model reads it as it came.
+    const { runtime, asked } = recording();
+    await element.execute(aiNode(), { statement: 'data:application/pdf;base64,JVBE', note: 'the total' }, runtime);
+    expect(asked[0].files).toEqual(['data:application/pdf;base64,JVBE']);
+    expect(asked[0].prompt).toBe('the total');
   });
 
   it('treats an unreadable image as text rather than failing the node', async () => {
@@ -149,7 +157,7 @@ describe('what an AI node sends', () => {
     const { runtime, asked } = recording();
     await element.execute(aiNode({ send_images: true }), { picture: 'gone.png' }, runtime);
     expect(asked[0].prompt).toBe('gone.png');
-    expect(asked[0].images).toBeUndefined();
+    expect(asked[0].files).toBeUndefined();
   });
 });
 

@@ -18,6 +18,7 @@
 import type { GraphNode } from '../graph.ts';
 import type { FileService } from '../elements/Runtime.ts';
 import type { Runners } from '../elements/NodeRunner.ts';
+import { fileContent } from '../elements/documents.ts';
 import { atMost } from './batching.ts';
 
 /**
@@ -61,7 +62,8 @@ export async function readPorts(
     // No path is no file, and no file has no content: a picker nobody has used
     // yet hands on "", and the node is there to say "choose a file" -- it used
     // to be told `ENOENT: open ''` instead, before it ran at all.
-    const read = (path: unknown): Promise<string> | string => (String(path ?? '').trim() ? files.read(String(path)) : '');
+    // What is in it, as `documents.ts` says: a Word document as its text, a picture or a PDF as itself.
+    const read = (path: unknown): Promise<string> | string => (String(path ?? '').trim() ? fileContent(String(path), files) : '');
     if (Array.isArray(value) && each.ports.has(key)) {
       const texts: unknown[] = new Array(value.length);
       await atMost(value.length, each.atOnce, async (index) => {

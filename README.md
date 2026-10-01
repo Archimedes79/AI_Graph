@@ -230,7 +230,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, containers, the Graph Runner CLI |
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting an AI assistant (any MCP client) generate, check, save and run graphs |
 | [docs/licenses.md](docs/licenses.md) | The licence check: AI-Graph's own terms, every package it is built from, and how each copy carries them |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the rules that hold them together, and what is deliberately left out; diagrams mapped to files in [arch/](arch/overview.md) |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, the decisions that hold them together and why, and what is left out for now; diagrams mapped to files in [arch/](arch/overview.md) |
 
 ## Project structure
 

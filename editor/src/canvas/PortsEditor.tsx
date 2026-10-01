@@ -111,7 +111,11 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wholeOffered, wire
   const [typed, type] = useTyped(port.id, (text) => {
     const id = codeName(text);
     if (problemIf(id)) return port.id;
-    set({ id, name: port.name === port.id ? id : port.name });
+    // A name that only said the id -- `prompt`, or `Prompt` as a new AI node's
+    // says it -- follows it; one somebody chose stays.
+    const said = port.name.toLowerCase() === port.id.toLowerCase();
+    const capital = port.name !== port.id;
+    set({ id, name: !said ? port.name : capital ? id.charAt(0).toUpperCase() + id.slice(1) : id });
     return id;
   });
   const shown = codeName(typed);
@@ -180,7 +184,7 @@ function PortRow({ port, kind, editable, perPort, readsFiles, wholeOffered, wire
                 ticks it where nobody has said anything yet (`connect`). */}
             {kind === 'input' && readsFiles && (
               <label className="flex items-center gap-1 text-xs whitespace-nowrap" style={{ color: DIMMER }}
-                title="The node is handed what the file says, not its path: a run reads the file, and its input.js example holds such a text">
+                title="The node is handed what the file says, not its path: a run reads the file -- a Word document as its text, a picture or a PDF as the file itself, which an AI node sends to its model -- and its input.js example holds such a text">
                 <input type="checkbox" checked={port.data_type === 'file_path'} aria-label="Read the file at this path"
                   onChange={(e) => set({ data_type: e.target.checked ? 'file_path' : 'any' }, ONCE)} />
                 Read the file at this path

@@ -796,3 +796,30 @@ describe('graphStore.connect', () => {
     expect(typed('result')).toMatchObject({ data_type: 'any', multi: false });
   });
 });
+
+describe('graphStore.connectToNewInput', () => {
+  const port = (id: string, kind: 'input' | 'output', name = id) => ({ id, name, kind, data_type: 'any' as const, multi: false, required: false, description: '' });
+  const inputsOf = (id: string) => (useGraphStore.getState().rfNodes.find((n) => n.id === id)!.data.graphNode as GraphNode).inputs;
+
+  it('gives a wire dropped on a code node an input of its own, named after what arrives', () => {
+    loadTestGraph([
+      graphNode({ id: 'page', node_type: 'code', outputs: [port('select_out', 'output', 'Darstellung'), port('picker_out', 'output', 'Größe')] }),
+      graphNode({ id: 'sum', node_type: 'code', inputs: [port('input', 'input')] }),
+    ]);
+    expect(useGraphStore.getState().connectToNewInput({ source: 'page', sourceHandle: 'select_out', target: 'sum' })).toBe(true);
+    expect(useGraphStore.getState().connectToNewInput({ source: 'page', sourceHandle: 'picker_out', target: 'sum' })).toBe(true);
+    expect(inputsOf('sum').map((p) => [p.id, p.name])).toEqual([['input', 'input'], ['darstellung', 'Darstellung'], ['groesse', 'Größe']]);
+    expect(useGraphStore.getState().rfEdges.map((edge) => edge.id)).toEqual(['page.select_out -> sum.darstellung', 'page.picker_out -> sum.groesse']);
+  });
+
+  it('leaves a node whose inputs are not its own to name, and the node the wire starts at', () => {
+    loadTestGraph([
+      graphNode({ id: 'a', node_type: 'code', inputs: [], outputs: [port('out', 'output')] }),
+      graphNode({ id: 'keep', node_type: 'data', inputs: [port('input', 'input')] }),
+    ]);
+    expect(useGraphStore.getState().connectToNewInput({ source: 'a', sourceHandle: 'out', target: 'keep' })).toBe(false);
+    expect(useGraphStore.getState().connectToNewInput({ source: 'a', sourceHandle: 'out', target: 'a' })).toBe(false);
+    expect(useGraphStore.getState().rfEdges).toHaveLength(0);
+    expect(inputsOf('keep')).toHaveLength(1);
+  });
+});

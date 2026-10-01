@@ -14,3 +14,14 @@ export function freeId(base: string, taken: Iterable<string>): string {
     if (!used.has(`${base}_${n}`)) return `${base}_${n}`;
   }
 }
+
+/**
+ * *name* as an id or a file name: lower case, `_` between words, an umlaut
+ * spelled out (`Übersicht` -> `uebersicht`) and any other accent dropped.
+ * Empty when nothing of it is left.
+ */
+export function slugOf(name: string): string {
+  return name.replace(/[äöüÄÖÜ]/g, (umlaut) => `${umlaut.normalize('NFD')[0]}e`).replace(/ß/g, 'ss')
+    .normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+}

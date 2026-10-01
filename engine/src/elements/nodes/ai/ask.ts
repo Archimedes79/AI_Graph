@@ -1,13 +1,13 @@
 // Asking a model, as a node does it -- and as a body may ask for it to be done.
 //
 // One function, because there is one way: what arrived is sent after the
-// instructions (`prompt.ts`), images are sent as images, tool servers live for
+// instructions (`prompt.ts`), pictures and PDFs are sent as files, tool servers live for
 // the length of the question. An ai node calls it directly; a code node reaches
 // the same function through `node.llm` (see `Runtime.BodyContext`), so a call
 // made from a body is not a second, thinner way to ask.
 
 import type { Runtime } from '../../Runtime.ts';
-import { imageDataUrl, imageMediaType } from '../../images.ts';
+import { fileContent, inlineMediaType, isInlineFile } from '../../documents.ts';
 import { assemblePrompt } from './prompt.ts';
 
 /** How often one run of a body may ask for the model. A loop that forgot to end must not spend a budget. */
@@ -42,37 +42,32 @@ export async function askModel(
   order: string[] = [],
 ): Promise<string> {
   const text: Record<string, unknown> = {};
-  const images: string[] = [];
+  const files: string[] = [];
   const names = [...order.filter((id) => id in inputs), ...Object.keys(inputs).filter((id) => !order.includes(id))];
 
   for (const name of names) {
     const value = inputs[name];
     if (value === null || value === undefined) continue;
-    if (settings.sendImages) {
-      // An input that *is* an image becomes an image in the request rather
-      // than a path pasted into the prompt. A list is expanded, so a folder
-      // picker wired straight in sends every file.
-      //
-      // Read here, not passed as a path: the provider's machine is not this
-      // one, so a filename would arrive as a filename and the model would
-      // dutifully talk about the filename. What is not an image in a mixed
-      // list -- a caption beside a photo -- stays in the prompt.
-      const candidates = Array.isArray(value) ? value : [value];
-      const words: unknown[] = [];
-      for (const candidate of candidates) {
-        const url = await asImageUrl(candidate, runtime);
-        if (url) images.push(url);
-        else words.push(candidate);
-      }
-      if (!words.length) continue;
-      text[name] = Array.isArray(value) ? words : value;
-      continue;
+    // A picture or a PDF goes as the file it is: one a file port read
+    // (`documents.ts`) always, and one named by its path when the node sends
+    // files (`send_images`), read here -- the provider's machine is not this
+    // one, so a filename would arrive as a filename and the model would
+    // dutifully talk about the filename. A list is expanded, so a folder
+    // picker wired straight in sends every file; what is not a file in a mixed
+    // list -- a caption beside a photo -- stays in the prompt.
+    const candidates = Array.isArray(value) ? value : [value];
+    const words: unknown[] = [];
+    for (const candidate of candidates) {
+      const file = isInlineFile(candidate) ? candidate : settings.sendImages ? await asInlineFile(candidate, runtime) : null;
+      if (file) files.push(file);
+      else words.push(candidate);
     }
-    text[name] = value;
+    if (!words.length) continue;
+    text[name] = Array.isArray(value) ? words : value;
   }
 
   const { system, user } = assemblePrompt(settings.instructions, text);
-  if (!user && !images.length) {
+  if (!user && !files.length) {
     throw new Error('Nothing to ask: this node has no instructions, and nothing wired into it brought anything.');
   }
   const request = {
@@ -81,7 +76,7 @@ export async function askModel(
     provider: settings.provider,
     model: settings.model,
     ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }),
-    ...(images.length ? { images } : {}),
+    ...(files.length ? { files } : {}),
   };
 
   // A failed call is not caught here: `catch_errors` is read by the executor,
@@ -143,19 +138,17 @@ export function llmCall(settings: AskSettings, runtime: Runtime): (args: unknown
 }
 
 /**
- * An image, inlined — or null for anything that is just text.
+ * A picture or a PDF named by its path, inlined -- or null for anything else.
  *
- * A file that looks like an image but cannot be read (missing, too large, not
- * actually one) counts as text: it goes into the prompt as the string it is,
- * which is what someone wiring a filename in would expect, rather than failing
- * the whole node over a picture it was optional to send.
+ * A file that looks like one but cannot be read (missing, too large) counts as
+ * text: it goes into the prompt as the string it is, which is what someone
+ * wiring a filename in would expect, rather than failing the whole node over a
+ * file it was optional to send.
  */
-async function asImageUrl(value: unknown, runtime: Runtime): Promise<string | null> {
-  if (typeof value !== 'string') return null;
-  if (value.startsWith('data:image/')) return value;
-  if (!imageMediaType(value)) return null;
+async function asInlineFile(value: unknown, runtime: Runtime): Promise<string | null> {
+  if (typeof value !== 'string' || !inlineMediaType(value)) return null;
   try {
-    return await imageDataUrl(value, runtime.files);
+    return await fileContent(value, runtime.files);
   } catch {
     return null;
   }

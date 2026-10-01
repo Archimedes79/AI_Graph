@@ -80,7 +80,8 @@ export interface AiRequest {
   provider?: string;
   model?: string;
   temperature?: number;
-  images?: string[];
+  /** Pictures and PDFs sent as the files they are, each a base64 `data:` URL (`documents.ts`). */
+  files?: string[];
   /** When set, the model may call these, and the answer is what it says once it has. */
   tools?: ToolAccess;
   /** Ends the call early. Put there by the executor for a run that can be stopped; no element sets it. */
