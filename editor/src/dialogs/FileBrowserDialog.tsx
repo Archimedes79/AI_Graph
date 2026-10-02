@@ -49,7 +49,8 @@ export default function FileBrowserDialog({
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState(defaultName ?? '');
 
-  const load = useCallback(async (target: string) => {
+  /** Shows *target*; whether it could. */
+  const load = useCallback(async (target: string): Promise<boolean> => {
     setLoading(true);
     setError('');
     try {
@@ -62,14 +63,19 @@ export default function FileBrowserDialog({
       setRoots(data.roots);
       setInProject(!!data.project);
       setSelected('');
+      return true;
     } catch (e) {
       setError(errorText(e, 'Could not read that directory.'));
+      return false;
     } finally {
       setLoading(false);
     }
   }, [extensions, mode]);
 
-  useEffect(() => { load(initialPath || ''); }, [load, initialPath]);
+  // A folder remembered from before may be gone: then it starts where the server was started.
+  useEffect(() => {
+    void load(initialPath || '').then((shown) => { if (!shown && initialPath) void load(''); });
+  }, [load, initialPath]);
 
   /** A project folder, where projects are what is being chosen. */
   const isProject = (entry: BrowseEntry) => !!projects && !!entry.project;

@@ -35,6 +35,25 @@ const folderOf = (path: string): string => {
   return whole.slice(0, Math.max(0, whole.lastIndexOf('/'), whole.lastIndexOf('\\')));
 };
 
+const FOLDER_KEY = 'ai-graph.last-folder';
+
+/** The folder a graph was last opened from or saved to, as this browser remembers it -- '' where it cannot. */
+function rememberedFolder(): string {
+  try {
+    return localStorage.getItem(FOLDER_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberFolder(folder: string): void {
+  try {
+    localStorage.setItem(FOLDER_KEY, folder);
+  } catch {
+    // A browser that keeps nothing starts where the server was started.
+  }
+}
+
 export default function App() {
   const addNode = useGraphStore((s) => s.addNode);
   // The node whose panel is open beside the canvas, while it is there...
@@ -248,9 +267,15 @@ export default function App() {
   // was: the folder the server was started in. Where the file browser starts
   // when the path box holds a bare name, a new graph's or one typed, with the
   // name filled in: it read the name as a folder, and opened on "Directory
-  // not found: …\untitled_graph".
-  const [lastFolder, setLastFolder] = useState('');
-  useEffect(() => { if (currentFilePath) setLastFolder(folderOf(currentFilePath)); }, [currentFilePath]);
+  // not found: …\untitled_graph". Kept in the browser, so a restart of the
+  // server does not send the person back to the folder it was started in.
+  const [lastFolder, setLastFolder] = useState(rememberedFolder);
+  useEffect(() => {
+    if (!currentFilePath) return;
+    const folder = folderOf(currentFilePath);
+    setLastFolder(folder);
+    rememberFolder(folder);
+  }, [currentFilePath]);
   const typedName = filePrompt && !/[\\/]/.test(filePrompt.path) ? filePrompt.path.trim() : null;
 
   // Open and Save As go straight to the file browser: choosing a file is what

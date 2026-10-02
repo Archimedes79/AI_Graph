@@ -404,7 +404,7 @@ describe('changing a body there is (refine)', () => {
     const { prompt, system } = ai.asked[0];
     expect(prompt).toContain('## What the node holds as it is now\n\n{\n  "cities": [\n    "Berlin"\n  ]\n}');
     expect(prompt).toContain('## What to change\n\nAdd Paris.');
-    expect(prompt).toMatch(/restate what this node does in one or two sentences, inside <description><\/description> tags/);
+    expect(prompt).toMatch(/write the node description again, inside <description><\/description> tags, with the change worked in: keep every sentence, name, list and number of it the change does not touch, word for word/);
     expect(prompt).toContain('in one ```json block, as plain JSON -- then, after the block, the node\'s text restated as asked above, and nothing else.');
     expect(`${system} ${prompt}`).not.toMatch(/JSON, and nothing else|Output only/);
     expect(reply).toMatchObject({ result: '{"cities": ["Berlin", "Paris"]}', description: 'Keeps two capitals: Berlin and Paris.' });
@@ -412,6 +412,28 @@ describe('changing a body there is (refine)', () => {
     const fresh = scripted(['```json\n{"cities": []}\n```']);
     await generate({ node: held }, deps(fresh));
     expect(fresh.asked[0].prompt).toContain('in one ```json block, as plain JSON, and nothing else.');
+  });
+});
+
+describe('the text a change restates', () => {
+  // Asked to restate it in one or two sentences, a model cut a description that
+  // listed what the node is written from down to a summary.
+  const long = 'Reads a broker export. Hands on "positions": one row each with isin, name, quantity, price, value and currency, '
+    + 'and "notes": what in the export could not be read. Themes: World, Dividend, Emerging, Bonds, Gold, Silver, Crypto, Cash.';
+  const held = () => ({ ...node('ai', { prompt: 'Read it.' }), description: long });
+  const change = 'Both outputs at the top level.';
+
+  it('keeps the text as it was, with the change added, where the model cut it to less than half', async () => {
+    const ai = scripted(['```md\nRead it, both outputs at the top.\n```\n<description>Reads a broker export.</description>']);
+    const reply = await generate({ node: held(), refine: { change } }, deps(ai));
+    expect(reply.description).toBe(`${long}\n\n${change}`);
+  });
+
+  it('takes the text restated where it kept what was there', async () => {
+    const restated = `${long} Both outputs stand at the top level.`;
+    const ai = scripted([`\`\`\`md\nRead it.\n\`\`\`\n<description>${restated}</description>`]);
+    const reply = await generate({ node: held(), refine: { change } }, deps(ai));
+    expect(reply.description).toBe(restated);
   });
 });
 
@@ -432,7 +454,7 @@ describe('a change that needs another output -- the review\'s tool 1: a chart\'s
     const reply = await generate({ node: chart(), refine: { change: CHANGE }, output_targets: { output: '"Page" (port "Chart")' } }, deps(ai, nodeCode));
     const sent = ai.asked[0].prompt;
     expect(sent).toContain(`--- output.js, the output definition it returns now ---\n${CONFIG}`);
-    expect(sent).toContain('If the change needs other outputs than output.js describes -- other keys, or another shape -- return the new output.js, the whole file, in a second ```js block after the function.');
+    expect(sent).toContain('If the change needs other outputs than output.js describes -- other keys, or another shape -- or is about output.js itself, return the new output.js, the whole file, in a second ```js block after the function.');
     expect(sent).toContain('Where the change needs other outputs than output.js describes, the new output.js follows the function, whole, in a second ```js block.');
     expect(reply).toMatchObject({ result: figureCode, output_definition: FIGURE, description: expect.stringContaining('bar figure'), probe: { status: 'ok' } });
     expect(ai.asked).toHaveLength(1);

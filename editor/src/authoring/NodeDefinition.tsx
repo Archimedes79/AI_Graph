@@ -260,7 +260,9 @@ function Row({ node, write, setConfig, onGenerate, generating, preview, before, 
           disabled={generating}
           className="text-xs px-2 py-1 rounded"
           style={{ background: SUCCESS, color: 'white', opacity: generating ? 0.5 : 1 }}
-          title={write === 'body' && hasDefinitions(node)
+          // Greyed out while one is writing: pressed then, it did nothing and said nothing.
+          title={generating ? '✨ is still writing: wait for it, or Stop it below'
+            : write === 'body' && hasDefinitions(node)
             ? `Write ${file} -- and first what is missing of input.js and output.js`
             : `Write ${file} from the node's text`}
         >

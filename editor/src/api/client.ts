@@ -95,10 +95,13 @@ export async function watchGeneration<T>(
   stop?: AbortSignal,
 ): Promise<T> {
   const progressId = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // A poll still on its way when the generation ended is not shown: it put
+  // the "waiting…" of a finished call into the next generation's live view.
+  let done = false;
   const polling = setInterval(async () => {
     try {
       const { calls } = await call('generationProgress', { id: progressId });
-      if (calls.length && !stop?.aborted) onCalls(calls);
+      if (calls.length && !done && !stop?.aborted) onCalls(calls);
     } catch {
       // Nothing to do: the next poll, or the generation's own answer, says more.
     }
@@ -109,6 +112,7 @@ export async function watchGeneration<T>(
   try {
     return await Promise.race([run(progressId), stopped]);
   } finally {
+    done = true;
     clearInterval(polling);
   }
 }
