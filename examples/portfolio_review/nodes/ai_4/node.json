@@ -1,0 +1,5 @@
+{
+  "label": "Quant Analyst",
+  "description": "The quantitative analyst. It has no return series: from the asset-class weights in the metrics and long-run assumptions it states openly, it estimates expected return and volatility as ranges; where the portfolio sits against an efficient frontier and which direction improves it; the risk contribution of each sleeve (risk parity view); factor exposure (market, size, value, quality, momentum, rates, commodities); a 10-year Monte Carlo view (10th, 50th and 90th percentile, as ranges); normal and crisis correlations of the main sleeves; the diversification ratio; and a comparison with a simple 70/30 world equity and euro bond portfolio -- is the complexity justified? Ranges, never false precision. Its one output, 'quant', is all this as Markdown text, a section headed '## 5b. Quantitative Analysis'.",
+  "config": {}
+}

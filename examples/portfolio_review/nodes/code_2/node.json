@@ -1,0 +1,5 @@
+{
+  "label": "Report Builder",
+  "description": "Puts the report together in Markdown from its parts, without changing a word of them. It is handed 'metrics' (the metrics object), the sections 'macro', 'valuation', 'risk', 'optimisation', 'quant', 'tax', 'diversification', 'psychology' and 'counter' (Markdown text each), and from the lead advisor 'summary', 'actions' (a list of rows), 'watch_list' and 'bottom_line'. Its one output, 'report': '# Portfolio Review' with today's date; '## Executive Summary' and the summary; '## 1. Portfolio Snapshot' written from the metrics -- a totals table, allocation by theme, by asset type, by region and by account as tables, concentration, duplicates, small positions, risk flags and notes; then the sections in this order: macro, valuation, risk, optimisation, quant, tax, diversification, psychology, counter; then '## 9. Master Action List' as a Markdown table of the actions, '## 10. Watch List' with the watch list, and '## The Honest Bottom Line' with the bottom line. A part that did not arrive is left out with one line that says which.",
+  "config": {}
+}

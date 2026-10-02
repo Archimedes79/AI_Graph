@@ -1,0 +1,9 @@
+{
+  "label": "Data Reader",
+  "description": "Reads a portfolio export in any format -- CSV with any delimiter, German or English column names and number formats, one or several accounts -- and returns the portfolio as clean data, without any advice. For every position: account, name, identifier (ISIN or ticker where given), asset type (ETF, ETC, ETN, ETP, stock, bond, fund, money market, crypto), theme (exactly one of: Broad World Equity, Dividend / Income, Precious Metals, Emerging Markets, Fixed Income, Real Estate, Technology / Innovation, Leveraged / Short / Hedge, Single Stocks, Crypto, Defensive / Cash, Frontier / Niche), region (inferred from the name where missing), quantity, cost basis in EUR, current value in EUR, unrealised P&L in EUR and in %. The same security in several accounts stays one row per account. Its outputs: 'positions', the list of positions, and 'notes', a list of data-quality notes (missing prices, non-EUR currencies, odd numbers).",
+  "config": {
+    "input_files": [
+      "examples/data/portfolio_review/broker_export.csv"
+    ]
+  }
+}

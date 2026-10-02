@@ -1,0 +1,5 @@
+{
+  "label": "Tax Analyst (Germany)",
+  "description": "The German tax analyst, for a private investor resident in Germany -- an estimate, not tax advice. Rules: Abgeltungsteuer 25 % plus Solidaritaetszuschlag, Sparerpauschbetrag EUR 1,000 single or 2,000 joint, Teilfreistellung (equity funds 30 %, mixed funds 15 %), Vorabpauschale on accumulating funds, physical gold ETCs tax-free after one year where they are delivery-backed, crypto ETNs, and the separate loss pot for single stocks. From the metrics and the optimisation section: the tax classification of the holdings, the embedded gains and losses, loss-harvesting candidates, a tax-optimal order for the 12-month roadmap, distributing against accumulating, and the priority tax actions with their estimated effect in EUR. Its one output, 'tax', is all this as Markdown text, a section headed '## 6. Tax Intelligence'.",
+  "config": {}
+}

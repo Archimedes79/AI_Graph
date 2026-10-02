@@ -1,0 +1,5 @@
+{
+  "label": "Metrics",
+  "description": "Computes the hard numbers of a portfolio, so that no analyst has to do arithmetic. 'input' arrives as the data reader's object: 'positions', a list of rows with account, name, identifier, asset_type, theme, region, quantity, cost_eur, value_eur, pnl_eur, pnl_pct, and 'notes'. Returns 'metrics', one object: total value, total cost, total P&L in EUR and %, number of positions and of accounts; every position with its weight in %; allocation by theme, by asset type, by region and by account (EUR and %, largest first); concentration (HHI over the position weights, share of the top 10, the largest position); duplicates (one identifier held in several accounts); small positions under EUR 500; risk flags (leveraged, short, crypto, single stocks, P&L below -10 %, P&L above +50 %); and the notes. And 'chart', a donut of the value by theme for the chart block: {kind: 'donut', title, points: [{label, value}]}.",
+  "config": {}
+}
