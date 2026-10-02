@@ -716,7 +716,13 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   };
   const own = (node.config.prompts as Partial<Record<string, string>> | undefined)?.[write];
   const template = own?.trim() ? own : STANDARD_PROMPTS[kind];
-  const values = variables(request, shape.reads);
+  // ✨ Input and ✨ Output write their file anew, from the text: shown the one
+  // there was, a model copied it -- a description that named its output
+  // "optimisation" kept "output" through three presses.
+  const anew = write === 'input' || write === 'output'
+    ? { ...request, node: { ...node, config: { ...node.config, [`${write}_definition`]: '' } } }
+    : request;
+  const values = variables(anew, shape.reads);
   /**
    * The prompt as sent: the template filled -- for a repair, from the node as
    * the first attempt left it (*left*: the text a change restated, the

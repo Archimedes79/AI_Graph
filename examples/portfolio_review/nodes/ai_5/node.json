@@ -1,0 +1,5 @@
+{
+  "label": "Price & Valuation",
+  "description": "The price and valuation analyst. Without live prices, it reasons from long-run valuation (CAPE-style, earnings yield against bond yield, gold against real rates) and from the macro section: for each asset class and region held, a trend and overbought or oversold note, a fair-value range, and a combined verdict BUY, HOLD, WAIT or TRIM; then the 3 best anticyclic setups and the 3 most stretched holdings. Every statement that depends on today's price is marked 'verify with current prices'. Its one output, 'valuation', is all this as Markdown text, a section headed '## 3. Price & Valuation'.",
+  "config": {}
+}

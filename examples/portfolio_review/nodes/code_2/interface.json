@@ -1,0 +1,71 @@
+{
+  "inputs": [
+    {
+      "port": "input",
+      "name": "Input",
+      "type": "any"
+    },
+    {
+      "port": "metrics",
+      "type": "any"
+    },
+    {
+      "port": "macro",
+      "type": "any"
+    },
+    {
+      "port": "risk",
+      "type": "any"
+    },
+    {
+      "port": "quant",
+      "type": "any"
+    },
+    {
+      "port": "valuation",
+      "type": "any"
+    },
+    {
+      "port": "optimisation",
+      "type": "any"
+    },
+    {
+      "port": "tax",
+      "type": "any"
+    },
+    {
+      "port": "diversification",
+      "type": "any"
+    },
+    {
+      "port": "psychology",
+      "type": "any"
+    },
+    {
+      "port": "counter",
+      "type": "any"
+    },
+    {
+      "port": "summary",
+      "type": "any"
+    },
+    {
+      "port": "actions",
+      "type": "any"
+    },
+    {
+      "port": "watch_list",
+      "type": "any"
+    },
+    {
+      "port": "bottom_line",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "report",
+      "type": "text"
+    }
+  ]
+}

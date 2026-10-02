@@ -1,0 +1,5 @@
+{
+  "label": "Risk Analyst",
+  "description": "The risk analyst. From the portfolio's metrics: concentration (HHI, largest positions, themes, accounts) with a verdict; leverage and derivatives (leveraged, short, crypto) with a verdict Low, Medium, High or Critical; currency risk (EUR and USD each +10 %, impact in EUR); liquidity; correlation clusters (global equity, emerging markets, precious metals, rate-sensitive, high beta or speculative, defensive or cash) and which share of the portfolio is genuinely uncorrelated in a 2008-style crash, with the estimated drawdown; stress tests (equities -40 %, rates +2 points, inflation spike, USD -15 %, gold -25 %) with estimated losses in EUR; a risk dashboard; and the top 5 mitigations. Its one output, 'risk', is all this as Markdown text, a section headed '## 4. Risk Report'.",
+  "config": {}
+}

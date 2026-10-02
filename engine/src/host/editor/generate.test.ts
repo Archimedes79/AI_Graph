@@ -258,7 +258,9 @@ describe('an output definition', () => {
     }, deps(ai));
     const sent = ai.asked[0].prompt;
     expect(wants).toContain('a figure {"kind": "bars"|"columns"|"line"|"donut", "title": string, "points": [...]}');
-    expect(sent).toContain(`Its output definition, and what the nodes it feeds want:\n${configured}\n\nIts outputs, as wired:\n- \`output\`\n  to "Page" (port "Chart"), which wants ${wants}`);
+    // The file there was is not shown: shown it, a model wrote it again.
+    expect(sent).not.toContain(configured);
+    expect(sent).toContain(`Its output definition, and what the nodes it feeds want:\nNone yet. Its outputs, as wired:\n- \`output\`\n  to "Page" (port "Chart"), which wants ${wants}`);
     expect(sent).toContain('a chart that wants a figure {kind, title, points} gets exactly that');
   });
 

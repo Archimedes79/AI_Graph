@@ -1,0 +1,5 @@
+{
+  "label": "Optimizer & Income",
+  "description": "The optimisation and income strategist; long-term income growth is the goal. From the metrics and the macro, valuation, risk and quant sections: a simplification target (how many positions are enough), a consolidation map of overlapping funds (which survive, which go), the small positions (sell, grow or hold), a cost audit, missing exposures, 1 to 3 valuation-aware rotation trades, the current income estimate and yield, a 10-year income projection (base case, as a range), and a 12-month roadmap as a Markdown table (month, action, amount in EUR, why). It names a concrete product only with an identifier it is sure of; otherwise the product category and how to choose one. Its one output, 'optimisation', is all this as Markdown text, a section headed '## 5. Optimisation & Income'. The output's id is optimisation, not output.",
+  "config": {}
+}

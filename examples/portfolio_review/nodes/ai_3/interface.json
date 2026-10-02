@@ -1,0 +1,20 @@
+{
+  "inputs": [
+    {
+      "port": "prompt",
+      "name": "Prompt",
+      "type": "any",
+      "description": "What to ask."
+    },
+    {
+      "port": "metrics",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "risk",
+      "type": "text"
+    }
+  ]
+}

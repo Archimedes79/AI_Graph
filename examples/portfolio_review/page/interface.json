@@ -1,0 +1,28 @@
+{
+  "inputs": [
+    {
+      "port": "plot_window_in",
+      "name": "Allocation by theme",
+      "type": "any",
+      "list": true
+    },
+    {
+      "port": "table_in",
+      "name": "Master action list",
+      "type": "any",
+      "list": true
+    },
+    {
+      "port": "text_io_in",
+      "name": "Report",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "input_picker_out",
+      "name": "Portfolio export (CSV, any broker)",
+      "type": "file_path"
+    }
+  ]
+}

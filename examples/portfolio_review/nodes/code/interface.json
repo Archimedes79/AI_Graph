@@ -1,0 +1,19 @@
+{
+  "inputs": [
+    {
+      "port": "input",
+      "name": "Input",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "metrics",
+      "type": "json"
+    },
+    {
+      "port": "chart",
+      "type": "json"
+    }
+  ]
+}

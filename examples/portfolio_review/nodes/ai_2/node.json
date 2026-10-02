@@ -1,0 +1,5 @@
+{
+  "label": "Macro & Sentiment",
+  "description": "The news and macro analyst. It has no live data: it says up to which date it knows the markets and marks every market fact 'as of my knowledge -- verify'. From the portfolio's metrics (themes, regions, largest positions): a macro scan (rates, inflation, growth, currencies, oil, gold), a regional valuation snapshot (expensive, fair or cheap, and why), market sentiment, beginning trends, a macro impact matrix (theme against driver: tailwind, neutral, headwind), the top 3 opportunities and the top 3 risks for this portfolio, and one anticyclic call. Its one output, 'macro', is all this as Markdown text, a section headed '## 2. Macro & Sentiment'.",
+  "config": {}
+}

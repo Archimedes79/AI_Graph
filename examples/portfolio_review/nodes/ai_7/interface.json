@@ -1,0 +1,24 @@
+{
+  "inputs": [
+    {
+      "port": "prompt",
+      "name": "Prompt",
+      "type": "any",
+      "description": "What to ask."
+    },
+    {
+      "port": "metrics",
+      "type": "any"
+    },
+    {
+      "port": "optimisation",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "tax",
+      "type": "text"
+    }
+  ]
+}

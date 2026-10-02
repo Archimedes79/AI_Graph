@@ -1,0 +1,52 @@
+{
+  "inputs": [
+    {
+      "port": "prompt",
+      "name": "Prompt",
+      "type": "any",
+      "description": "What to ask."
+    },
+    {
+      "port": "metrics",
+      "type": "any"
+    },
+    {
+      "port": "macro",
+      "type": "any"
+    },
+    {
+      "port": "risk",
+      "type": "any"
+    },
+    {
+      "port": "quant",
+      "type": "any"
+    },
+    {
+      "port": "valuation",
+      "type": "any"
+    },
+    {
+      "port": "optimisation",
+      "type": "any"
+    },
+    {
+      "port": "tax",
+      "type": "any"
+    },
+    {
+      "port": "diversification",
+      "type": "any"
+    },
+    {
+      "port": "psychology",
+      "type": "any"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "counter",
+      "type": "text"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "label": "Diversification Scout",
+  "description": "The diversification and anticorrelation scout. From the metrics and the quant section: the correlation landscape of the current sleeves, the gaps, and candidates for an 8 to 12 % security layer from these categories: managed futures or trend following, minimum volatility, quality factor, listed infrastructure, diversified commodities, market neutral, catastrophe bonds, listed private equity, diversified holding companies. The top 3 candidates, why each fits, how much of the portfolio, and an overlap check with what is already held. It names a concrete product only with an identifier it is sure of; otherwise the category and how to choose one. Its one output, 'diversification', is all this as Markdown text, a section headed '## 7. Diversification & Security Layer'.",
+  "config": {}
+}

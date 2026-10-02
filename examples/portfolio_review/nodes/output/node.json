@@ -1,0 +1,7 @@
+{
+  "label": "Save Report",
+  "config": {
+    "value": "output/portfolio_review.md",
+    "write_mode": "file"
+  }
+}

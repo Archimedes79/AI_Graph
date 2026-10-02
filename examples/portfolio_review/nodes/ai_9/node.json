@@ -1,0 +1,5 @@
+{
+  "label": "Psychology Analyst",
+  "description": "The behavioural finance analyst. From the metrics and the optimisation section: a bias audit read from the portfolio itself (fragmentation, momentum chasing, loss aversion in the deepest losers, lottery-ticket positions, home bias, overconfidence), crowd sentiment for each asset class held, a decision-quality rating of each proposed action (sound, check or bias-driven, and why), anticyclic triggers, and one 'cold water' sentence. Its one output, 'psychology', is all this as Markdown text, a section headed '## 8. Behavioural Finance'.",
+  "config": {}
+}
