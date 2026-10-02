@@ -197,7 +197,9 @@ const PLAIN_JSON = 'plain JSON: double-quoted keys and strings, no comments, no 
  * cost a second call to correct.
  */
 function definitionSkeleton(type: 'Input' | 'Output', ids: string[]): string {
-  const keys = ids.length ? ids : [type.toLowerCase()];
+  // No id to keep is no id to show: shown "output", a model wrapped the two
+  // outputs it named in one key of that name.
+  const keys = ids.length ? ids : ['<id>'];
   return `/** @typedef {Object} ${type} ${keys.map((id) => `@property {…} ${id} …`).join(' ')} */\n`
     + `module.exports = { ${keys.map((id) => `"${id}": …`).join(', ')} };`;
 }
@@ -248,7 +250,7 @@ function frame(kind: PromptKind, shape: Shape, restating: boolean, asked: Output
       break;
     }
     case 'output': {
-      lines.push('Answer with the whole file output.js, in one ```js block and nothing else, shaped like this:', '', definitionSkeleton('Output', outputs), '',
+      lines.push('Answer with the whole file output.js, in one ```js block and nothing else, shaped like this:', '', definitionSkeleton('Output', wired), '',
         '- the JSDoc: `@typedef {Object} Output`, then one `@property {type} <id> <what it holds>` for each output;',
         `- after \`module.exports =\`: what one call returns for the example input, keyed by the outputs, as ${PLAIN_JSON}.`,
         // Kept to the ids there were, a model answered "its mood, and the reason" on one output "output" (the review's tool 2).
@@ -256,7 +258,8 @@ function frame(kind: PromptKind, shape: Shape, restating: boolean, asked: Output
       if (outputs.length) {
         lines.push(wired.length
           ? `Now it has ${quoted(outputs)}. Keep ${quoted(wired)}: ${wired.length > 1 ? 'they are' : 'it is'} wired to other nodes, which read ${wired.length > 1 ? 'them' : 'it'} by that id.`
-          : `Now it has ${quoted(outputs)}, and nothing is wired to ${outputs.length > 1 ? 'them' : 'it'} yet: name each by what it holds.`);
+          // Told "now it has 'output'", a model kept it over the "'optimisation'" its description named.
+          : `Nothing is wired to its outputs yet, so ${quoted(outputs)} ${outputs.length > 1 ? 'are' : 'is'} only a placeholder: name each output as the description names it, else by what it holds.`);
       }
       if (perItem) lines.push('It is what one call returns: the calls\' answers are collected into lists by themselves.');
       break;
@@ -578,7 +581,36 @@ function definitionFaults(kind: 'input' | 'output', text: string, shape: Shape):
     return stray.length ? [`It names ${quoted(stray)}, which ${stray.length > 1 ? 'are' : 'is'} not among the inputs: ${quoted(shape.inputs) || 'none'}.`] : [];
   }
   const lost = shape.wired.filter((port) => !keys.includes(port));
-  return lost.length ? [`It leaves out ${quoted(lost)}, which other nodes are wired to and read by that id.`] : [];
+  const faults = lost.length ? [`It leaves out ${quoted(lost)}, which other nodes are wired to and read by that id.`] : [];
+  // A JSDoc naming two outputs over an example that wraps them in one key: the
+  // ports follow the example, so the node had one output where it said two.
+  const said = typedefKeys(text, 'Output');
+  if (said.length && (said.length !== keys.length || said.some((key) => !keys.includes(key)))) {
+    faults.push(`Its example is keyed ${quoted(keys)}, and its @typedef Output names ${quoted(said)}: key the example by exactly the outputs the JSDoc names, one key each, with nothing wrapped around them.`);
+  }
+  return faults;
+}
+
+/**
+ * The properties the JSDoc gives *type*: each `@property {…} <id>` in the
+ * comment that says `@typedef {Object} <type>`. A type may hold braces of its
+ * own -- `{Array<{label: string}>}` -- so it is read to its matching brace.
+ */
+export function typedefKeys(text: string, type: string): string[] {
+  const comment = [...text.matchAll(/\/\*\*[\s\S]*?\*\//g)].map(([found]) => found)
+    .find((found) => new RegExp(String.raw`@typedef\s+\{Object\}\s+${type}\b`).test(found));
+  if (!comment) return [];
+  const keys: string[] = [];
+  for (const { index } of comment.matchAll(/@property\s*\{/g)) {
+    let at = comment.indexOf('{', index);
+    for (let depth = 0; at < comment.length; at += 1) {
+      if (comment[at] === '{') depth += 1;
+      else if (comment[at] === '}' && --depth === 0) break;
+    }
+    const name = /^\s*\[?([\w$]+)/.exec(comment.slice(at + 1));
+    if (name) keys.push(name[1]);
+  }
+  return keys;
 }
 
 // ---------------------------------------------------------------------------

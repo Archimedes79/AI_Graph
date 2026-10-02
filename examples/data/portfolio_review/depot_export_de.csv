@@ -1,0 +1,13 @@
+ISIN;Name;Typ;Anzahl;Kaufpreis;Aktueller Kurs;Aktueller Wert;Währung;Region;Sektor;Portfolioname
+XX0000000201;Welt Aktien ETF (thesaurierend);ETF;420;68,40;96,85;40.677,00;EUR;Welt;;Hauptdepot
+XX0000000202;Europa Dividenden ETF;ETF;610;19,80;23,45;14.304,50;EUR;Europa;;Hauptdepot
+XX0000000203;USA Large Cap ETF;ETF;55;410,00;512,30;28.176,50;EUR;Nordamerika;;Hauptdepot
+XX0000000204;Schwellenländer ETF;ETF;300;31,20;33,10;9.930,00;EUR;Emerging Markets;;Hauptdepot
+XX0000000205;Unternehmensanleihen Euro ETF;Anleihe;80;118,40;121,10;9.688,00;EUR;Europa;;Hauptdepot
+XX0000000206;Gold physisch ETC;ETC;120;52,10;79,60;9.552,00;EUR;;;Hauptdepot
+XX0000000207;Muster Technologie AG;Aktie;60;140,00;214,90;12.894,00;EUR;Deutschland;Technologie;Zweitdepot
+XX0000000208;Muster Versicherung AG;Aktie;30;280,00;311,50;9.345,00;EUR;Deutschland;Finanzen;Zweitdepot
+XX0000000209;Wasserstoff Innovation ETF;ETF;400;11,20;5,85;2.340,00;EUR;Welt;Energie;Zweitdepot
+XX0000000210;Bitcoin ETN;ETN;40;29,00;31,20;1.248,00;EUR;;;Zweitdepot
+XX0000000211;Tagesgeld ETF;Geldmarkt;40;139,80;142,10;5.684,00;EUR;Europa;;Hauptdepot
+XX0000000212;Infrastruktur Welt ETF;ETF;9;28,00;30,15;271,35;EUR;Welt;Infrastruktur;Zweitdepot

@@ -276,10 +276,20 @@ describe('an output definition', () => {
     const mood = { ...node('ai', {}, { inputs: ['prompt'], outputs: ['output'] }), description: 'Read the text and say its mood in one word, and the reason in one line.' };
     await generate({ node: mood, write: 'output' }, deps(ai));
     const sent = ai.asked[0].prompt;
-    expect(sent).toContain('/** @typedef {Object} Output @property {…} output … */\nmodule.exports = { "output": … };');
+    // Unwired, its "output" is not shown as the key to fill: shown it, a model wrapped what it named in it.
+    expect(sent).toContain('/** @typedef {Object} Output @property {…} <id> … */\nmodule.exports = { "<id>": … };');
     expect(sent).toContain('one for each thing the description asks it to hand on -- "its mood, and the reason" are two outputs, "mood" and "reason".');
-    expect(sent).toContain('Now it has "output", and nothing is wired to it yet: name each by what it holds.');
+    expect(sent).toContain('Nothing is wired to its outputs yet, so "output" is only a placeholder: name each output as the description names it, else by what it holds.');
     expect(sent).toContain('as plain JSON: double-quoted keys and strings, no comments, no trailing commas.');
+  });
+
+  it('is asked again where its example wraps the outputs its JSDoc names in one key', async () => {
+    const wrapped = '/** @typedef {Object} Output\n * @property {Array<{label: string}>} metrics The numbers.\n * @property {Object} chart A figure.\n */\nmodule.exports = { "output": { "metrics": [], "chart": {} } };';
+    const flat = '/** @typedef {Object} Output\n * @property {Array<{label: string}>} metrics The numbers.\n * @property {Object} chart A figure.\n */\nmodule.exports = { "metrics": [], "chart": {} };';
+    const ai = scripted([js(wrapped), js(flat)]);
+    const reply = await generate({ node: node('code', {}, { inputs: ['input'], outputs: ['output'] }), write: 'output' }, deps(ai));
+    expect(ai.asked[1].prompt).toContain('Its example is keyed "output", and its @typedef Output names "metrics", "chart"');
+    expect(reply.result).toBe(flat);
   });
 });
 

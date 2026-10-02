@@ -1,0 +1,22 @@
+Account,Security,Identifier,Asset class,Quantity,Avg cost,Last price,Currency,Market value (EUR)
+Main depot,World Equity ETF (Acc),XX0000000101,ETF,310,71.20,96.85,EUR,30023.50
+Main depot,All-World Equity ETF (Dist),XX0000000102,ETF,140,98.10,121.40,EUR,16996.00
+Main depot,Global High Dividend ETF,XX0000000103,ETF,520,27.40,31.95,EUR,16614.00
+Main depot,Global Select Dividend ETF,XX0000000104,ETF,260,24.80,26.10,EUR,6786.00
+Main depot,Dividend Aristocrats ETF,XX0000000105,ETF,95,52.30,58.75,EUR,5581.25
+Main depot,Emerging Markets Equity ETF,XX0000000106,ETF,400,29.90,33.10,EUR,13240.00
+Main depot,Euro Government Bond 1-3y ETF,XX0000000107,Bond ETF,60,128.50,129.90,EUR,7794.00
+Main depot,Physical Gold ETC,XX0000000108,ETC,150,48.20,79.60,EUR,11940.00
+Main depot,Physical Gold ETC (Euro hedged),XX0000000109,ETC,40,61.00,88.30,EUR,3532.00
+Main depot,Physical Silver ETC,XX0000000110,ETC,180,21.50,34.20,EUR,6156.00
+Main depot,Europe Real Estate ETF,XX0000000111,ETF,200,24.10,20.85,EUR,4170.00
+Second broker,Nasdaq-100 2x Leveraged ETP,XX0000000112,ETP,35,61.40,104.20,EUR,3647.00
+Second broker,S&P 500 Short ETF,XX0000000113,ETF,120,9.80,7.15,EUR,858.00
+Second broker,Bitcoin ETN,XX0000000114,ETN,110,38.50,31.20,EUR,3432.00
+Second broker,Example Software Inc.,XX0000000115,Stock,25,180.00,262.40,USD,5904.00
+Second broker,Example Utilities SE,XX0000000116,Stock,140,18.20,16.40,EUR,2296.00
+Second broker,Clean Energy Innovation ETF,XX0000000117,ETF,300,9.40,6.05,EUR,1815.00
+Second broker,Frontier Markets ETF,XX0000000118,ETF,12,21.00,22.40,EUR,268.80
+Second broker,Global Water ETF,XX0000000119,ETF,6,52.00,61.30,EUR,367.80
+Savings plan,World Equity ETF (Acc),XX0000000101,ETF,84,88.10,96.85,EUR,8135.40
+Savings plan,Overnight Rate ETF,XX0000000120,Money market ETF,95,140.20,142.10,EUR,13499.50
