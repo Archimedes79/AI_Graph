@@ -230,6 +230,9 @@ export default function GraphCanvas({ active, onOpenPage }: { active: boolean; o
         // point -- one type size across the whole window -- and a graph too big
         // for the viewport is still shrunk to fit.
         fitViewOptions={{ maxZoom: 1, padding: 0.25 }}
+        // ReactFlow's 0.5 held a graph of fifteen nodes in a row at twice the
+        // canvas's width: a wire is drawn only between two ends in sight.
+        minZoom={0.2}
         onInit={setRfInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}

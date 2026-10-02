@@ -1,8 +1,8 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { Handle, Position, NodeProps, NodeResizer, useUpdateNodeInternals } from 'reactflow';
+import { Handle, Position, NodeProps, NodeResizer, useStore, useUpdateNodeInternals } from 'reactflow';
 import type { RFNodeData } from '@/store/nodeData';
 import type { GraphNode, NodeResult, Port } from '@/graph';
-import { useGraphStore } from '@/store/graphStore';
+import { takesNewInputs, useGraphStore } from '@/store/graphStore';
 import { NODE_BUILDERS } from '@/elements/registry';
 import { errorLine, type PortPreviews } from '@/elements/resultPreview';
 import { ACCENT, ACCENT_GLOW, DANGER, DIM, EVENT, HOVER, LINE, MUTED, SUCCESS, SUNKEN, SURFACE, TEXT } from '@/ui/theme';
@@ -225,6 +225,12 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
     askToDelete([id], [], window.confirm);
   }, [id]);
 
+  // A wire on its way from another node's output: where dropping it on the
+  // card makes a new input (`connectToNewInput`), the card says so -- nothing
+  // else told that a code or AI node takes one there and other nodes do not.
+  const wireComing = useStore((s) => s.connectionHandleType === 'source' && !!s.connectionNodeId && s.connectionNodeId !== id);
+  const takesWire = wireComing && takesNewInputs(graphNode);
+
   const failedDrop = statusTone('error');
   const ports = Math.max(graphNode.inputs.length, graphNode.outputs.length);
 
@@ -236,7 +242,7 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
       onDrop={onDrop}
       style={{
         background: SURFACE,
-        border: `1px ${fileOver ? 'dashed' : 'solid'} ${lit || fileOver ? ACCENT : LINE}`,
+        border: `1px ${fileOver || takesWire ? 'dashed' : 'solid'} ${lit || fileOver || takesWire ? ACCENT : LINE}`,
         // The accent, doubled to two pixels without moving anything, and its glow.
         boxShadow: lit ? `0 0 0 1px ${ACCENT}, 0 0 0 6px ${ACCENT_GLOW}` : undefined,
         ...(page
@@ -330,6 +336,11 @@ const GraphNodeView = memo(({ id, data, selected }: NodeProps<RFNodeData>) => {
           </div>
         ))}
         {failure && <div className="mt-1">{failure}</div>}
+        {takesWire && (
+          <div className="mt-1 rounded px-1 py-0.5 text-xs" style={{ background: HOVER, color: ACCENT }}>
+            Drop the wire here for a new input
+          </div>
+        )}
         {/* A file dropped here that could not become its example, and why --
             whole, since it says what to do instead. */}
         {dropFailed && (

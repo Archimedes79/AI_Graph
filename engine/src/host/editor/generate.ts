@@ -157,9 +157,14 @@ function codeBlocks(reply: string): string[] {
   return [...reply.replace(/\r\n/g, '\n').matchAll(new RegExp(FENCED, 'g'))].map((match) => match[2].trim());
 }
 
-/** Said last in a request to change a body, so the node's text changes with it. */
-const RESTATE = 'After that, restate what this node does in one or two sentences, inside <description></description> tags: '
-  + 'what it does now, with the change. It replaces the node description above.';
+/**
+ * Said last in a request to change a body, so the node's text changes with it.
+ * Asked to restate it "in one or two sentences", a model cut a description
+ * that listed the themes and fields a node is written from down to a summary.
+ */
+const RESTATE = 'After that, write the node description again, inside <description></description> tags, with the change worked in: '
+  + 'keep every sentence, name, list and number of it the change does not touch, word for word -- ✨ writes the node\'s files from it. '
+  + 'It replaces the node description above.';
 
 /** The text a changed body's answer restated, and the answer without it. */
 function descriptionIn(raw: string): { description?: string; rest: string } {
@@ -213,7 +218,7 @@ function definitionSkeleton(type: 'Input' | 'Output', ids: string[]): string {
 type OutputAsked = 'new' | 'mended' | undefined;
 
 /** Asked in a change: the output.js it outgrows comes back after *body*, whole. */
-const newOutput = (body: string): string => 'If the change needs other outputs than output.js describes -- other keys, or another shape -- '
+const newOutput = (body: string): string => 'If the change needs other outputs than output.js describes -- other keys, or another shape -- or is about output.js itself, '
   + `return the new output.js, the whole file, in a second \`\`\`js block after ${body}.`;
 
 /**
@@ -752,7 +757,14 @@ export async function generate(given: GenerateRequest, deps: GenerateDeps): Prom
   const body = typeof held === 'string' ? held : held === undefined || held === null ? '' : JSON.stringify(held, null, 2);
   // Only a change restates the text: nothing else asks for it, and a text a
   // model offered unasked is not written over the person's.
-  const restated = (said: string | undefined) => (said && refine?.change?.trim() ? { description: said } : {});
+  // A text cut to less than half is not the text restated but a summary of it,
+  // which loses what the files are written from: the change is added to it instead.
+  const restated = (said: string | undefined) => {
+    const change = refine?.change?.trim();
+    if (!said || !change) return {};
+    const was = node.description.trim();
+    return { description: said.length * 2 < was.length ? `${was}\n\n${change}` : said };
+  };
 
   try {
     if (write === 'input' || write === 'output') {

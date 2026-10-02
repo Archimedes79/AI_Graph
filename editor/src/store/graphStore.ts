@@ -303,6 +303,11 @@ export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult):
  * card keeps its width (260 at most, a page's 320), and three new nodes still
  * fit beside an open panel at a zoom that can be read (`READABLE_ZOOM`).
  */
+/** Whether a wire dropped on *node* becomes a new input of it: a code or AI node, whose inputs are its own to name. */
+export function takesNewInputs(node: GraphNode): boolean {
+  return derivedNodePorts(node) === null && engineRegistry.node(node.node_type)?.readsFileInputs === true;
+}
+
 export function besideTheRest(placed: Node[]): { x: number; y: number } {
   if (!placed.length) return { x: 200, y: 120 };
   const right = Math.max(0, ...placed.map((node) => node.position.x + (node.width ?? 260)));
@@ -582,8 +587,7 @@ export const useGraphStore = create<GraphStore>()(
     connectToNewInput: (wire) => {
       const nodeOf = (id: string) => get().rfNodes.find((node: RFNode) => node.id === id)?.data.graphNode as GraphNode | undefined;
       const target = nodeOf(wire.target);
-      if (!target || wire.target === wire.source || derivedNodePorts(target) !== null
-        || engineRegistry.node(target.node_type)?.readsFileInputs !== true) return false;
+      if (!target || wire.target === wire.source || !takesNewInputs(target)) return false;
       const from = nodeOf(wire.source)?.outputs.find((port) => port.id === wire.sourceHandle);
       const name = from?.name || wire.sourceHandle;
       // An id a body can use as a key.

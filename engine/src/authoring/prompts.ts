@@ -135,13 +135,20 @@ export function nodeDescription(node: { id: string; label: string; description: 
  * text. Where it names several, or a value that is not text, the answer is
  * JSON keyed as its example is, which the node hands on key by key.
  */
+/**
+ * Said with every output definition a model answers: an example said a
+ * portfolio had "a health score of 72 out of 100" and too much in AAPL, MSFT
+ * and NVDA, and the report on a portfolio holding none of them said the same.
+ */
+const FORM_ONLY = 'Its example shows the form only: take no figure, name or claim from it -- each comes from the input.';
+
 export function standardRunPrompt(definition: string): string {
   const start = '{Node Description}\n\nDo this with the input below';
   if (!definition.trim()) return `${start}. Answer in plain text.`;
   if (textOutput(definition) !== undefined) {
-    return `${start}. Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file.\n{Output Definition}`;
+    return `${start}. Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file. ${FORM_ONLY}\n{Output Definition}`;
   }
-  return `${start}, and answer with the data mapped onto this output definition: only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n{Output Definition}`;
+  return `${start}, and answer with the data mapped onto this output definition: only a JSON object, keyed and shaped as its example after module.exports -- not the file itself. ${FORM_ONLY}\n{Output Definition}`;
 }
 
 /**
@@ -153,6 +160,6 @@ export function standardRunPrompt(definition: string): string {
  */
 export function answeredAs(definition: string): string {
   return textOutput(definition) !== undefined
-    ? `Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file.\n${definition}`
-    : `Answer with only a JSON object, keyed and shaped as its example after module.exports -- not the file itself.\n${definition}`;
+    ? `Answer in plain text: the text itself, as this output definition describes it -- not JSON, and not the file. ${FORM_ONLY}\n${definition}`
+    : `Answer with only a JSON object, keyed and shaped as its example after module.exports -- not the file itself. ${FORM_ONLY}\n${definition}`;
 }
