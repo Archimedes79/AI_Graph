@@ -5,7 +5,8 @@
 **Wire nodes on a canvas into an AI workflow — then hand the result to someone else<br>
 as a tool that runs on their machine: offline, on a local model, with no account and no cloud bill.**
 
-Visual programming for AI workflows and small local apps: say in plain words what each node
+A self-hosted, no-code / low-code workflow builder for AI: visual programming for LLM
+pipelines, multi-agent workflows and small local apps. Say in plain words what each node
 should do, and AI writes its code or its prompt; give the graph a page — a file picker, a
 chat, a chart — and 🚀 Deploy packs it into a folder someone else can run.
 
@@ -177,7 +178,7 @@ built *is* the example, and runs it.
 | [nested_statistics](examples/nested_statistics/) | A part of the work built as its own graph: the counting lives inside one node, and the graph above it reads as a sentence | no |
 | [depot_uebersicht](examples/depot_uebersicht/) | Choose a folder of portfolio statements as PDFs, in layouts nobody agreed on: a model reads each into rows, a code node sums them up, and the page shows a table and a chart by asset class, by security or over time — and saves the rows as CSV | yes, one that reads PDFs |
 | [word_nach_latex](examples/word_nach_latex/) | Choose a Word document, get a LaTeX document that compiles: headings, lists, emphasis and tables kept, special characters escaped, saved as `.tex` | yes |
-| [portfolio_review](examples/portfolio_review/) | A multi-agent team of AI analysts reviews a portfolio export in any format: a data reader, the hard numbers in code, nine specialists -- macro, risk, quant, valuation, optimisation, tax, diversification, psychology and a counter-thesis -- wired in the order their findings depend on each other, and a lead advisor; the page shows the allocation, the master action list and the report, saved as Markdown | yes |
+| [portfolio_review](examples/portfolio_review/) | A team of AI analysts reviews a portfolio export in any format: a data reader, the hard numbers in code, nine specialists -- macro, risk, quant, valuation, optimisation, tax, diversification, psychology and a counter-thesis -- wired in the order their findings depend on each other, and a lead advisor; the page shows the allocation, the master action list and the report, saved as Markdown | yes |
 
 **Every example is held to the same three things by the test suite**
 (`engine/src/examples.test.ts`), and an example added to the folder is held to them
