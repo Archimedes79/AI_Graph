@@ -12,7 +12,11 @@ import { describe, it, expect } from 'vitest';
  * grip and the properties panel inside a chunk it loaded and never used.
  *
  * So the rule is checked where it is actually decided — in the imports, rather
- * than in a naming convention or a review habit.
+ * than in a naming convention or a review habit. The walk starts from every
+ * file of `runtime/`, not only the entry point: one that nothing imports yet is
+ * held to the same rule before it is wired in. It follows imports through
+ * every area, which the editor's layer rule (`layers.test.ts`) cannot: that one
+ * sees a single import at a time, and `runtime` ranks above the store.
  *
  * The sources are read through `import.meta.glob` rather than `node:fs`, so the
  * test needs no Node types and runs under the same config as everything else.
@@ -27,14 +31,16 @@ const BY_PATH = new Map(
   Object.entries(SOURCES).map(([key, source]) => [key.replace(/^\/src\//, ''), source]),
 );
 
-/** Modules that exist for *building* a graph, and have no business in a bundle. */
+/**
+ * The editor's areas a tool has no part of at all: it holds no graph (the
+ * store), draws no canvas, writes no node (authoring) and has no editor
+ * around it (app). The server holds the graph; the page is handed its blocks.
+ */
+const EDITOR_AREAS = ['store', 'canvas', 'authoring', 'app'];
+
+/** Modules for *building* a graph in the areas a tool shares with the editor -- the page -- and the editor's shell. */
 const EDITOR_ONLY = [
   'App',
-  'app/Toolbar',
-  'app/Sidebar',
-  'app/ViewTabs',
-  'canvas/GraphCanvas',
-  'canvas/NodeEditor',
   'page/DesignerTab',
   'page/DesignerSurface',
   'page/DesignerPalette',
@@ -57,15 +63,21 @@ function resolveSpec(fromPath: string, spec: string): string | null {
   return null;
 }
 
-/** Every module the runtime entry point can reach. */
-function runtimeImports(): Set<string> {
-  const seen = new Set<string>();
-  const queue = ['runtime/main.tsx'];
+/**
+ * Every module the runtime area reaches -- what a deployed tool is built from
+ * -- each with the module that first imported it, or null for one of its own.
+ */
+function runtimeImports(): Map<string, string | null> {
+  const reachedBy = new Map<string, string | null>();
+  // Breadth first, so the way a module is said to be reached is a shortest one.
+  const queue: [string, string | null][] = [...BY_PATH.keys()]
+    .filter((path) => path.startsWith('runtime/') && !/\.test\.tsx?$/.test(path))
+    .map((path) => [path, null]);
 
   while (queue.length) {
-    const path = queue.pop()!;
-    if (seen.has(path)) continue;
-    seen.add(path);
+    const [path, by] = queue.shift()!;
+    if (reachedBy.has(path)) continue;
+    reachedBy.set(path, by);
 
     const source = BY_PATH.get(path);
     if (!source) continue;
@@ -74,14 +86,21 @@ function runtimeImports(): Set<string> {
     for (const match of source.matchAll(/from\s+'((?:\.|@\/)[^']+)'/g)) {
       const spec = match[1];
       const resolved = spec.startsWith('@/') ? resolveSpec('', spec.slice(2)) : resolveSpec(path, spec);
-      if (resolved) queue.push(resolved);
+      if (resolved) queue.push([resolved, path]);
     }
   }
-  return seen;
+  return reachedBy;
 }
 
 describe('deployment boundary', () => {
-  const reachable = runtimeImports();
+  const reachedBy = runtimeImports();
+  const reachable = new Set(reachedBy.keys());
+  /** How *path* is reached: each import on the way, from a file of `runtime/`. */
+  const chain = (path: string): string => {
+    const links = [path];
+    for (let by = reachedBy.get(path); by; by = reachedBy.get(by)) links.unshift(by);
+    return links.join(' → ');
+  };
 
   it('reaches the page a deployed tool renders', () => {
     // A check on the walker itself: without it, the assertions below could pass
@@ -92,19 +111,22 @@ describe('deployment boundary', () => {
     expect(reachable.size).toBeGreaterThan(10);
   });
 
-  it('draws elements with their views, and never loads a panel or the authoring UI', () => {
+  it('draws elements with their views, and never loads a panel or the fields one is made of', () => {
     // Panels are registered with `lazy(() => import(…))`, which this walk --
     // like the bundler's static graph -- does not follow: a panel is a chunk
     // the editor fetches when an element is opened, and a tool never does.
-    const editing = [...reachable].filter((path) => /Panel\.tsx$/.test(path)
-      || /^(authoring|elements\/fields)\/.*\.tsx$/.test(path));
-    expect(editing).toEqual([]);
+    const editing = [...reachable].filter((path) => /Panel\.tsx$/.test(path) || /^elements\/fields\//.test(path));
+    expect(editing.map(chain)).toEqual([]);
     expect([...reachable].some((path) => /WidgetView\.tsx$/.test(path))).toBe(true);
+  });
+
+  it.each(EDITOR_AREAS)('reaches nothing in %s/: a tool holds no graph, draws no canvas, writes no node, has no editor around it', (area) => {
+    expect([...reachable].filter((path) => path.startsWith(`${area}/`)).map(chain)).toEqual([]);
   });
 
   it.each(EDITOR_ONLY)('does not pull %s into a deployed bundle', (module) => {
     const hit = [...reachable].find((path) => path.replace(/\.tsx?$/, '') === module);
-    expect(hit, `${module} is reachable from runtime/main.tsx`).toBeUndefined();
+    expect(hit && chain(hit), `${module} is reachable from runtime/`).toBeUndefined();
   });
 
   /**
@@ -123,12 +145,12 @@ describe('deployment boundary', () => {
   it.each(['elements/registry.ts', 'elements/widgets/roster.ts'])(
     'does not pull the builder registry %s into a deployed bundle',
     (module) => {
-      expect([...reachable], `${module} is reachable from runtime/main.tsx`).not.toContain(module);
+      expect(reachable.has(module) ? chain(module) : null).toBeNull();
     },
   );
 
   it('never loads a GuiBuilder class, even one imported without the registry', () => {
-    expect([...reachable].filter((path) => /GuiBuilder\.ts$/.test(path))).toEqual([]);
+    expect([...reachable].filter((path) => /GuiBuilder\.ts$/.test(path)).map(chain)).toEqual([]);
   });
 
   it('draws the page it is handed, and runs it through the session, from the halves that are delivered', () => {

@@ -9,8 +9,8 @@ import { describe, expect, it } from 'vitest';
  *   0 ui         look, without knowing a graph: theme, tone, colour scheme, Modal
  *   1 graph      the document's types
  *   2 document   what a graph *is* to the editor: node kinds, a page's ports, grid placement
- *     api        the contract's client
- *   3 store      the open graph, its runs, its undo
+ *     api        the contract's client, and the session a page follows
+ *   3 store      the open graph, its undo, what a round shows on it
  *   4 dialogs    small dialogs that ask the server something
  *   5 elements   the builders, their panels and their views
  *     authoring  writing a body: the editors a panel is made of
@@ -24,6 +24,11 @@ import { describe, expect, it } from 'vitest';
  * is made of authoring editors, and an authoring editor asks the registry what a
  * node is. A panel is a lazy chunk, so the static graph has no cycle in it
  * (`runtime/boundary.test.ts` holds that a tool never loads either).
+ *
+ * `runtime` ranks with `App` -- both are served -- but reaches far less: nothing
+ * in store/, canvas/, authoring/ or app/, however indirectly, as a delivered
+ * tool holds no graph. That is a rule on what is reached, not on one import,
+ * so `runtime/boundary.test.ts` holds it, walking the imports from runtime/.
  */
 const RANK: Record<string, number> = {
   ui: 0, graph: 1, document: 2, api: 2, store: 3, dialogs: 4, elements: 5, authoring: 5,

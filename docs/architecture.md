@@ -303,6 +303,11 @@ crosses areas goes through `@/`, and one into the engine through `@engine/`.
 up, or sideways between two areas of one rank. The single sideways pair is
 `elements` ↔ `authoring`, on purpose: a panel is made of authoring editors, and an authoring
 editor asks the registry what a node is. Panels are lazy chunks, so there is no static cycle.
+`runtime` ranks with `App`, both being served, but reaches far less: nothing in `store/`,
+`canvas/`, `authoring/` or `app/`, however indirectly -- a delivered tool holds no graph,
+draws no canvas and writes no node. That is a rule on what is reached, not on one import, so
+[`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) holds it, walking the
+imports from every file of `runtime/` and naming the chain that broke it.
 
 ## The surface
 
