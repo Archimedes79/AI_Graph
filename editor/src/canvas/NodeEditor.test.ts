@@ -35,7 +35,12 @@ beforeEach(async () => {
   }
   // And then drawn until it is still: a chunk that lands later -- a code box's
   // editor -- draws it once more, and on a slower machine that was counted as
-  // a draw the store caused (CI: 3 where 2 were expected).
+  // a draw the store caused (CI: 3 where 2 were expected; here under a full
+  // run). So first until every code box holds its editor, not for a while.
+  const loaded = () => [...page.querySelectorAll('[data-code-field]')].every((box) => box.querySelector('.cm-editor'));
+  for (let tries = 0; tries < 250 && !loaded(); tries += 1) {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  }
   for (let still = 0, last = -1, tries = 0; still < 3 && tries < 100; tries += 1) {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     still = drawn === last ? still + 1 : 0;
