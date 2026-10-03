@@ -150,7 +150,7 @@ jobs:
           v=$(node -p process.version)
           base="https://nodejs.org/dist/$v"
           curl -fsSLO "$base/SHASUMS256.txt"
-          for pair in win-x64:windows-x64 darwin-arm64:macos-arm64 darwin-x64:macos-x64 linux-x64:linux-x64; do
+          for pair in win-x64:windows-x64 win-arm64:windows-arm64 darwin-arm64:macos-arm64 darwin-x64:macos-x64 linux-x64:linux-x64 linux-arm64:linux-arm64; do
             target=${pair%%:*}; name=${pair##*:}
             case $target in win-*) file="node-$v-$target.zip" ;; *) file="node-$v-$target.tar.gz" ;; esac
             curl -fsSLO "$base/$file"
