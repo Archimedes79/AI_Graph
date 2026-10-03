@@ -234,8 +234,8 @@ async function makeBundle(options: CliOptions): Promise<number> {
  * to know about, let alone read a Node stack trace about.
  */
 async function runServer(options: CliOptions): Promise<number> {
-  // No graph file is a legitimate way to run this: the editor posts the graph
-  // being edited with every request, and serves one only when it is named --
+  // No graph file is a legitimate way to run this: the editor hands the server
+  // the document being edited (holdGraph), and serves one only when it is named --
   // started in a folder that happened to hold a graph.json, it shipped that
   // one and kept its clock. A bundle is the other case, and there the graph is
   // right here. A graph that was named and is not there is a mistake to say,

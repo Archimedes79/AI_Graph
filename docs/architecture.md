@@ -201,9 +201,15 @@ builder, so the builder was in every bundle. Measured on the import graph: what
 `runtime/main.tsx` reaches fell from 80 modules to 45 -- and from 51 to 41 when the page
 stopped holding a graph of its own and the store left the bundle.
 
-Still reachable, and not closed by any of this: the **engine's** element tree, for a
-handful of questions the page asks it — which ports, does this block fire, does this node
-carry the interface. That goes when the graph arrives already resolved over the wire.
+The **engine** is out of reach as well, but for the contract and a few value shapes. Which
+blocks start a round and which a round is given are the graph's events and values, which
+the runtime API tells the page by name (`/api/runtime/interface`), so the page asks the
+engine's element tree nothing. Of the engine it loads `host/api.ts` and six small modules a
+view reads a value by -- a chat's conversation, a slider's range -- where it loaded fifty,
+the executor among them, while it asked the registry two questions
+([`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts): "loads of the engine
+only the contract and the shapes of the values its views read"). Counted on what loads
+code, the tool's page is 46 modules, 7 of them the engine's, where it was 90 and 50.
 
 What the tests hold: every member stands under a bar; the build-time list is spelled out,
 so moving a member across is a decision and not a bar that slipped; **no file a run goes
@@ -425,7 +431,7 @@ other knows, it imports it or replays its result:
 | every route, request and response | `host/api.ts` |
 | the graph's types | `graph.ts` |
 | a page node's ports | `GuiNodeRunner.derivedPorts` via `document/guiWidgets.ts` |
-| whether a widget starts the graph | `WidgetRunner.firesRun` |
+| whether a block starts a round, and whether a round is given its value | the graph's events and values: the editor asks `WidgetRunner.firesRun` and `takesValue` (`document/guiWidgets.ts`), a delivered page is told them by name (`/api/runtime/interface`) |
 | what using the graph left behind, by name | the session (`SessionView`), told over `/api/runtime/stream` |
 | what a widget shows | `NodeResult.display` |
 | the order to generate a graph in | `topologicalLevels` |
@@ -454,9 +460,9 @@ other knows, it imports it or replays its result:
    "Read the file at this path"; never guessed from the wire) → run once, or once per item → record.
    A failure marks the node and skips its dependents; with `catch_errors` it becomes an
    `error` output instead.
-4. **After the round.** `settleMemory` hands loop values to the nodes that keep them and
-   lists every write in `result.memory`. Then each page node is asked what it shows,
-   *with* those values.
+4. **After the round.** `settleMemory` hands loop values to the nodes that keep them, in
+   the copy of the graph the round ran on -- the copy a session keeps. Then each page node
+   is asked what it shows, *with* those values.
 5. **Watching and stopping.** A server holds one `Session` (`host/session.ts`): the graph in
    use and what using it leaves behind (see [State](#state)). Its `Rounds`
    (`host/rounds.ts`) start each round in the background, one at a time in the order asked
@@ -725,8 +731,10 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
 3. **Where.** In the session, and in `state.json` beside the project's `flow.json` --
    `<file>.state.json` beside a single graph file; an unsaved graph's state is held in memory
    only. The file is not part of the project: `check` and a save leave it alone and a bundle
-   never carries it. *Reset* empties the session and deletes the file. ("what a session keeps
-   on disk")
+   never carries it. *Reset* empties the session and deletes the file. A document saved
+   where it was not -- for the first time, or as another project -- keeps its session, and
+   its state is written there from then on; only another document is a session of its own.
+   ("what a session keeps on disk"; "the document the editor hands over")
 4. **When.** A round runs on a working copy: the design, the slots over it, the values the
    round was given over those. A round that ran to its end commits -- its slots, what it
    left in the latch, the result it shows, the messages it delivered emptied -- and the file
@@ -742,8 +750,12 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
    ("a design that changed")
 6. **One session per server**, for now. Its id travels in every runtime route, so a session
    per visitor needs no change to the contract; it is kept in `state.json`, so a restarted
-   tool goes on with the same session. (`host/runtimeApi.test.ts`: "answers for its own
-   session only")
+   tool goes on with the same session. The editor hands its document over as the document
+   of the session it holds; any other handover -- another document, or a second editor that
+   took the server meanwhile -- is a session of its own, from its own file, so neither writes
+   into the other's state. A page's stream follows the session the server holds.
+   (`host/runtimeApi.test.ts`: "answers for its own session only"; `host/session.test.ts`: "the
+   document the editor hands over")
 7. **Calling a graph keeps nothing.** `ai-graph run` and the MCP server's `run_graph` start
    from the design with what they are given and return what it hands back: a function call.
    Rounds of one `--every` share their memory while the process lives. (`cli/cli.test.ts`:

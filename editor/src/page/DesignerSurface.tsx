@@ -145,6 +145,7 @@ export default function DesignerSurface({
                 value={blockValue(widget, own, incoming, overrides)}
                 onChange={(next) => onWidgetValue(widget, next)}
                 onTrigger={(next) => onWidgetTrigger(widget, next)}
+                fires={widgetFiresRun(widget)}
                 busy={busy}
                 blockRef={(element) => {
                   if (element) blockRefs.current.set(widget.id, element);

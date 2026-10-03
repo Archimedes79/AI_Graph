@@ -316,15 +316,15 @@ describe('the engine as the front door of the editor', () => {
     expect(served).toMatchObject({ session, name: 'Handed over' });
   });
 
-  it('begins another session for another document, and goes on with the one there is for the same', async () => {
+  it('goes on with the session a document is handed over as, and begins one of its own for any other', async () => {
     const url = await editor();
     const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
     const hold = async (body: unknown) => (await asJson(await fetch(`${url}/api/runtime/hold`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     }))).session;
     const first = await hold({ graph });
-    expect(await hold({ graph })).toBe(first);
-    expect(await hold({ graph, anew: true })).not.toBe(first);
+    expect(await hold({ graph, session: first })).toBe(first);
+    expect(await hold({ graph })).not.toBe(first);
   });
 
   it('will not let a deployed tool be handed a different graph', async () => {

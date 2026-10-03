@@ -7,7 +7,7 @@ import type { Graph, GraphNode } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { RUN_PORT } from '../execution/triggers.ts';
 import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
-import { Session, type SessionEvent, type SessionOptions } from './session.ts';
+import { Session, holderOf, type SessionEvent, type SessionOptions } from './session.ts';
 import { NotOffered } from '../execution/graphInterface.ts';
 import { loadGraph, saveGraph, STATE_FILE, stateFileOf, writeProject } from '../project/folder.ts';
 import { folderProblems } from '../project/folderCheck.ts';
@@ -198,6 +198,81 @@ describe('what a session keeps on disk', () => {
   });
 });
 
+describe('the document the editor hands over', () => {
+  const file = async (name: string) => join(await mkdtemp(join(tmpdir(), 'session-document-')), name);
+  const roundsIn = async (path: string) => (JSON.parse(await readFile(stateFileOf(path), 'utf8')) as { rounds: number }).rounds;
+
+  it('keeps its session when it is saved for the first time: what using it left goes into the file beside it', async () => {
+    // It was lost to the first save: a chat, used in the App tab and then saved, began again.
+    const holder = holderOf(null, { runtime: fake });
+    const session = await holder.hold(counter());
+    await session.run(null);
+    const saved = await file('counter.json');
+    expect(await holder.hold(counter(), { path: saved, session: session.id })).toBe(session);
+    expect(session.kept()).toEqual({ count: { data_value: 1 } });
+    expect(await roundsIn(saved)).toBe(1);
+  });
+
+  it('moves its state along when saved as another file, and leaves the one it was kept in before as it was', async () => {
+    const holder = holderOf(null, { runtime: fake });
+    const before = await file('a.json');
+    const session = await holder.hold(counter(), { path: before });
+    await session.run(null);
+    const after = await file('b.json');
+    await holder.hold(counter(), { path: after, session: session.id });
+    await session.run(null);
+    expect(await roundsIn(after)).toBe(2);
+    expect(await roundsIn(before)).toBe(1);
+  });
+
+  it('is a session of its own when it is another document, going on from that one\'s file', async () => {
+    const holder = holderOf(null, { runtime: fake });
+    const path = await file('a.json');
+    const first = await holder.hold(counter(), { path });
+    await first.run(null);
+    const other = await holder.hold(counter());
+    expect(other).not.toBe(first);
+    expect(other.kept()).toEqual({});
+    const back = await holder.hold(counter(), { path });
+    expect(back.kept()).toEqual({ count: { data_value: 1 } });
+  });
+
+  it('is given a session of its own when another editor took the server meanwhile, and writes nothing into that one', async () => {
+    // Two editors on one server: the second's document went into the first's
+    // session, and its state into the first one's project.
+    const holder = holderOf(null, { runtime: fake });
+    const mine = await file('mine.json');
+    const theirs = await file('theirs.json');
+    const first = await holder.hold(counter(), { path: mine });
+    await first.run(null);
+    await holder.hold(counter('function run(i) { return { next: i.n + 10 }; }'), { path: theirs });
+    const again = await holder.hold(counter(), { path: mine, session: first.id });
+    expect(again).not.toBe(first);
+    // From its own file: the same session, as a restarted server's would be.
+    expect(again.id).toBe(first.id);
+    expect(again.kept()).toEqual({ count: { data_value: 1 } });
+    await again.run(null);
+    expect(await roundsIn(mine)).toBe(2);
+    expect(existsSync(stateFileOf(theirs))).toBe(false);
+  });
+
+  it('is followed on the stream as the session it is now: a page open on the server hears the switch', async () => {
+    const holder = holderOf(null, { runtime: fake });
+    const told: SessionEvent[] = [];
+    holder.watch((event) => told.push(event));
+    const first = await holder.hold(counter());
+    await first.run(null);
+    const second = await holder.hold(counter());
+    await second.run(null);
+    const sessions = told.flatMap((event) => (event.type === 'session' ? [event.session.session] : []));
+    expect(sessions).toContain(first.id);
+    expect(sessions[sessions.length - 1]).toBe(second.id);
+    // And told nothing more of the one before.
+    await first.run(null);
+    expect(told.flatMap((event) => (event.type === 'session' ? [event.session.session] : [])).slice(sessions.length)).not.toContain(first.id);
+  });
+});
+
 describe('a design that changed', () => {
   it('drops what a node that is gone kept, and says so', async () => {
     const session = await open(counter());
@@ -297,6 +372,19 @@ describe('whoever watches a session', () => {
     expect(told.find((event) => event.type === 'session')).toMatchObject({ session: { values: { pick: 'b' }, outputs: { shown: 'picked b' } } });
     await session.run({ node_id: 'page', port_id: 'pick_out' });
     expect(told.length).toBe(rounds.length + 1);                    // told nothing once it stopped listening
+  });
+
+  it('is told the session again when the design it holds changed -- and not when it is handed the same one', async () => {
+    const session = await open(echo());
+    const told: SessionEvent[] = [];
+    session.watch((event) => told.push(event));
+    session.hold(echo());
+    expect(told).toEqual([]);
+    const changed = echo();
+    changed.metadata.name = 'Echo, renamed';
+    session.hold(changed);
+    expect(told).toEqual([{ type: 'session', session: expect.objectContaining({ design_revision: 1 }) }]);
+    expect(session.view().design_revision).toBe(1);
   });
 
   it('is told the session again when a reset emptied it', async () => {

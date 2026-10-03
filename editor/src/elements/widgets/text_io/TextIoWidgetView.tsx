@@ -5,7 +5,6 @@ import { fileName, saveFile } from '../download';
 import { asText } from '@engine/elements/widgets/text_io/text.ts';
 import { textIoRole } from '@engine/elements/widgets/text_io/role.ts';
 import { DIMMER, FIELD, LINE, SUNKEN, TEXT } from '@/ui/theme';
-import { widgetFiresRun } from '@/document/guiWidgets';
 import { BOX_TEXT } from '@/document/layout';
 
 /**
@@ -65,15 +64,15 @@ function useFollow(text: string) {
  * What it shows of a run follows the text as it grows and can be saved as a
  * text file; what is typed is the person's own, and already in their hands.
  */
-export default function TextIoWidgetView({ widget, value, incoming, onChange, onTrigger }: WidgetViewProps) {
+export default function TextIoWidgetView({ widget, value, incoming, onChange, onTrigger, fires }: WidgetViewProps) {
   const mode = textIoRole(widget.mode);
   const text = asText(value);
   const incomingText = asText(incoming);
   const follow = useFollow(mode === 'output' ? text : incomingText);
   // In a box that sends, Enter sends and Shift+Enter is the newline -- what
   // every messenger does. In one that does not, Enter is just a newline.
-  // Whether it sends is the engine's answer, the one the page acts on.
-  const sends = widgetFiresRun(widget);
+  // Whether it sends is the page's to say, the one it acts on (WidgetViewProps.fires).
+  const sends = fires === true;
   const sendOnEnter = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!sends || event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();

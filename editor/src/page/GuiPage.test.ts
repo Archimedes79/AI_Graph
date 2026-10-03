@@ -13,7 +13,7 @@ const output = { ...NODE_KINDS.output.create('count'), label: 'Words' } as Graph
 /** The session once a round has run: the output "count" handed back. */
 const ran: PageSession = {
   view: {
-    session: 's1', values: {}, outputs: { count: 'forty-two words' }, rounds: 1, finished_at: 1, round: null, dropped: [],
+    session: 's1', values: {}, outputs: { count: 'forty-two words' }, rounds: 1, finished_at: 1, round: null, dropped: [], design_revision: 0,
     clock: { running: false, runs_by_itself: false, ticks: false, next_at: null, problem: null },
   },
   round: null, edits: {}, sent: {},
@@ -26,6 +26,8 @@ const drawn = (nodes: GraphNode[]) => renderToStaticMarkup(createElement(GuiSurf
     description: 'Counts the words.',
     scheme: 'night',
     blocks: pageOf(nodes).widgets,
+    events: [],
+    values: [],
     outputs: [{ name: 'count', label: 'Words' }],
   }, ran),
   onValue: () => {},

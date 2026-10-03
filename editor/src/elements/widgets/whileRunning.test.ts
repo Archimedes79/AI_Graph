@@ -11,6 +11,8 @@ import { WIDGET_BUILDERS } from '@/elements/registry';
  * A block that starts the graph, while a round runs: it waits, as a button
  * does. Used meanwhile, what it was set to was kept -- and the event dropped,
  * so a dropdown showed a choice the chart beside it had never been drawn for.
+ * Whether it starts the graph is said by whoever draws the page (fires), as
+ * the graph's events say it -- here, as they would for run_on_change.
  */
 
 const blocks: [string, ComponentType<WidgetViewProps>, 'select' | 'slider' | 'input_picker', RegExp][] = [
@@ -23,7 +25,7 @@ describe('a file picker that starts the graph, filled in already', () => {
   it('says how to start it with what it holds -- and only where it starts the graph and holds something', () => {
     const drawn = (starts: boolean, value: string, mode = 'file') => renderToStaticMarkup(createElement(InputPickerWidgetView, {
       widget: { ...WIDGET_BUILDERS.input_picker.create('csv', 'CSV file', mode), extensions: '.csv', run_on_change: starts },
-      value, onChange: () => {}, onTrigger: () => {},
+      value, onChange: () => {}, onTrigger: () => {}, fires: starts,
     }));
     expect(drawn(true, 'data/population.csv')).toContain('Allowed: .csv · Press Enter to use this file');
     expect(drawn(true, 'data/stories', 'directory')).toContain('Press Enter to use this folder');
@@ -36,7 +38,7 @@ describe('a block that starts the graph, while a round runs', () => {
   it.each(blocks)('%s waits for it -- and one that does not start the graph does not', (_what, View, kind, control) => {
     const drawn = (starts: boolean, busy: boolean) => renderToStaticMarkup(createElement(View, {
       widget: { ...WIDGET_BUILDERS[kind].create('block', 'Block'), options: 'a, b', run_on_change: starts },
-      value: 'a', onChange: () => {}, onTrigger: () => {}, busy,
+      value: 'a', onChange: () => {}, onTrigger: () => {}, fires: starts, busy,
     }));
     const controls = (html: string) => html.match(new RegExp(control.source, 'g')) ?? [];
     expect(controls(drawn(true, true)).length).toBeGreaterThan(0);

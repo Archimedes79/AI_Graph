@@ -22,8 +22,8 @@ export interface WidgetViewProps {
   /**
    * The person did the thing this block is *for*: pressed the button, sent the
    * message, made the choice. Whether that starts the graph is not the block's
-   * call -- the page asks the engine (`firesRun`) -- so a block reports every
-   * such moment and does not look at its own settings to decide.
+   * call -- whoever draws the page knows it (`fires`) -- so a block reports
+   * every such moment and does not look at its own settings to decide.
    *
    * `value` is what the block holds as of this event. Passed along rather than
    * read back, because the event and the last keystroke arrive in one tick and
@@ -31,6 +31,12 @@ export interface WidgetViewProps {
    * final letter.
    */
   onTrigger?: (value?: unknown) => void;
+  /**
+   * Using this block starts a round, so it waits while one is going. Said by
+   * whoever draws the page: a delivered tool by the graph's events, which it
+   * is told by name; the editor by the engine.
+   */
+  fires?: boolean;
   /** A run is in flight. For a block that shows waiting: a chat's typing dots. */
   busy?: boolean;
 }

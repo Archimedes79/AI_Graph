@@ -30,7 +30,7 @@ const { heldValue, setEdit, startRound, useSession, watchSession } = await impor
 const told = (type: 'session' | 'round', data: unknown) => streams[streams.length - 1].listeners[type]({ data: JSON.stringify(data) } as MessageEvent<string>);
 
 const view = (values: Record<string, unknown>, session = 's1'): SessionView => ({
-  session, values, outputs: {}, rounds: 0, finished_at: null, round: null, dropped: [],
+  session, values, outputs: {}, rounds: 0, finished_at: null, round: null, dropped: [], design_revision: 0,
   clock: { running: false, runs_by_itself: false, ticks: false, next_at: null, problem: null },
 });
 const round = (id: string, over: Partial<RoundSnapshot> = {}): RoundSnapshot => ({

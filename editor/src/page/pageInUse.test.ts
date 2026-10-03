@@ -21,6 +21,8 @@ const blocks = [
 const page: PageModel = {
   name: 'Tool', description: '', scheme: 'night', blocks,
   valueOf: (block) => block.value, shownOn: () => undefined, busy: false, error: '', outputs: [],
+  // As the graph's names say: the button is an event, the dropdown a value.
+  fires: (block) => block.id === 'go', takes: (block) => block.id === 'pick',
 };
 
 let root: Root;

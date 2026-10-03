@@ -96,9 +96,12 @@ export class Session {
   private finishedAt: number | null = null;
   private notes: string[] = [];
   private lastRound: string | null = null;
+  /** The design as it was handed over, written out, and how often it changed since the session began. */
+  private designText: string;
+  private revision = 0;
   /** The clock, while the application runs, and what stops the rounds it started. */
   private application: { clock: Clock; stop: AbortController } | null = null;
-  private readonly file: string | null;
+  private file: string | null;
   private readonly runtime: (report: (event: ProgressEvent) => void) => Runtime;
   private readonly watchers = new Set<(event: SessionEvent) => void>();
   /** The rounds no event started: they ran the whole graph. */
@@ -111,6 +114,7 @@ export class Session {
   private constructor(id: string, design: Graph, options: SessionOptions) {
     this.id = id;
     this.design = design;
+    this.designText = JSON.stringify(design);
     this.file = options.file ?? null;
     this.runtime = options.runtime ?? ((report) => nodeRuntime({ report }));
     this.rounds = new Rounds((round, moment) => this.roundChanged(round, moment));
@@ -139,9 +143,25 @@ export class Session {
     return this.design;
   }
 
+  /** Which design this is, counted from 0 as it changes (SessionView.design_revision). */
+  get designRevision(): number {
+    return this.revision;
+  }
+
   /** Where this session keeps its state; none, for a graph never saved. */
   get stateFile(): string | null {
     return this.file;
+  }
+
+  /**
+   * Keep the state in *file* from now on, and write it there: the same
+   * document, saved where it was not -- for the first time, or as another
+   * project. What using it left goes along rather than being lost to a save;
+   * the file it was kept in before stays as it was.
+   */
+  moveTo(file: string | null): Promise<void> {
+    this.file = file;
+    return this.save();
   }
 
   /** What the last time the session was opened, or handed a graph, dropped of what it kept -- in words. */
@@ -165,6 +185,7 @@ export class Session {
       finished_at: this.finishedAt,
       round: this.lastRound ? this.snapshot(this.lastRound) : null,
       dropped: this.notes,
+      design_revision: this.revision,
       clock: {
         running: !!clock,
         runs_by_itself: clock?.runsByItself ?? false,
@@ -200,16 +221,22 @@ export class Session {
    * Go on with a changed design: what the editor hands over as it is edited.
    * What the session kept for a node that is gone, or a slot whose design
    * changed, is dropped and said; the rest stays. Returns what was said.
+   * Watchers are told the session again when the design changed -- its
+   * `design_revision` counts on -- or something was dropped.
    */
   hold(graph: Graph): string[] {
     this.design = graph;
+    // Handed over before every round and after every edit: most often it is
+    // the same design again, which changes nothing a page drew.
+    const text = JSON.stringify(graph);
+    const changed = text !== this.designText;
+    this.designText = text;
+    if (changed) this.revision += 1;
     const { slots, notes } = checked(graph, this.slots);
     this.slots = slots;
     this.notes = notes;
-    if (notes.length) {
-      void this.save();
-      this.tell({ type: 'session', session: this.view() });
-    }
+    if (notes.length) void this.save();
+    if (changed || notes.length) this.tell({ type: 'session', session: this.view() });
     return notes;
   }
 
@@ -399,12 +426,17 @@ export class Session {
   }
 }
 
-/** How a graph is handed over: from which file, and whether it is another document than the one before. */
+/** How a graph is handed over: from which file, and as the document of which session. */
 export interface Handover {
   /** Where the graph is kept, if anywhere: its session keeps its state beside it (`stateFileOf`). */
   path?: string | null;
-  /** Another document than the one handed over before -- opened, or started anew: a session of its own. */
-  anew?: boolean;
+  /**
+   * The session the editor holds for this document. That one goes on; none
+   * -- a document opened, or started anew -- or one this server no longer
+   * holds, because another editor handed it another document since, and the
+   * document is given a session of its own, from its own file.
+   */
+  session?: string | null;
 }
 
 /**
@@ -414,8 +446,9 @@ export interface Handover {
 export interface SessionHolder {
   session: Session | null;
   /**
-   * Go on with *graph*: the session there is, handed a changed design -- or,
-   * for another document or another file, a new one, the one before stopped.
+   * Go on with *graph*: the session it names, handed a changed design -- and,
+   * the document saved somewhere new, its state moved along -- or, for any
+   * other, a session of its own, the one before stopped.
    */
   hold(graph: Graph, handover?: Handover): Promise<Session>;
   /**
@@ -423,10 +456,20 @@ export interface SessionHolder {
    * another, which is not here: a 404 that sends a page back to the interface.
    */
   asked(id?: string): Session;
+  /**
+   * Be told what happens in the session held, whichever that is: its rounds
+   * and changes, and the session itself when another is held from then on --
+   * the editor handed it another document -- so a page open on the server
+   * does not go on listening to one that is gone. Returns how to stop.
+   */
+  watch(listener: (event: SessionEvent) => void): () => void;
 }
 
-/** A holder of *session*, or of none until a graph is handed to it. */
-export function holderOf(session: Session | null = null): SessionHolder {
+/** A holder of *session*, or of none until a graph is handed to it; the sessions it opens are opened with *options*. */
+export function holderOf(session: Session | null = null, options: Omit<SessionOptions, 'file'> = {}): SessionHolder {
+  const watchers = new Set<(event: SessionEvent) => void>();
+  const tell = (event: SessionEvent): void => { for (const watcher of watchers) watcher(event); };
+  let unwatch = session ? session.watch(tell) : null;
   return {
     session,
     asked(id) {
@@ -436,10 +479,11 @@ export function holderOf(session: Session | null = null): SessionHolder {
       }
       return this.session;
     },
-    async hold(graph, { path = null, anew = false } = {}) {
+    async hold(graph, { path = null, session = null } = {}) {
       const file = path ? stateFileOf(path) : null;
       const before = this.session;
-      if (before && !anew && before.stateFile === file) {
+      if (before && session === before.id) {
+        if (before.stateFile !== file) await before.moveTo(file);
         before.hold(graph);
         return before;
       }
@@ -447,8 +491,15 @@ export function holderOf(session: Session | null = null): SessionHolder {
         await before.stopApplication();
         await before.stopAll();
       }
-      this.session = await Session.open(graph, { file });
+      this.session = await Session.open(graph, { ...options, file });
+      unwatch?.();
+      unwatch = this.session.watch(tell);
+      tell({ type: 'session', session: this.session.view() });
       return this.session;
+    },
+    watch(listener) {
+      watchers.add(listener);
+      return () => { watchers.delete(listener); };
     },
   };
 }
