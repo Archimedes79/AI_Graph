@@ -23,9 +23,12 @@ of them the way this guide does (a node dropped, blocks added, a wire dragged) a
 | Save, hand it on | 2 min | A folder name; one click on 🚀. |
 
 About **15–25 minutes** for a first tool of this size, with a hosted model: that is inside
-30. It is not inside 30 when the model has to be downloaded first, when the data is messier
-than the sample, or when the tool grows past about four nodes. The sections below say what
-costs the time.
+30. The tool with a model in it (section 6) adds about ten, estimated, because its input has
+to be named and told to run per item.
+
+It is not inside 30 when the model has to be downloaded first, when the data is messier than
+the sample, or when the tool grows past about four nodes. The sections below say what costs
+the time.
 
 ## 1. Install (3–5 min)
 
@@ -120,13 +123,56 @@ under `nodes/` with its `input.js`, `output.js` and `code.js`. They are plain te
 **🚀** downloads the tool as a zip: the engine, the graph and its page. Whoever receives it
 unzips it and starts `run.cmd` or `run.sh`; the page is there, with no editor.
 
+## 6. A tool with a model in it: summarize a folder (about 10 min)
+
+The same pattern with an AI node: choose a folder of `.txt` files, and one window shows a
+summary of each. The sample is [`examples/data/stories/`](../examples/data/stories/), three
+short stories. It differs from the plotter in three places, and the third is the one that
+cost the most time to find.
+
+**The page.** Click **File or folder** and **Text output**. On the picker: tick **⚡ Using this
+starts the graph** (choosing a folder is what runs it), set **Mode** to *Directory (list of
+files)*, **File types** to `.txt`, and **Folder** to where the stories are. A path typed
+there is what the page starts on.
+
+**The node and the wires.** On the Graph tab, click the AI node in the left column. Wire
+the picker's dot to its left dot, and its right dot to the page's *Text output* dot. A wire
+from a picker makes the node read the file at each path, so what it is handed is the text.
+
+**Name what comes in, before ✨.** Open the panel's **Advanced — ports, model, tools,
+images, failures**:
+
+1. Change the input's name from `prompt` to what it holds: `story`. The default says *what
+   to ask*, and ✨ Input believes it: given `prompt`, it twice wrote an example that was not a
+   story -- first an invented one, then the node's own sentence -- and an example answer to
+   match.
+2. Tick **Run once per item**. Without it the model is handed the whole list in one call
+   and writes one summary of everything.
+
+**Text, a real file, then ✨.** In the top box:
+
+> Summarize one short story: its title, then two sentences -- what it is about, and where
+> it ends up.
+
+Press **⟳ From the graph** under *Example files*: it runs the page and attaches the first
+story. Then **✨ Input**, **✨ Output**, **✨ Prompt**. An AI node's third file is its
+instructions, `prompt.md`, not code. `input.js` now holds the first story's text under
+`story`, and `output.js` a summary of it. In the run measured here the three took about 36 s
+on a small hosted model.
+
+**Run it.** **▶ Run** opens the **App** tab with the folder in the path box, and — because of
+the ⚡ — waits for you: press **Enter** in the box. Three stories were summarized within ten
+seconds, one summary under the other in the text window.
+
 ## Where the time goes
 
 **1. The first run on real data.** ✨ writes the code against the *example* in `input.js`.
 A CSV with other column names, a decimal comma, or a header on row three runs fine on the
 example and fails on your file. Give ✨ Input the real file before pressing ✨ Code — **⟳
 From the graph** or **Add a file…** in the panel, or drop one on the node. That one step is
-the difference between a first run that works and ten minutes of correcting.
+the difference between a first run that works and ten minutes of correcting. The same goes
+for what the input is *called*: a node with its default input `prompt` and a wired file
+produced a wrong example twice in a row here, before it was named `story`.
 
 **2. Saying it precisely.** A vague text gets a vague node. *Plot the data* writes something;
 *bar chart of the population per country, largest first* writes what you meant. When the
