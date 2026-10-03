@@ -91,7 +91,8 @@ describe('memoryFeedbackEdges', () => {
       const nodes = make();
       const run = await executeGraph(graphOf(order.map((id) => nodes[id]), edges), { runtime, registry });
       expect(run.node_results.find((r) => r.node_id === 'page')!.display, order.join()).toEqual({ shown: 'typed now' });
-      expect(run.memory, order.join()).toContainEqual({ node_id: 'page', port_id: 'shown_in', value: 'typed now' });
+      const kept = (nodes.page.config.gui_widgets as { id: string; value?: unknown }[]).find((w) => w.id === 'shown')!.value;
+      expect(kept, order.join()).toBe('typed now');
     }
   });
 });
@@ -239,7 +240,6 @@ describe('executeGraph', () => {
     );
     expect(run.node_results.find((r) => r.node_id === 'store')!.outputs.output).toEqual(['A', 'B']);
     expect(store.config.data_value).toEqual(['A', 'B']);
-    expect(run.memory).toEqual([{ node_id: 'store', port_id: 'input', value: ['A', 'B'] }]);
   });
 
   it('shows a block fed across a loop by two wires both of them', async () => {
@@ -253,7 +253,7 @@ describe('executeGraph', () => {
       { runtime, registry },
     );
     expect(run.node_results.find((r) => r.node_id === 'page')!.inputs.show_in).toEqual(['answer a', 'answer b']);
-    expect(run.memory).toEqual([{ node_id: 'page', port_id: 'show_in', value: ['answer a', 'answer b'] }]);
+    expect((page.config.gui_widgets as { id: string; value: unknown }[]).find((w) => w.id === 'show')!.value).toEqual(['answer a', 'answer b']);
   });
 
   /** Three outputs: two called "Result", and one whose label is the key the second would be given. */

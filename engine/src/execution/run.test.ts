@@ -86,10 +86,9 @@ describe('what a page shows', () => {
 });
 
 describe('what a run remembers', () => {
-  it('lists every value a memory node kept, and keeps it in the copy of the graph it ran on', async () => {
+  it('keeps what came back around a loop in the copy of the graph it ran on', async () => {
     const graph = loop();
-    const result = await executeGraph(graph, { runtime: runtime(), registry });
-    expect(result.memory).toEqual([{ node_id: 'page', port_id: 'shown_in', value: 42 }]);
+    await executeGraph(graph, { runtime: runtime(), registry });
     // That copy is what a session keeps (`host/session.ts`).
     const block = (graph.nodes[0].config.gui_widgets as { id: string; value: unknown }[]).find((w) => w.id === 'shown')!;
     expect(block.value).toBe(42);
@@ -103,8 +102,7 @@ describe('what a run remembers', () => {
       ],
       edges: [{ id: 'e', source_node_id: 'text', source_port_id: 'output', target_node_id: 'store', target_port_id: 'input' }],
     });
-    const result = await executeGraph(graph, { runtime: runtime(), registry });
-    expect(result.memory).toEqual([{ node_id: 'store', port_id: 'input', value: 'kept' }]);
+    await executeGraph(graph, { runtime: runtime(), registry });
     expect(graph.nodes[1].config.data_value).toBe('kept');
   });
 });
@@ -128,13 +126,15 @@ describe('a node with nothing to do', () => {
     // ▶ Run on a chat page nobody has typed into. Asking the model "User:" is
     // not a question, and its answer would be written into the conversation.
     let asked = 0;
-    const result = await executeGraph(chat(''), {
+    const graph = chat('');
+    const result = await executeGraph(graph, {
       registry, runtime: runtime({ ai: { complete: async () => { asked += 1; return 'hm'; } } }),
     });
     expect(asked).toBe(0);
     expect(result.status).toBe('success');
     expect(result.node_results.find((r) => r.node_id === 'ai')).toMatchObject({ status: 'skipped' });
-    expect(result.memory).toEqual([]);
+    // Nothing was said, so nothing was written into the conversation.
+    expect((graph.nodes[0].config.gui_widgets as { value: unknown }[])[0].value).toEqual({ messages: [], pending: '' });
   });
 
   it('runs as soon as there is something to say', async () => {

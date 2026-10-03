@@ -224,11 +224,15 @@ describe('what stood still is not news', () => {
         edge('a', 'answer', 'out', 'sink', 'v2'),
       ],
     );
-    const first = await executeGraph(graph(), { runtime, registry, trigger: { node_id: 'page', port_id: 'ask_out' }, latch });
-    expect(first.memory).toEqual([{ node_id: 'page', port_id: 'shown_in', value: 'an answer' }]);
-    const second = await executeGraph(graph(), { runtime, registry, trigger: { node_id: 'page', port_id: 'other_out' }, latch });
+    /** What the page's box was left holding by a round on a fresh copy of the graph. */
+    const shown = (ran: Graph) => (ran.nodes[0].config.gui_widgets as { id: string; value?: unknown }[]).find((w) => w.id === 'shown')!.value;
+    const once = graph();
+    await executeGraph(once, { runtime, registry, trigger: { node_id: 'page', port_id: 'ask_out' }, latch });
+    expect(shown(once)).toBe('an answer');
+    const again = graph();
+    const second = await executeGraph(again, { runtime, registry, trigger: { node_id: 'page', port_id: 'other_out' }, latch });
     expect(result(second, 'answer')).toMatchObject({ held: true });
-    expect(second.memory).toEqual([]);
+    expect(shown(again)).toBeUndefined();
   });
 
   it('does not show the page again what reached it only from nodes that stood still', async () => {
