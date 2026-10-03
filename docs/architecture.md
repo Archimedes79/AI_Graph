@@ -255,6 +255,10 @@ built from that table, and mirror each other:
   [`editor/src/graph.ts`](../editor/src/graph.ts) imports them and adds one narrowing — each
   element's settings spelled out in `NodeConfig` — for its panels.
 
+What crosses to the outside -- the folder, the graph's names, the `tool` rows as the runtime
+API, and the lines a body speaks -- is [connection-points.md](connection-points.md), with
+the test behind each claim and what another language would bring.
+
 ## Modules, by side
 
 ```

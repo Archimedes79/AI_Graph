@@ -265,6 +265,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting an AI assistant (any MCP client) generate, check, save and run graphs |
 | [docs/licenses.md](docs/licenses.md) | The licence check: AI-Graph's own terms, every package it is built from, and how each copy carries them |
 | [docs/architecture.md](docs/architecture.md) | How the pieces fit, the decisions that hold them together and why, and what is left out for now; diagrams mapped to files in [arch/](arch/overview.md) |
+| [docs/connection-points.md](docs/connection-points.md) | Where something else meets AI-Graph -- the folder, the graph's names, the runtime API, a body's protocol -- and what another language would bring |
 
 ## Project structure
 

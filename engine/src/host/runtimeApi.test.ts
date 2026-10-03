@@ -34,9 +34,10 @@ const ECHO = {
 const served: Served[] = [];
 afterAll(async () => { for (const one of served) await one.shutdown(); });
 
-async function tool(): Promise<{ url: string; graphPath: string }> {
+/** A tool serving *graph*, from a file of its own. */
+async function tool(graph: unknown = ECHO): Promise<{ url: string; graphPath: string }> {
   const graphPath = join(await mkdtemp(join(tmpdir(), 'runtime-api-')), 'echo.json');
-  await writeFile(graphPath, JSON.stringify(ECHO));
+  await writeFile(graphPath, JSON.stringify(graph));
   const one = await serve({ graphPath, port: 0 });
   served.push(one);
   return { url: one.url, graphPath };
@@ -135,6 +136,32 @@ describe('the runtime API', () => {
     const value = await post(`${url}/api/runtime/rounds`, { values: { shown: 'typed into a display' } });
     expect(value.status).toBe(400);
     expect(value.body.detail).toMatch(/No value called "shown": this graph takes "pick"/);
+  });
+
+  it('says a graph that could not run as one: 422 from run, and the round\'s own error from rounds', async () => {
+    const step = (id: string, from: string, to: string) => ({
+      id, node_type: 'code', inputs: [port(from, 'input')], outputs: [port(to, 'output')],
+      config: { code: `function run(i) { return { ${to}: i.${from} }; }` },
+    });
+    const { url } = await tool({
+      metadata: { name: 'Loop', description: 'Two nodes waiting for each other.' },
+      nodes: [step('a', 'x', 'y'), step('b', 'y', 'x')],
+      edges: [
+        { id: 'ab', source_node_id: 'a', source_port_id: 'y', target_node_id: 'b', target_port_id: 'y' },
+        { id: 'ba', source_node_id: 'b', source_port_id: 'x', target_node_id: 'a', target_port_id: 'x' },
+      ],
+    });
+    const ran = await post(`${url}/api/runtime/run`);
+    expect(ran.status).toBe(422);
+    expect(ran.body.detail).toMatch(/^The graph could not run: .*cycle/i);
+    const started = await post(`${url}/api/runtime/rounds`);
+    expect(started.status).toBe(200);
+    let round: Record<string, unknown> = {};
+    for (let i = 0; i < 50 && !round.done; i += 1) {
+      round = (await get(`${url}/api/runtime/rounds/${started.body.round_id as string}`)).body;
+      if (!round.done) await new Promise((wake) => setTimeout(wake, 50));
+    }
+    expect(round).toMatchObject({ done: true, error: expect.stringMatching(/cycle/i) });
   });
 
   it('answers for its own session only: another id is a frontend to send back to the interface', async () => {

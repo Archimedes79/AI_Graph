@@ -162,8 +162,10 @@ API, by name, never by node or port:
 | Route | What it is for |
 |---|---|
 | `GET /api/runtime/interface` | What the graph offers: its events, the values it takes and the outputs it hands back, by name -- a block on its page by the block's id, an input, output or trigger node by its own -- and the session's id |
+| `GET /api/runtime/page` | The page as it was designed, for a frontend that draws its blocks: name, description, colour scheme, blocks |
 | `GET /api/runtime/stream` | Server-sent events: `session` (values, outputs, rounds) on connect and after every change, `round` as each round starts, goes and ends -- this page's, the clock's, another tab's |
-| `POST /api/runtime/rounds` | `{ event, values }`: start a round; watch it on the stream, or at `GET /api/runtime/rounds/:id` |
+| `POST /api/runtime/requirements` | `{ event, values }`: what that round would still ask before it runs -- a file nobody chose, a place to write -- each under the name of the value that answers it |
+| `POST /api/runtime/rounds` | `{ event, values }`: start a round; watch it on the stream, or at `GET /api/runtime/rounds/:id`; stop it at `POST /api/runtime/rounds/:id/stop` |
 | `POST /api/runtime/run` | The same, answered once the round has ended: `{ status, outputs, values }` -- a function call |
 | `GET /api/runtime/session` | What the stream says on connect, for a page that does not listen |
 | `POST /api/runtime/reset` | Forget what using the graph left behind: it is as designed again |
@@ -173,7 +175,9 @@ is one: a hundred lines that draw a field for every value the graph takes, a but
 every event -- or one Run for a graph that has none -- and a box for every output, and
 follow the stream. What using the graph leaves behind is kept by the server, in
 `state.json` beside `flow.json` (see [State](architecture.md#state)), so a page reloaded,
-or opened in a second tab, shows what the first one did.
+or opened in a second tab, shows what the first one did. The rules of the routes -- the
+session's id, what is refused and how -- are in
+[connection-points.md](connection-points.md#the-runtime-api).
 
 **Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
 server to stop rather than ending it where it stands: no new round starts, runs in flight
