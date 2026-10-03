@@ -24,7 +24,7 @@
 
 import { createInterface } from 'node:readline/promises';
 import type { Graph } from '../graph.ts';
-import { loadGraph, projectFolderOf } from '../project/folder.ts';
+import { frontendOf, loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
 import { executeGraph, memoryFeedbackEdges, nodeName, runNodeAlone } from '../execution/executor.ts';
 import { runExample, testGraph } from '../authoring/examples.ts';
@@ -209,7 +209,7 @@ async function makeBundle(options: CliOptions): Promise<number> {
   const graph = await loadGraph(options.graphPath);
   // A bundle without the built page still runs on the terminal; with it, the
   // recipient gets the tool they were shown.
-  const written = await writeBundle(graph, options.bundle!, { pageDir: builtPage() });
+  const written = await writeBundle(graph, options.bundle!, { pageDir: builtPage(), frontend: frontendOf(options.graphPath) });
   process.stderr.write(
     `Wrote ${written.length} files to ${options.bundle}
 `

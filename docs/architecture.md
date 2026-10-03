@@ -629,6 +629,10 @@ A graph is a folder, and **each fact is in one place**:
   in its file only on disk -- code.js's lines that run it by itself -- is `TextFile.footer`,
   written after the body and taken off on the way in.
 - `layout.json` — positions only.
+- `frontend/` — a page of the project's own, written by hand against the runtime API, by
+  name: served at `/` in place of the built page, and carried by a bundle
+  ([deployment.md](deployment.md#a-page-of-your-own); `host/frontend.test.ts`).
+- Not the project's: `state.json`, what a session of it keeps ([State](#state)).
 
 [`project/folder.ts`](../engine/src/project/folder.ts) reads and writes a folder for everyone —
 editor, CLI, a served tool, the MCP server — and never learns what a code node is. The graph

@@ -118,8 +118,8 @@ export async function watchGeneration<T>(
 }
 
 /** Save the deploy bundle the way a browser saves any download, under the name the engine gave it. */
-export async function downloadBundle(graph: RequestOf<'bundle'>): Promise<void> {
-  const zip = await call('bundle', graph);
+export async function downloadBundle(asked: RequestOf<'bundle'>): Promise<void> {
+  const zip = await call('bundle', asked);
   const url = URL.createObjectURL(zip);
   const link = document.createElement('a');
   link.href = url;

@@ -106,11 +106,14 @@ The recipient needs Node, and nothing else — no AI-Graph, no Python, no instal
 Or use the API:
 
 ```bash
-curl -X POST http://localhost:8000/api/deploy/bundle \
+jq '{graph: .}' my_graph.json | curl -X POST http://localhost:8000/api/deploy/bundle \
   -H "Content-Type: application/json" \
-  -d @my_graph.json \
+  -d @- \
   --output bundle.zip
 ```
+
+Sent with `"path"` -- the project the graph was opened from, as the editor's Deploy sends
+it -- the bundle carries that project's own page too (below).
 
 See [engine/src/cli/bundle.ts](../engine/src/cli/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
@@ -148,6 +151,29 @@ the graph, its page and its nodes belong to whoever built them.
 A bundle's server also keeps the clock of the graph's trigger nodes: a trigger ticked to
 fire when the tool starts, or given an interval such as `5m`, runs with nobody watching,
 and the page shows the latest result.
+
+### A page of your own
+
+A project can bring a page written by hand: `frontend/index.html` beside its `flow.json`,
+with whatever else it loads. A served project shows it at `/` in place of the built page,
+and a bundle carries it. It uses the graph the way any frontend does -- through the runtime
+API, by name, never by node or port:
+
+| Route | What it is for |
+|---|---|
+| `GET /api/runtime/interface` | What the graph offers: its events, the values it takes and the outputs it hands back, by name -- a block on its page by the block's id, an input, output or trigger node by its own -- and the session's id |
+| `GET /api/runtime/stream` | Server-sent events: `session` (values, outputs, rounds) on connect and after every change, `round` as each round starts, goes and ends -- this page's, the clock's, another tab's |
+| `POST /api/runtime/rounds` | `{ event, values }`: start a round; watch it on the stream, or at `GET /api/runtime/rounds/:id` |
+| `POST /api/runtime/run` | The same, answered once the round has ended: `{ status, outputs, values }` -- a function call |
+| `GET /api/runtime/session` | What the stream says on connect, for a page that does not listen |
+| `POST /api/runtime/reset` | Forget what using the graph left behind: it is as designed again |
+
+[`examples/nested_statistics/frontend/index.html`](../examples/nested_statistics/frontend/index.html)
+is one: a hundred lines that draw a field for every value the graph takes, a button for
+every event -- or one Run for a graph that has none -- and a box for every output, and
+follow the stream. What using the graph leaves behind is kept by the server, in
+`state.json` beside `flow.json` (see [State](architecture.md#state)), so a page reloaded,
+or opened in a second tab, shows what the first one did.
 
 **Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
 server to stop rather than ending it where it stands: no new round starts, runs in flight

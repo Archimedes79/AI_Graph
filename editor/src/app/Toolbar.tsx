@@ -159,7 +159,8 @@ export default function Toolbar({
   const handleDownloadBundle = () =>
     runDeployAction('Bundle download', async () => {
       // The tool someone is handed is the whole thing, not the level that is open.
-      await downloadBundle(useGraphStore.getState().rootGraph());
+      const { rootGraph, currentFilePath } = useGraphStore.getState();
+      await downloadBundle({ graph: rootGraph(), path: currentFilePath });
     });
 
   const handleOpenAiGraph = () => {

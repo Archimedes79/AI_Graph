@@ -221,6 +221,7 @@ export class Session {
       this.count = 0;
       this.finishedAt = null;
       this.notes = [];
+      this.lastRound = null;
       await this.writing;
       if (this.file) await rm(this.file, { force: true });
       this.tell({ type: 'session', session: this.view() });

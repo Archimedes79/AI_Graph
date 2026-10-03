@@ -69,7 +69,7 @@ describe('a download', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array([80, 75]), {
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="My_Graph_bundle.zip"' },
     })));
-    const zip = await call('bundle', { nodes: [], edges: [] } as never);
+    const zip = await call('bundle', { graph: { nodes: [], edges: [] } } as never);
     expect(zip).toBeInstanceOf(File);
     expect(zip.name).toBe('My_Graph_bundle.zip');
     expect(zip.size).toBe(2);

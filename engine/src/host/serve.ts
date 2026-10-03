@@ -34,7 +34,7 @@ import { NotFound } from '../errors.ts';
 import { Session, holderOf, type SessionHolder } from './session.ts';
 import { schedule } from './schedule.ts';
 import { Lifecycle } from './lifecycle.ts';
-import { loadGraph, projectFolderOf, stateFileOf } from '../project/folder.ts';
+import { frontendOf, loadGraph, projectFolderOf, stateFileOf } from '../project/folder.ts';
 import { withoutAuthoring } from '../authoring/handedOn.ts';
 
 /** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
@@ -88,6 +88,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
   const held = holderOf(options.graphPath
     ? await Session.open(await loadGraph(options.graphPath), { file: stateFileOf(options.graphPath) })
     : null);
+  const frontend = options.graphPath ? frontendOf(options.graphPath) : null;
   const clock = held.session
     ? schedule(() => held.session!.graph, (trigger, signal) => held.session!.run(trigger, {}, signal), lastRunFile(options.graphPath!))
     : null;
@@ -152,6 +153,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
     }
 
     if (options.editor) return servePage(response, path, options.editor.dist, 'index.html');
+    // A page of the project's own, written by hand against the runtime API, wins over the built one.
+    if (frontend) return servePage(response, path, frontend, 'index.html');
     if (options.pageDir) return servePage(response, path, options.pageDir, 'runtime.html');
     return sendJson(response, 404, { detail: 'No page.' });
   }

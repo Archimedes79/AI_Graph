@@ -152,11 +152,12 @@ export function editorRoutes(held: SessionHolder = holderOf()): Handlers {
     }),
 
     async bundle(asked) {
-      const graph = parseGraph(asked);
+      const graph = parseGraph(asked.graph);
       const work = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
       try {
-        // The page `--bundle` carries: a bundle from the editor is the same bundle.
-        await writeBundle(graph, work, { pageDir: builtPage() });
+        // The page `--bundle` carries -- a bundle from the editor is the same
+        // bundle -- and the project's own, when it has one.
+        await writeBundle(graph, work, { pageDir: builtPage(), frontend: asked.path ? project.frontendOf(asked.path) : null });
         const entries = [];
         for (const file of await allFiles(work)) {
           const path = file.slice(work.length + 1);
