@@ -4,13 +4,17 @@ import type { Graph, GraphNode } from '@/graph';
 // What ▶ Run starts: the application, as whoever gets the tool runs it -- its
 // clock kept by the server's session, the document handed to it first.
 
-const server = vi.hoisted(() => ({ asked: [] as string[], ticks: false }));
+const server = vi.hoisted(() => ({ asked: [] as string[], ticks: false, slowStop: false }));
 vi.mock('@/api/client', async (actual) => ({
   ...(await actual<typeof import('@/api/client')>()),
   call: vi.fn(async (route: string, _request?: unknown, options?: { keepalive?: boolean }) => {
     server.asked.push(options?.keepalive ? `${route}, as the page closes` : route);
     if (route === 'holdGraph') return { session: 's1', dropped: [] };
     if (route === 'startApplication') return { ticks: server.ticks };
+    if (route === 'stopApplication' && server.slowStop) {
+      await new Promise((wake) => setTimeout(wake, 5));
+      server.asked.push('stopApplication answered');
+    }
     return { stopped: true };
   }),
 }));
@@ -43,7 +47,7 @@ const open = (graph: Graph): Graph => {
   return useGraphStore.getState().rootGraph();
 };
 
-beforeEach(() => { whole = 0; server.asked.length = 0; server.ticks = false; vi.useFakeTimers(); });
+beforeEach(() => { whole = 0; server.asked.length = 0; server.ticks = false; server.slowStop = false; vi.useFakeTimers(); });
 afterEach(async () => {
   await stopApplication();
   vi.useRealTimers();
@@ -56,6 +60,23 @@ describe('the application ▶ Run starts', () => {
     expect(server.asked).toEqual(['holdGraph', 'startApplication']);
     expect(whole).toBe(0);
     expect(useApplication.getState().running).toBe(true);
+  });
+
+  it('is running from the moment it is started, before the server has answered: the App tab it opens stays open', async () => {
+    const graph = open(graphOf(page({ id: 'go', kind: 'button' })));
+    const starting = startApplication(graph, runWhole);
+    expect(useApplication.getState().running).toBe(true);
+    await starting;
+  });
+
+  it('stops the one before in the server before it starts there: a stop cannot overtake the start', async () => {
+    vi.useRealTimers();
+    const graph = open(graphOf(page({ id: 'go', kind: 'button' })));
+    await startApplication(graph, runWhole);
+    server.asked.length = 0;
+    server.slowStop = true;
+    await startApplication(graph, runWhole);
+    expect(server.asked).toEqual(['stopApplication', 'stopApplication answered', 'holdGraph', 'startApplication']);
   });
 
   it('without a page, runs whole once, as a program does -- and has then ended', async () => {

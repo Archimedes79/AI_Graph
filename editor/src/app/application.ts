@@ -75,28 +75,34 @@ function stopWhenLeft(): () => void {
  * what the graph still needs (`useRound`).
  */
 export async function startApplication(graph: Graph, runWhole: () => Promise<void>): Promise<void> {
-  await stopApplication();
+  const stopping = stopApplication();
+  // Running from the moment ▶ Run is pressed, before the server has answered:
+  // the App tab it opens is shown only while the application runs, and would
+  // close again in between.
+  useApplication.setState({ running: true });
   // What the graph's cards showed before is not what this run has done.
   useGraphStore.getState().setExecutionResult(null);
-  useApplication.setState({ running: true });
+  // The one before is stopped in the server first, or its stop could overtake this start.
+  await stopping;
   await useGraphStore.getState().holdDocument();
   whileRunning = [followEdits(), stopWhenLeft()];
   const { ticks } = await call('startApplication', {});
   if (startEvents(graph, engineRegistry).includes(null)) await runWhole();
   // Nothing left to happen: no page to use, no clock to tick.
-  if (!pageOf(graph.nodes).widgets.length && !ticks) end();
+  if (!pageOf(graph.nodes).widgets.length && !ticks) await end();
 }
 
-/** No longer running: edits no longer handed over, and the server's clock stopped. */
-function end(): void {
+/** No longer running: edits no longer handed over, and the server's clock stopped -- once it has answered. */
+function end(): Promise<void> {
   for (const undo of whileRunning) undo();
   whileRunning = [];
   useApplication.setState({ running: false });
-  void call('stopApplication', {}).catch(() => {});
+  return call('stopApplication', {}).then(() => {}, () => {});
 }
 
 /** Stop the application -- its clocks -- and the round in flight, whoever started it. */
 export async function stopApplication(): Promise<void> {
-  if (useApplication.getState().running) end();
+  const ending = useApplication.getState().running ? end() : null;
   if (useGraphStore.getState().isExecuting) await stopRound().catch(() => {});
+  await ending;
 }
