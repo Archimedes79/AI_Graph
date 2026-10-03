@@ -1,9 +1,10 @@
 // What the graph needs from a person before it can run.
 //
 // An input node set to ask, an output node set to ask where to write, a file
-// picker on the page with nothing chosen yet. Each is a question with a key, so
-// the same list serves a dialog in the editor, prompts on a terminal, and a
-// `--inputs name=value` on a command line.
+// picker on the page with nothing chosen yet. Each is a question under the
+// name of the value that answers it (`graphInterface.ts`), so the same list
+// serves a dialog in the editor, prompts on a terminal, a `--inputs
+// name=value` on a command line, and a frontend that sends values.
 //
 // The engine asks the elements rather than looking for node types itself; a new
 // element that wants to prompt says so in its own file and nothing here changes.
@@ -14,7 +15,7 @@ import type { Runners } from '../elements/NodeRunner.ts';
 import { filePorts } from './fileInputs.ts';
 
 export interface RuntimeRequirement {
-  /** `nodeId`, or `nodeId::widgetId` for a block inside a page. */
+  /** The name the answer is given under: the value the node or block offers (`graphInterface.ts`). */
   key: string;
   label: string;
   kind: 'text' | 'file' | 'directory';
@@ -70,39 +71,12 @@ function readAsFile(graph: Graph, nodeId: string, registry: Runners): boolean {
   });
 }
 
-/**
- * Write the answers back into the graph.
- *
- * A key of `nodeId::widgetId` reaches a block inside a page; a plain node id
- * reaches the node. The element decides where the value lands, because only it
- * knows what it stores — the same reason it decides what it remembers.
- *
- * Returns the ids of the nodes it wrote into, for a caller that keeps the
- * answers beyond this run: the key is read here and nowhere else.
- */
-export function applyRuntimeValues(
-  graph: Graph,
-  values: Record<string, string>,
-  registry: Runners,
-): Set<string> {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const answered = new Set<string>();
-  for (const [key, value] of Object.entries(values)) {
-    const [nodeId, widgetId] = key.split('::');
-    const node = byId.get(nodeId);
-    if (!node) continue;
-    registry.node(node.node_type)?.applyRuntimeValue(node, widgetId ?? null, value);
-    answered.add(nodeId);
-  }
-  return answered;
-}
-
-/** The default an unanswered question falls back to. */
+/** The default an unanswered question falls back to. The answers are values by name, written by `applyValues`. */
 export function withDefaults(
   asked: RuntimeRequirement[],
-  answers: Record<string, string>,
-): Record<string, string> {
-  const resolved: Record<string, string> = { ...answers };
+  answers: Record<string, unknown>,
+): Record<string, unknown> {
+  const resolved: Record<string, unknown> = { ...answers };
   for (const requirement of asked) {
     if (!resolved[requirement.key]) resolved[requirement.key] = requirement.current;
   }

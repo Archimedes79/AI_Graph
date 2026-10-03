@@ -15,43 +15,31 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { parseGraph, type Graph } from '../graph.ts';
-import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
+import { dirname, resolve } from 'node:path';
 import { registry } from '../elements/registry.ts';
-import { runtimeRequirements } from '../execution/runtimeValues.ts';
-import { triggeredNodes } from '../execution/triggers.ts';
+import { startEvents } from '../execution/triggers.ts';
 import { aiSetting, settingsPath } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, EventStream, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendEvents, sendJson, servePage,
+  type Exchange, type Handlers,
 } from './http.ts';
+import { NotOffered, eventOf, interfaceOf, outputsOf } from '../execution/graphInterface.ts';
 import { browse } from './browse.ts';
 import { extensionFilter } from '../elements/folderListing.ts';
 import { NotFound } from '../errors.ts';
-import { RunBoard } from './runs.ts';
-import { Rounds } from './rounds.ts';
-import { Latch } from '../execution/latch.ts';
-import { nodeRuntime } from './node.ts';
-import { schedule } from './schedule.ts';
+import { Session, holderOf, type SessionHolder } from './session.ts';
 import { Lifecycle } from './lifecycle.ts';
-import { loadGraph, projectFolderOf } from '../project/folder.ts';
-import { withoutAuthoring } from '../authoring/handedOn.ts';
-
-/** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
-function lastRunFile(graphPath: string): string {
-  const folder = projectFolderOf(graphPath);
-  return folder ? join(folder, 'flow.last-run.json') : `${graphPath}.last-run.json`;
-}
+import { frontendOf, loadGraph, projectFolderOf, stateFileOf } from '../project/folder.ts';
 
 export interface ServeOptions {
   /**
    * The graph this server ships, for a deployed tool.
    *
-   * Optional, because the editor posts the graph being edited with every
-   * request, so there is nothing stored to serve unless it is given one. With
-   * it come the `graph` route, the graph's clock and the file its last round is
-   * kept in, and the folder the file picker opens in.
+   * Optional, because the editor hands its session the graph being edited,
+   * so there is nothing to serve until it does unless it is given one. With
+   * it come a session that goes on from its state.json, the graph's clock,
+   * and the folder the file picker opens in.
    */
   graphPath?: string;
   /** Where the built page lives, if this bundle carries one. */
@@ -80,25 +68,18 @@ export async function serve(options: ServeOptions): Promise<Served> {
   /** Who this server is, for telling its own page from another's: its port is known once it listens. */
   const self = { loopback, port: 0, names: namesFor(host) };
 
-  // The graph this server ships is held, not re-read: what a run remembers is
-  // settled into it, so the next scheduled round -- and the next page to open --
-  // starts from there. A page that runs the graph hands over its copy, so the
-  // clock goes on with the file the person picked.
-  // Shared by the clock and the page's runs: both run the same graph, so both
-  // queue for it and both read what its nodes were left holding.
-  const latch = new Latch();
-  const rounds = new Rounds();
-  const held: { graph: Graph | null } = {
-    graph: options.graphPath ? await loadGraph(options.graphPath) : null,
-  };
-  const clock = held.graph
-    ? schedule(() => held.graph!, (graph, signal, trigger) => {
-      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }), signal);
-    }, lastRunFile(options.graphPath!))
-    : null;
-  if (clock) lifecycle.own('the schedule', () => clock.stop());
-  const runs = new RunBoard({ latch, rounds });
-  lifecycle.own('runs in flight', () => runs.stopAll());
+  // The graph in use, and what using it leaves behind: one session, shared by
+  // the clock and every page, so all queue for one graph and all read what its
+  // nodes were left holding. A deployed tool's is opened with the server, goes
+  // on from its state.json and keeps its clock from the start; the editor's
+  // begins with the graph it hands over, and its clock runs from ▶ Run to ■ Stop.
+  const held = holderOf(options.graphPath
+    ? await Session.open(await loadGraph(options.graphPath), { file: stateFileOf(options.graphPath) })
+    : null);
+  const frontend = options.graphPath ? frontendOf(options.graphPath) : null;
+  if (held.session && !options.editor) void held.session.startApplication();
+  lifecycle.own('the clock', async () => { await held.session?.stopApplication(); });
+  lifecycle.own('rounds in flight', async () => { await held.session?.stopAll(); });
 
   const handlers: Handlers = {
     // Where an empty path opens the picker, decided here and nowhere else. A
@@ -106,7 +87,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
     // what its paths are relative to. The editor's opens where the editor was
     // started, which is the same idea one level up, even when it was given a
     // graph to serve as well.
-    ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.editor || !options.graphPath
+    ...toolRoutes(held, options.editor || !options.graphPath
       ? process.cwd()
       : (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))),
     // Loaded, not imported: a bundle carries this file without the `editor/`
@@ -130,8 +111,8 @@ export async function serve(options: ServeOptions): Promise<Served> {
 
     if (path.startsWith('/api/')) {
       const found = matchRoute(request.method ?? 'GET', path);
-      // Watching and stopping still answer while the runs wind down; nothing new starts.
-      if (lifecycle.stopping && request.method !== 'GET' && found?.name !== 'stopRun') {
+      // Watching and stopping still answer while the rounds wind down; nothing new starts.
+      if (lifecycle.stopping && request.method !== 'GET' && found?.name !== 'stopRound' && found?.name !== 'stopApplication') {
         return sendJson(response, 503, { detail: 'This server is stopping.' });
       }
       const handler = found ? handlers[found.name] as ((request: unknown, exchange: Exchange) => unknown) | undefined : undefined;
@@ -146,14 +127,20 @@ export async function serve(options: ServeOptions): Promise<Served> {
           ...(route.method === 'POST' ? await readJson(request) : {}),
         };
         const answer = await handler(asked, exchange);
-        return answer instanceof Download ? sendDownload(response, answer) : sendJson(response, 200, answer);
+        if (answer instanceof Download) return sendDownload(response, answer);
+        if (answer instanceof EventStream) return sendEvents(response, answer);
+        return sendJson(response, 200, answer);
       } catch (error) {
         if (error instanceof Refusal) return sendJson(response, error.status, { detail: error.message, ...error.extra });
+        // A name the graph does not offer is the caller's mistake, said as one.
+        if (error instanceof NotOffered) return sendJson(response, 400, { detail: error.message });
         throw error;
       }
     }
 
     if (options.editor) return servePage(response, path, options.editor.dist, 'index.html');
+    // A page of the project's own, written by hand against the runtime API, wins over the built one.
+    if (frontend) return servePage(response, path, frontend, 'index.html');
     if (options.pageDir) return servePage(response, path, options.pageDir, 'runtime.html');
     return sendJson(response, 404, { detail: 'No page.' });
   }
@@ -199,22 +186,90 @@ export function portTaken(error: unknown): boolean {
 
 /** The `tool` rows: what any server answers, a deployed tool's included. */
 function toolRoutes(
-  held: { graph: Graph | null },
-  clock: ReturnType<typeof schedule> | null,
-  runs: RunBoard,
-  ships: boolean,
+  held: SessionHolder,
   /** Where the file picker opens: the folder a tool's graph sits in, or where the editor was started. */
   toolRoot: string,
 ): Handlers {
+  const sessionAsked = (asked: { session?: string }): Session => held.asked(asked.session);
+
   return {
-    graph() {
-      if (!held.graph) throw new Refusal(404, 'This server ships no graph; post the one to run.');
-      // A tool's page is handed what runs, not how each node was written.
-      return withoutAuthoring(held.graph);
+    // -- the runtime API: what any frontend uses, by name ---------------------
+
+    interface(asked) {
+      const session = sessionAsked(asked);
+      const { name, description } = session.graph.metadata;
+      return { session: session.id, name, description: description ?? '', ...interfaceOf(session.graph, registry) };
     },
 
-    schedule: () => clock?.state() ?? {
-      scheduled: false, running: false, runs: 0, result: null, error: null, finished_at: null, next_at: null,
+    session: (asked) => sessionAsked(asked).view(),
+
+    stream(asked) {
+      const session = sessionAsked(asked);
+      return new EventStream((send) => {
+        send('session', session.view());
+        return session.watch((event) => send(event.type, event.type === 'round' ? event.round : event.session));
+      });
+    },
+
+    requirements(asked) {
+      const session = sessionAsked(asked);
+      return session.requirements(eventOf(session.graph, asked.event, registry), asked.values ?? {});
+    },
+
+    startRound(asked) {
+      const session = sessionAsked(asked);
+      const { id, total } = session.start(eventOf(session.graph, asked.event, registry), asked.values ?? {});
+      return { session: session.id, round_id: id, total };
+    },
+
+    round(asked) {
+      const snapshot = sessionAsked(asked).snapshot(asked.id);
+      if (!snapshot) throw new Refusal(404, 'No such round.');
+      return snapshot;
+    },
+
+    stopRound: (asked) => ({ stopped: sessionAsked(asked).stop(asked.id) }),
+
+    async runRound(asked) {
+      const session = sessionAsked(asked);
+      const { id, outcome } = session.start(eventOf(session.graph, asked.event, registry), asked.values ?? {});
+      const ended = await outcome.then((result) => result, (error: unknown) => {
+        // Stopped while it waited: a round that did not run, not a graph that cannot.
+        if (session.snapshot(id)?.cancelled) return null;
+        throw new Refusal(422, `The graph could not run: ${message(error)}`);
+      });
+      return {
+        session: session.id,
+        round_id: id,
+        status: ended?.status ?? 'cancelled',
+        error: ended?.error ?? null,
+        outputs: outputsOf(session.graph, ended, registry),
+        values: session.view().values,
+      };
+    },
+
+    async reset(asked) {
+      const session = sessionAsked(asked);
+      await session.reset();
+      return session.view();
+    },
+
+    // -- what the built-in page reads besides ----------------------------------
+
+    // The page as it was designed, and no more of the graph: its blocks are
+    // what it draws, by the names they are called by.
+    page(asked) {
+      const session = sessionAsked(asked);
+      const { graph } = session;
+      const page = graph.nodes.find((node) => registry.node(node.node_type)?.hasInterface);
+      return {
+        session: session.id,
+        name: graph.metadata.name,
+        description: graph.metadata.description ?? '',
+        scheme: String(graph.metadata.gui_scheme ?? ''),
+        blocks: page ? registry.node(page.node_type)!.blocks(page) : [],
+        starts_whole: startEvents(graph, registry).includes(null),
+      };
     },
 
     // Read-only on purpose: a deployed tool is configured by whoever runs it,
@@ -231,33 +286,6 @@ function toolRoutes(
         settings_file_exists: existsSync(file),
       };
     },
-
-    requirements(asked) {
-      // Asked for one event, only what that event runs is asked about.
-      const graph = parseGraph(asked);
-      const trigger = asked.trigger?.node_id ? asked.trigger : null;
-      const only = trigger ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry)) : null;
-      return runtimeRequirements(graph, registry, only);
-    },
-
-    startRun(asked) {
-      const graph = parseGraph(asked);
-      if (ships) held.graph = graph;
-      const trigger = asked.trigger?.node_id ? asked.trigger : null;
-      const only = trigger
-        ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry))
-        : null;
-      const total = only?.size ?? graph.nodes.length;
-      return { run_id: runs.start(graph, trigger, total), total };
-    },
-
-    run(asked) {
-      const snapshot = runs.snapshot(asked.id);
-      if (!snapshot) throw new Refusal(404, 'No such run.');
-      return snapshot;
-    },
-
-    stopRun: (asked) => ({ cancelled: runs.stop(asked.id) }),
 
     // The one picker, the editor's too. It used to list the starting directory's
     // files and nothing else -- no folders, no parent, no drives -- which left

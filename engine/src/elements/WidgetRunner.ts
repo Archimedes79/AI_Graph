@@ -74,6 +74,16 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
   ): Promise<Record<string, unknown>>;
 
   /**
+   * Whether this block keeps something between rounds: what a person sets on
+   * it, or what a loop brings back to it. A block with a port does; a heading,
+   * a divider, a spacer are their design and nothing else.
+   */
+  keepsState(widget: Widget): boolean {
+    const own = this.ports(widget);
+    return own.inputs.length > 0 || own.outputs.length > 0;
+  }
+
+  /**
    * Keep a value that came back around a loop, for the next run.
    *
    * `stored` is the block as the graph file holds it. Most blocks simply
@@ -111,8 +121,20 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
     return [];
   }
 
-  /** Keep one supplied value in *stored*, the block as the graph file holds it. Only a block that asked is told. */
-  applyRuntimeValue(_stored: RawConfig, _value: string): void {}
+  /**
+   * Whether a person sets what this block hands on -- a choice, a text, a
+   * path, a message: a value a round can be given under the block's id. A
+   * block that hands on nothing takes none, and nor does one that only says
+   * it was used (a button).
+   */
+  takesValue(widget: Widget): boolean {
+    return this.ports(widget).outputs.some((port) => port.id === `${widget.id}_out`);
+  }
+
+  /** Keep a value given from outside -- a person, a page, a script -- in *stored*, the block as the graph file holds it. */
+  setValue(stored: RawConfig, value: unknown): void {
+    stored.value = value;
+  }
 
   // ── Build time ────────────────────────────────────────────────────────────
   // What building a neighbour asks of it.
@@ -142,5 +164,16 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
   /** Files and folders this block names as its own defaults, which a bundle carries: what a picker starts on. */
   referencedPaths(_widget: Widget): string[] {
     return [];
+  }
+
+  /**
+   * Whether what this block holds is part of the page's design -- a choice, a
+   * text, a path to start on, set while the page is built -- rather than only
+   * ever what using it left: a conversation is what was said, never what a
+   * page starts with. The editor's Page tab writes the first kind into the
+   * design as it is set there; the second is the session's wherever it is set.
+   */
+  valueIsDesign(_widget: Widget): boolean {
+    return true;
   }
 }

@@ -64,14 +64,14 @@ flowchart LR
 | Diagram node | Path | Notes |
 |---|---|---|
 | `Editor page` | [`editor/src/App.tsx`](../editor/src/App.tsx), [`app/`](../editor/src/app/), [`canvas/`](../editor/src/canvas/), [`page/`](../editor/src/page/), [`authoring/`](../editor/src/authoring/), [`store/`](../editor/src/store/) | canvas, node editor, page designer; entry `editor/src/main.tsx` |
-| `Deployed tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | entry `runtime/main.tsx` → `runtime.html`; may not reach editor-only modules (`runtime/boundary.test.ts`) |
-| `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts) | `call(route, request)`; `ApiError`; `EditorView` narrows returned graphs; `watchGeneration` (a generation's calls, polled while it runs; a signal stops the watch at once, and what comes back later is dropped) |
+| `Deployed tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | entry `runtime/main.tsx` → `runtime.html`; reaches no store, canvas, authoring or editor shell (`runtime/boundary.test.ts`) |
+| `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts), [`session.ts`](../editor/src/api/session.ts) | `call(route, request)`; `ApiError`; the session a page follows (`useSession`); `EditorView` narrows returned graphs; `watchGeneration` (a generation's calls, polled while it runs; a signal stops the watch at once, and what comes back later is dropped) |
 | `Contract` | [`engine/src/host/api.ts`](../engine/src/host/api.ts) | every route: method, path, `tool`/`editor`, request and response types |
-| `Server` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts), [`http.ts`](../engine/src/host/http.ts), [`runs.ts`](../engine/src/host/runs.ts), [`schedule.ts`](../engine/src/host/schedule.ts) | serves the page and the `tool` routes; refuses to start if a route has no handler |
+| `Server` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts), [`http.ts`](../engine/src/host/http.ts), [`session.ts`](../engine/src/host/session.ts) | serves the page and the `tool` routes; refuses to start if a route has no handler; holds the one session: the graph in use and its state |
 | `Editor routes` | [`engine/src/host/editor/routes.ts`](../engine/src/host/editor/routes.ts) | the `editor` routes; dynamic import, never in a bundle |
 | `Runtime services` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | files, sandboxed code, models, tools: the `Runtime` handed to elements |
 | `CLI` | [`engine/src/main.ts`](../engine/src/main.ts), [`engine/src/cli/cli.ts`](../engine/src/cli/cli.ts) | run a folder or a file once / on a clock / `--serve` / `--bundle` / `--mcp` / `--editor` / `check` / `test` / `run-node` |
-| `Executor` | [`engine/src/execution/`](../engine/src/execution/): `executor.ts`, `triggers.ts` (what starts a run -- and what starting the application runs: `startEvents`, `pageStarts`), [`clock.ts`](../engine/src/execution/clock.ts) (when a trigger is due: the one clock the server's schedule and the editor's ▶ Run keep), `batching.ts`, `fileInputs.ts`, `reuse.ts`, `latch.ts`, `interface.ts`, `runtimeValues.ts`, `wiring.ts` (`ERROR_PORT` and `errorOutput`, the error output spelled once) | order, fan-out, memory, displays, stopping; reuses context a page event only needs; holds outputs to what a node's output.js says; one call of a node on its input.js example (`callNode`), held to its output.js by [`authoring/examples.ts`](../engine/src/authoring/examples.ts) (`runExample`; `testGraph` at every depth), and one node alone (`runNodeAlone`, `executeNode`), for ▶ Try, the CLI and MCP alike |
+| `Executor` | [`engine/src/execution/`](../engine/src/execution/): `executor.ts`, `triggers.ts` (what starts a run -- and what starting the application runs: `startEvents`, `pageStarts`), [`clock.ts`](../engine/src/execution/clock.ts) (when a trigger is due: the one clock, kept by the server's session for a served tool and for the editor's ▶ Run alike), `batching.ts`, `fileInputs.ts`, `reuse.ts`, `latch.ts`, `interface.ts` (what one node hands on), `graphInterface.ts` (what the whole graph offers by name: events, values, outputs -- `NodeRunner.offers`), `runtimeValues.ts`, `wiring.ts` (`ERROR_PORT` and `errorOutput`, the error output spelled once) | order, fan-out, memory, displays, stopping; reuses context a page event only needs; holds outputs to what a node's output.js says; one call of a node on its input.js example (`callNode`), held to its output.js by [`authoring/examples.ts`](../engine/src/authoring/examples.ts) (`runExample`; `testGraph` at every depth), and one node alone (`runNodeAlone`, `executeNode`), for ▶ Try, the CLI and MCP alike |
 | `Elements + registry` | [`engine/src/elements/`](../engine/src/elements/), and its mirror [`editor/src/elements/`](../editor/src/elements/) | one class per node type and widget kind, mirrored file for file; see [elements](#elements) |
 | `Graph document` | [`engine/src/graph.ts`](../engine/src/graph.ts), [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types; `defaultMetadata()` (a graph's settings when nothing says otherwise: a new graph's, and what `flow.json` leaves out); the editor adds only the typed `NodeConfig` view |
 | `Project folder + check` | [`engine/src/project/`](../engine/src/project/): [`folder.ts`](../engine/src/project/folder.ts), [`check.ts`](../engine/src/project/check.ts), [`folderCheck.ts`](../engine/src/project/folderCheck.ts) | a graph as a folder (`flow.json` with nodes and wires via [`flow.ts`](../engine/src/project/flow.ts), `layout.json`, `nodes/<id>/` with `node.json`, `interface.json` via [`interfaceFile.ts`](../engine/src/project/interfaceFile.ts), the files per `NodeRunner.texts`, the page's folder `page/` beside them (`nodeFolders`) with its blocks in `page.json` -- every one there from the start, a stub until something is written into it -- and a project folder of its own under a node that holds a graph), read and written for every caller; changes on disk; the one list of problems (`check`, MCP, and the editor before it loads a graph pasted in or designed by ✨ AI Graph: `problemsIn` reads no disk; what a folder gets wrong is `folderCheck.ts`) |
@@ -324,8 +324,9 @@ classDiagram
 
 ## Class diagram: runs and their state
 
-The classes that are not elements: what the server keeps while graphs run. `serve()` creates the `Latch`, the
-`Rounds` and the `Lifecycle` and hands the first two to the `RunBoard` and the clock.
+The classes that are not elements: what the server keeps while graphs run. `serve()` opens one `Session` --
+the graph in use and what using it leaves behind -- or, for the editor, holds none until a graph is handed
+over (`SessionHolder`). The session keeps the clock too: its rounds are rounds like any other.
 
 ```mermaid
 classDiagram
@@ -334,46 +335,75 @@ classDiagram
     shutdown(graceMs)
     stopping
   }
-  class RunBoard {
-    start()
+  class SessionHolder {
+    session
+    hold(graph, handover)
+    asked(id)
+  }
+  class Session {
+    id
+    graph
+    open(graph, file)$
+    hold(graph)
+    start(trigger)
+    run(trigger, signal)
+    requirements(trigger, values)
+    snapshot(id)
+    stop(id)
+    stopAll()
+    startApplication()
+    stopApplication()
+    reset()
+    kept()
+    view()
+    watch(listener)
+  }
+  class Rounds {
+    start(total, labelOf, work)
+    exclusive(work)
     snapshot(id)
     stop(id)
     stopAll()
   }
-  class Run {
+  class Round {
     id
     total
     completed
     result
     snapshot()
-    stop()
-  }
-  class Rounds {
-    turn()
+    halt()
   }
   class Latch {
     key()
     get()
     set()
+    heldBy(nodes)
+    restore(held)
+  }
+  class RoundLatch {
+    commit()
   }
   class LastOutputs {
     get()
     set()
   }
-  RunBoard "1" *-- "0..*" Run : in flight
-  RunBoard o-- Rounds : shared with the clock
-  RunBoard o-- Latch : shared with the clock
-  RunBoard *-- LastOutputs
-  Lifecycle ..> RunBoard : stopAll() while stopping
+  SessionHolder o-- Session : one per server
+  Session *-- Rounds : one at a time
+  Rounds "1" *-- "0..*" Round : going, or ended 5 min ago
+  Session *-- Latch : what each node made last
+  Session *-- LastOutputs
+  Latch <|-- RoundLatch : held back until a round ends
+  Session ..> RoundLatch : one per round
+  Lifecycle ..> Session : stopAll() while stopping
 ```
 
 | Diagram node | Path | Notes |
 |---|---|---|
 | `Lifecycle` | [`engine/src/host/lifecycle.ts`](../engine/src/host/lifecycle.ts) | what a server stops, in order, once, within a grace period |
-| `RunBoard`, `Run` | [`engine/src/host/runs.ts`](../engine/src/host/runs.ts) | two classes in one file (a review-sized exception to "one class per file"); forgets a run after 5 minutes |
-| `Rounds` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | one round of a graph at a time; a graph is known by its name and shape (`graphKey`) |
-| `Latch` | [`engine/src/execution/latch.ts`](../engine/src/execution/latch.ts) | what every node made last, for rounds its ◆ stays shut, kept under the graph and what the node is made from as written; gone at restart |
-| `LastOutputs` | [`engine/src/execution/reuse.ts`](../engine/src/execution/reuse.ts) | outputs a page event may hand back for context-only nodes; the file is not named after the class |
+| `Session`, `RoundLatch`, `SessionHolder` | [`engine/src/host/session.ts`](../engine/src/host/session.ts) | the application's clock (`startApplication`, [`execution/clock.ts`](../engine/src/execution/clock.ts)); a round runs on a working copy -- the design, each node's slots put back (`NodeRunner.state`/`setState`) -- and commits only when it ran to its end; slots are kept with the design value they started from and dropped, said, when their node, block or design changed; `state.json` ([`stateFileOf`](../engine/src/project/folder.ts)) after every round, read back by `open`, deleted by `reset` |
+| `Rounds`, `Round` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | the rounds of one session: queued in the order asked, watched (`RoundSnapshot`), stopped -- a waiting one at once; `exclusive` for a reset; forgets a round 5 minutes after it ended |
+| `Latch` | [`engine/src/execution/latch.ts`](../engine/src/execution/latch.ts) | what every node made last, for rounds its ◆ stays shut, kept under the graph and what the node is made from as written; one entry a node is written to `state.json` (`heldBy`) |
+| `LastOutputs` | [`engine/src/execution/reuse.ts`](../engine/src/execution/reuse.ts) | outputs a page event may hand back for context-only nodes; the file is not named after the class; not kept beyond the process |
 
 Not drawn: the error classes (`Refusal`, `NotFound`, `NotAGraph`, `FileChanged`, …), spread over the
 files that throw them; `errors.ts` holds `NotFound` and `NotAGraph`, the two more than one file needs.
@@ -390,8 +420,8 @@ flowchart TD
     Api["api.ts — contract"]
     Http["http.ts"]
     Serve["serve.ts"]
-    Runs["runs.ts — RunBoard"]
-    Schedule["schedule.ts"]
+    Session["session.ts — Session"]
+    Rounds["rounds.ts — Rounds"]
     Lifecycle["lifecycle.ts"]
     Node["node.ts — Runtime"]
     subgraph editor["host/editor/ — never bundled"]
@@ -405,14 +435,14 @@ flowchart TD
 
   Serve --> Api
   Serve --> Http
-  Serve --> Runs
-  Serve --> Schedule
+  Serve --> Session
   Serve --> Lifecycle
-  Serve --> Node
   Serve -. "await import" .-> Routes
   Http --> Api
-  Runs --> Api
-  Runs --> Node
+  Session --> Rounds
+  Session --> Node
+  Rounds --> Api
+  Routes --> Session
   Routes --> Api
   Routes --> Http
   Routes --> Node
@@ -428,12 +458,11 @@ flowchart TD
 
 | Diagram node | Path | Notes |
 |---|---|---|
-| `api.ts — contract` | [`engine/src/host/api.ts`](../engine/src/host/api.ts) | `API` table, `RequestOf`/`ResponseOf`, `matchRoute`, `pathFor`; wire types (`RunSnapshot`, `AICall`, `SettingsStatus`, …) |
+| `api.ts — contract` | [`engine/src/host/api.ts`](../engine/src/host/api.ts) | `API` table, `RequestOf`/`ResponseOf`, `matchRoute`, `pathFor`; wire types (`RoundSnapshot`, `SessionView`, `InterfaceView`, `AICall`, `SettingsStatus`, …) |
 | `http.ts` | [`engine/src/host/http.ts`](../engine/src/host/http.ts) | `Refusal` (thrown with a status), `Download`, `Handler`/`Handlers`, JSON (only as `application/json`) and byte bodies, static page; `foreignRequest`: a loopback host -- with the server's port on a loopback bind; bound wider, on any port, or the address bound to, or a name `AI_GRAPH_ALLOWED_HOSTS` lists (`namesFor`) -- and no foreign origin or cross-site call |
-| `serve.ts` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts) | `serve()`: dispatch by the table; `toolRoutes()`: graph, schedule, AI settings (read-only), requirements, run/watch/stop, browse |
-| `runs.ts — RunBoard` | [`engine/src/host/runs.ts`](../engine/src/host/runs.ts) | runs in flight: start, snapshot, stop, `stopAll` for a shutdown, forget after 5 min |
-| `rounds.ts` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | one round of a graph at a time: the clock's and the page's rounds share the queue, and the [`Latch`](../engine/src/execution/latch.ts) that holds what every node made last |
-| `schedule.ts` | [`engine/src/host/schedule.ts`](../engine/src/host/schedule.ts) | a clock per trigger node, each round told which began it; `ScheduleState`, kept across restarts in `flow.last-run.json` (a project) or `<file>.last-run.json` (a graph file) |
+| `serve.ts` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts) | `serve()`: dispatch by the table, one session held (`holderOf`); `toolRoutes()`: the runtime API -- interface, session and its stream, page, requirements, rounds started, watched and stopped, run, reset -- AI settings (read-only), browse |
+| `session.ts — Session` | [`engine/src/host/session.ts`](../engine/src/host/session.ts) | the graph in use and what using it leaves behind, the clock's rounds and the page's alike: see the class diagram above |
+| `rounds.ts — Rounds` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | the rounds of one session, one at a time: start, snapshot, stop, `stopAll` for a shutdown, forget after 5 min |
 | `lifecycle.ts` | [`engine/src/host/lifecycle.ts`](../engine/src/host/lifecycle.ts) | `Lifecycle`: what a server must stop, in order, once, within a grace period; `untilStopped`: signals → shutdown → exit code, used by [`cli/cli.ts`](../engine/src/cli/cli.ts) |
 | `node.ts — Runtime` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | `nodeFiles`, `nodeCode` (sandboxed `node --permission`; a body may ask this process for what it may not do itself — `BodyContext.calls`, how `node.llm` works), `nodeRuntime()` |
 | `routes.ts` | [`engine/src/host/editor/routes.ts`](../engine/src/host/editor/routes.ts) | `editorRoutes()`: try a node, open/save a project or file (reload is an open again) and what changed on disk (through [`project/folder.ts`](../engine/src/project/folder.ts)), generation + live transcripts, bundle, settings |
@@ -454,7 +483,8 @@ The page side of the wire. The areas stand in layers, and [`layers.test.ts`](../
 fails on an import that goes up: `ui` · `graph` · `document`, `api` · `store` · `dialogs` ·
 `elements`, `authoring` · `page`, `canvas` · `app` · `App`, `runtime`. Two entry points share one set of modules: the editor
 (`main.tsx` → `App.tsx`) and the deployed tool's page (`runtime/main.tsx` →
-`RuntimeApp.tsx`), which reaches element views but never a panel or an editing module.
+`RuntimeApp.tsx`), which reaches element views but never a panel or an editing module, and
+nothing in `store/`, `canvas/`, `authoring/` or `app/` (`runtime/boundary.test.ts`).
 
 ```mermaid
 flowchart TD
@@ -488,7 +518,6 @@ flowchart TD
   App --> Toolbar
   App --> Page
   Runtime --> Page
-  Runtime --> Store
   Runtime --> Client
   Canvas --> Store
   NodeEd --> Registry
@@ -510,15 +539,15 @@ flowchart TD
 | Diagram node | Path | Notes |
 |---|---|---|
 | `Editor shell` | [`editor/src/App.tsx`](../editor/src/App.tsx), [`main.tsx`](../editor/src/main.tsx) | views (Graph · Page, and App while the application runs), open/save, drop a file |
-| `Tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | `RuntimeApp.tsx`, `RuntimeAISettings.tsx` (read-only); [`boundary.test.ts`](../editor/src/runtime/boundary.test.ts) keeps panels and editing modules out |
+| `Tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | `RuntimeApp.tsx` (holds no graph: asks the server for its page and interface, follows the session, starts rounds by name), `RuntimeAISettings.tsx` (read-only); [`boundary.test.ts`](../editor/src/runtime/boundary.test.ts) keeps panels, editing modules, the store, the canvas, authoring and the shell out |
 | `Header, bar + dialogs` | [`editor/src/app/`](../editor/src/app/) | `Toolbar.tsx`, the header (the app's and the graph's name, `ViewTabs.tsx`; Undo and Redo as icons; the one ▶ Run, on every tab, which runs the application -- [`application.ts`](../editor/src/app/application.ts): with a page, the App tab and the page runs the graph; without, what starts it; ■ Stop ends it --; Generate, Settings, Deploy: the zip; below 1280 pixels its buttons are their icons), [`FileMenu.tsx`](../editor/src/app/FileMenu.tsx) (New, ✨ AI Graph -- a new graph from a description --, Open, Save, Save as…, Reload, JSON: `fileActions`, each saying why it waits during a run), [`ChangeBar.tsx`](../editor/src/app/ChangeBar.tsx) (the bar under the canvas: say what to change on the node selected -- a code, ai or data node's panel takes it up (`askChange`) -- or on the whole graph, which ✨ AI Graph changes, each node's history kept, and the bar shows before Apply) and [`graphChange.ts`](../editor/src/app/graphChange.ts) (what the bar is on, where a change goes, and what a changed graph adds, removes and changes), `Sidebar.tsx` (the palette: every node but the page, under the heading its kind says, `paletteGroup`; its icons below 1280 pixels), `SettingsDialog.tsx`, `ResultsPanel.tsx` (beside the canvas while no node's panel is open); [`SubgraphTrail.tsx`](../editor/src/app/SubgraphTrail.tsx) (the breadcrumb into a node's graph and back out, which waits for a run in flight); [`GraphProblems.tsx`](../editor/src/app/GraphProblems.tsx) (what the engine's `check` finds in a graph about to be taken in from outside, said before Load or Apply); [`windowDrops.ts`](../editor/src/app/windowDrops.ts) (what is dropped anywhere on the window: which project a folder is, said with where the engine looked when it is none -- and a file dropped into a code box is the box's, typed in by its editor) |
 | `Graph canvas` | [`editor/src/canvas/GraphCanvas.tsx`](../editor/src/canvas/GraphCanvas.tsx), [`GraphNodeView.tsx`](../editor/src/canvas/GraphNodeView.tsx) | ReactFlow; a node is a card -- [`NodeKind.tsx`](../editor/src/canvas/NodeKind.tsx) (its kind as a tag in its tint, and its id: on the card and atop its panel), its heading and its text's first line, its ports as dots on its edges (measured again when their ids change); the page's ports as rows, the card no wider than `PAGE_CARD_MAX_WIDTH` while it has no size of its own -- and one click opens its panel, as a palette click or drop does for the node it adds; [`inView.ts`](../editor/src/canvas/inView.ts) (`viewDue`: another document fitted whole, a node added shown with the rest where they fit readably, one opened brought into sight, once measured on screen); [`wireLook.ts`](../editor/src/canvas/wireLook.ts) (soft grey wires, the selected node's in the accent, a ◆'s amber and dashed); a file dropped on a node is one more file its ✨ Input writes from -- or what a data node holds -- where the element takes one (`dropPort`, `authoring/droppedFile.ts`); [`ResultPreview.tsx`](../editor/src/canvas/ResultPreview.tsx) (what a node made last, drawn small on its card: a line, a count and its first row, a sketch, a thumbnail, or its error's first line), `nodeRemoval.ts` (Delete only as pressed on the canvas; one question -- a page's blocks, the wires -- for Delete and a card's ✕ alike, and one undo step), `PortsEditor.tsx`, [`portIds.ts`](../editor/src/canvas/portIds.ts) (the port names a node's panel will not store: none, twice, the error port's) |
 | `Node panel` | [`editor/src/canvas/NodeEditor.tsx`](../editor/src/canvas/NodeEditor.tsx), [`PageCardPanel.tsx`](../editor/src/canvas/PageCardPanel.tsx) | a node's panel, docked beside the canvas while the node is selected (`ui/SidePanel`), with no Save -- the page's is the way to the Page tab: at its top the node's kind and id (`NodeKind.tsx`, as on its card) and its heading below them (`authoring/HeadingField.tsx`, never empty), then the element's own `Panel` — for a code, ai or data node `authoring/NodeDefinition.tsx`: its text, a row per ✨, ▶ Try and history.md — and `AdvancedPanel` folded under it, with the ports of a node that `definesItself`; the one ✨ handler: what is missing first (`writesFor`), each written in as it comes; [`nodePanel.ts`](../editor/src/canvas/nodePanel.ts) (what is changed is shown at once and written a moment later, one undo step per field typed into, and on close; a change from outside is taken with what waits kept on top); [`nodeDraft.ts`](../editor/src/canvas/nodeDraft.ts) (`withSetting`: a setting's change, its ports following -- or a function of the setting, for a write that lands after a wait; `withPorts`: a ports edit, the keys of input.js and output.js following the ports; `saveDraft`: the write, the wires following the ports) |
-| `Page + designer` | [`editor/src/page/`](../editor/src/page/) | `GuiPage.tsx` draws a page (shared with the tool page) -- or, while it has no blocks, the tool without one: what it does and `RunResult.tsx`, the run's result, each output node's values under its label; `DesignerTab.tsx`, `DesignerPalette.tsx` (where each block kind's own `paletteEntries` stand, and `newBlock`: the block an entry adds, named for its kind and numbered beside another of that name), `WidgetEditor.tsx`, `pageWrite.ts` (the page is one node, which its first block makes, beside what is on the canvas and in that block's undo step, and its last block takes away; `patchBlock`: one block changed on the page as the store holds it when the change lands -- set in its panel, or used on the page, `usePageEvents`); [`PageHeading.tsx`](../editor/src/page/PageHeading.tsx) (above the page, the graph's name and description: the tool is called what the graph is, and the delivered header shows the same); `ApplicationView.tsx` (the running application: the delivered page attached to the document, and the pop-out ⧉ Open as a tool); [`TopGraphOnly.tsx`](../editor/src/page/TopGraphOnly.tsx) (the designer and the running page only in the graph at the top, where a page can be); [`typedValues.ts`](../editor/src/page/typedValues.ts) (what was typed into a live block, shown while the block still holds it); [`useDeliveredRun.ts`](../editor/src/page/useDeliveredRun.ts) (ask what a graph needs, write the answers by the engine's `applyRuntimeValues`, then run: for the tool page, the running application and the rounds ▶ Run starts alike) |
+| `Page + designer` | [`editor/src/page/`](../editor/src/page/) | `GuiPage.tsx` draws a page (shared with the tool page) -- or, while it has no blocks, the tool without one: what it does and `RunResult.tsx`, the run's result, each output under its label -- from a `PageModel`, never the store: the design with what the session says of each block by name ([`pageInUse.ts`](../editor/src/page/pageInUse.ts)); `DesignerTab.tsx`, `DesignerPalette.tsx` (where each block kind's own `paletteEntries` stand, and `newBlock`: the block an entry adds, named for its kind and numbered beside another of that name), `WidgetEditor.tsx`, `pageWrite.ts` (the page is one node, which its first block makes, beside what is on the canvas and in that block's undo step, and its last block takes away; `patchBlock`: one block changed on the page as the store holds it when the change lands -- set in its panel, or typed into on the Page tab); [`PageHeading.tsx`](../editor/src/page/PageHeading.tsx) (above the page, the graph's name and description: the tool is called what the graph is, and the delivered header shows the same); `ApplicationView.tsx` (the running application: the delivered page, against the session the document is handed to, and the pop-out ⧉ Open as a tool); [`usePage.ts`](../editor/src/page/usePage.ts) (the page of the document the editor has open); [`TopGraphOnly.tsx`](../editor/src/page/TopGraphOnly.tsx) (the designer and the running page only in the graph at the top, where a page can be); [`typedValues.ts`](../editor/src/page/typedValues.ts) (what was typed into a live block, shown while the block still holds it); [`useRound.ts`](../editor/src/page/useRound.ts) (a round by name: what it asks first, the session's `requirements`, then the round with the answers as values -- for the tool page, the running application and the rounds ▶ Run starts alike) |
 | `Element builders` | [`editor/src/elements/`](../editor/src/elements/) | `registry.ts`, `ElementGuiBuilder.ts`, one folder per element — see [elements](#elements). A chart's view, `plot_window/PlotWindowWidgetView.tsx`, measures the block and hands what arrived to `PlotChart.tsx`, which lays a figure `{kind, title, points}` out at that size (or shows finished SVG), redrawn on a resize with no run. [`resultPreview.ts`](../editor/src/elements/resultPreview.ts) reads a value small, by its shape, for the canvas |
 | `Authoring` | [`editor/src/authoring/`](../editor/src/authoring/) | a node's text and what ✨ writes from it: `NodeDefinition.tsx` (its text, a row per ✨ -- the button, the prompt it is written with, its file's content in a box (`CodeField`/`CodeSurface`, CodeMirror, lazy) and a chip beside it that opens the file (`FileChip.tsx`) -- the files ✨ Input and ✨ Output write from, ▶ Try (`TryExample.tsx`) and history.md; a change said in the bar for the node, `pendingChange`, is made here), `HeadingField.tsx`; the request and what comes back written in (`generation.ts`: `generateRequest`, `writtenInto`, `writesFor`, `unfitDefinition`), {Context} (`graphContext.ts`), the wiring ✨ is told (`generationContext.ts`), the files ✨ Input reads from the graph (`exampleFile.ts`), a port's keys in the definitions (`definitionPorts.ts`), "Run once per item" and "whole list" (`perItem.ts`); a dropped file (`droppedFile.ts`) and a folder's listing read as a run reads it (`readAsRun.ts`); `useGenerate` (the ✨ state machine, and its Stop), `LiveGeneration`, `GenerationTranscript`; the graph-wide sweep over the nodes (`graphSweep.ts`, `useGraphSweep.ts`); `useTyped.ts` (a box keeps what is typed while its stored form comes back tidied) |
-| `Graph store` | [`editor/src/store/graphStore.ts`](../editor/src/store/graphStore.ts) | the open graph, undo, a new one (`newGraph`, from the engine's `defaultMetadata`), the node the person is on (`editingNodeId`, `clearSelection`), a change said for a node's panel (`pendingChange`, `askChange`, `clearChange`), the graph changed as one undo step (`changeGraph`), saving it (`save`: what counts as saved is what was sent), runs (start → poll `run` → replay `memory`); `nodeData.ts`, `executionStatus.ts`; [`portRenames.ts`](../editor/src/store/portRenames.ts) (which port became which across an edit of a node's ports, so a renamed port keeps its wires -- and, edit by edit, its keys in input.js and output.js: `renamedPorts`) |
-| `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts) | the contract's client: `call(route, request)`, `ApiError`, `watchGeneration`; `errorText.ts` |
+| `Graph store` | [`editor/src/store/graphStore.ts`](../editor/src/store/graphStore.ts) | the open graph, undo, a new one (`newGraph`, from the engine's `defaultMetadata`), the node the person is on (`editingNodeId`, `clearSelection`), a change said for a node's panel (`pendingChange`, `askChange`, `clearChange`), the graph changed as one undo step (`changeGraph`), saving it (`save`: what counts as saved is what was sent), the document handed to the server's session (`holdDocument`) and what a round shows on the graph as the session tells it, kept nowhere (`followRound`); `nodeData.ts`, `executionStatus.ts`; [`portRenames.ts`](../editor/src/store/portRenames.ts) (which port became which across an edit of a node's ports, so a renamed port keeps its wires -- and, edit by edit, its keys in input.js and output.js: `renamedPorts`) |
+| `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts), [`session.ts`](../editor/src/api/session.ts) | the contract's client: `call(route, request)`, `ApiError`, `watchGeneration`; `errorText.ts`; the session a page follows over its stream (`useSession`, `watchSession`), what was set on a page by name until a round takes it (`setEdit`, `heldValue`), and rounds by event and values (`startRound`, `stopRound`) |
 | `Document` | [`editor/src/document/`](../editor/src/document/) | what a graph is to the editor: [`nodeKinds.ts`](../editor/src/document/nodeKinds.ts) (a node of each type, loaded and saved -- a new code or ai node runs once, on what arrives whole; a new one's numbered heading, `heading.ts`), `baseNodeConfig.ts`, `givenFiles.ts` (the files a node's ✨ Input and ✨ Output are given), `guiWidgets.ts` (a page's ports, as the engine derives them; `pageOf`: which node is the page, and its blocks; and `blockShows`: what a run put on a block, for the page and the canvas alike), `layout.ts` (the grid), [`wires.ts`](../editor/src/document/wires.ts) (`graphEdge`: a canvas wire as the saved edge, for every place that asks the wiring as a file has it) |
 | `Graph types` | [`editor/src/graph.ts`](../editor/src/graph.ts) | the engine's types plus the typed `NodeConfig` view |
 

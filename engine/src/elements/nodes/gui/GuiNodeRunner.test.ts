@@ -128,9 +128,9 @@ describe('what a page asks before it runs', () => {
     const asks = page([{ id: 'pick', kind: 'input_picker', label: 'Folder', mode: 'directory' }, { id: 'title', kind: 'text', value: 'Heading' }]);
     const element = new GuiNodeRunner();
     // Asked under its block, and used where what the block hands on is.
-    expect(element.runtimeRequirements(asks)).toEqual([{ key: 'page::pick', label: 'Folder', kind: 'directory', direction: 'input', current: '', ports: ['pick_out'] }]);
-    element.applyRuntimeValue(asks, 'pick', '/data');
-    element.applyRuntimeValue(asks, 'title', 'written over');
+    expect(element.runtimeRequirements(asks)).toEqual([{ key: 'pick', label: 'Folder', kind: 'directory', direction: 'input', current: '', ports: ['pick_out'] }]);
+    element.setValue(asks, 'pick', '/data');
+    element.setValue(asks, 'title', 'written over');
     expect(asks.config.gui_widgets).toEqual([
       expect.objectContaining({ id: 'pick', value: '/data' }),
       expect.objectContaining({ id: 'title', value: 'Heading' }),

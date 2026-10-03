@@ -588,21 +588,25 @@ describe('run_graph', () => {
     const value: string = ran.json.nodes[0].outputs.output;
     expect(value.startsWith('x'.repeat(600))).toBe(true);
     expect(value).toMatch(/… \(\+4400 characters\)$/);
-    expect(ran.json.outputs.Result.value).toMatch(/\(\+4400 characters\)$/);
+    // The graph's outputs by name, as any frontend reads them: the output node's id.
+    expect(ran.json.outputs.result).toMatch(/\(\+4400 characters\)$/);
     // Five thousand characters went in at three places; the report is not made of them.
     expect(ran.text.length).toBeLessThan(3_000);
     // What the node was handed is upstream's output again, and is left out.
     expect(ran.json.nodes[1].inputs).toBeUndefined();
   });
 
-  it('applies inputs by node id, and says which keys named nothing', async () => {
+  it('takes values by the names the graph offers, and refuses one it does not take', async () => {
     const tools = toolsWith();
     await tools.call('save_graph', { path: 'hello.json', graph: hello('the default') });
-    const ran = await answer(tools, 'run_graph', { path: 'hello.json', inputs: { greeting: 'typed instead', nobody: 'x' } });
-    expect(ran.json.outputs.Result.value).toBe('typed instead');
-    expect(ran.json.ignored_inputs).toEqual(['nobody']);
+    const ran = await answer(tools, 'run_graph', { path: 'hello.json', values: { greeting: 'typed instead' } });
+    expect(ran.json.outputs.result).toBe('typed instead');
     // The file is a graph, not a scratchpad: a run's answers are not written back.
     expect(JSON.parse(await readFile(join(root, 'hello.json'), 'utf8')).nodes[0].config.value).toBe('the default');
+
+    const wrong = await tools.call('run_graph', { path: 'hello.json', values: { greeting: 'x', nobody: 'x' } });
+    expect(wrong.isError).toBe(true);
+    expect(wrong.text).toMatch(/No value called "nobody": this graph takes "greeting"/);
   });
 
   it('reports a failing node as a result, with its error, not as a crash', async () => {
@@ -636,16 +640,33 @@ describe('run_graph', () => {
     expect(ranBody).toContain('from the file');
   });
 
-  it('refuses a trigger that names no node, and a graph that is not there', async () => {
+  it('refuses an event the graph does not offer, and a graph that is not there', async () => {
     const tools = toolsWith();
     await tools.call('save_graph', { path: 'hello.json', graph: hello() });
-    const wrong = await tools.call('run_graph', { path: 'hello.json', trigger: { node_id: 'ghost' } });
+    const wrong = await tools.call('run_graph', { path: 'hello.json', event: 'ghost' });
     expect(wrong.isError).toBe(true);
-    expect(wrong.text).toMatch(/"greeting", "result"/);
+    expect(wrong.text).toMatch(/No event called "ghost"/);
 
     const missing = await tools.call('run_graph', { path: 'nothing.json' });
     expect(missing.isError).toBe(true);
     expect(missing.text).toMatch(/There is no graph at "nothing.json"/);
+  });
+});
+
+describe('describe_graph', () => {
+  it('says what a graph offers by name, and what it asks before it runs', async () => {
+    const tools = toolsWith();
+    const greeting = { ...textInput('greeting'), config: { input_mode: 'text', value: 'hello', prompt_at_runtime: true } };
+    const asking = graphOf([greeting, output('result')], [edge('e1', 'greeting.output', 'result.value')], 'Hello');
+    await tools.call('save_graph', { path: 'hello.json', graph: asking });
+    const described = await answer(tools, 'describe_graph', { path: 'hello.json' });
+    expect(described.json).toMatchObject({
+      name: 'Hello',
+      events: [],
+      values: [{ name: 'greeting', type: 'text' }],
+      outputs: [{ name: 'result' }],
+      asks: [{ name: 'greeting', kind: 'text' }],
+    });
   });
 });
 
@@ -686,14 +707,14 @@ describe('call', () => {
     const tools = toolsWith();
     const unknown = await tools.call('format_disk', {});
     expect(unknown.isError).toBe(true);
-    expect(unknown.text).toMatch(/authoring_guide, generate_graph, validate_graph, save_graph, run_graph, run_node, test_graph, list_graphs/);
+    expect(unknown.text).toMatch(/authoring_guide, generate_graph, validate_graph, save_graph, run_graph, describe_graph, run_node, test_graph, list_graphs/);
 
     for (const args of [null, 'text', [1, 2], { path: 42 }, { path: { toString: null } }]) {
       const result = await tools.call('run_graph', args as never);
       expect(result.isError).toBe(true);
     }
     expect(tools.specs.map((spec) => spec.name)).toEqual(
-      ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'run_node', 'test_graph', 'list_graphs']);
+      ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'describe_graph', 'run_node', 'test_graph', 'list_graphs']);
   });
 });
 
@@ -722,7 +743,7 @@ describe('serveStdio', () => {
   const rpc = (id: number | undefined, method: string, params?: unknown): string =>
     JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, ...(params === undefined ? {} : { params }) });
 
-  it('shakes hands, lists eight tools, answers a ping, and says nothing to a notification', async () => {
+  it('shakes hands, lists nine tools, answers a ping, and says nothing to a notification', async () => {
     const { answers } = await exchange(toolsWith(), [
       rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } }),
       rpc(undefined, 'notifications/initialized'),
@@ -733,7 +754,7 @@ describe('serveStdio', () => {
     const byId = new Map(answers.map((answer) => [answer.id, answer]));
     expect(byId.get(1).result).toMatchObject({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'ai-graph' } });
     expect(byId.get(2).result).toEqual({});
-    expect(byId.get(3).result.tools).toHaveLength(8);
+    expect(byId.get(3).result.tools).toHaveLength(9);
     expect(byId.get(3).result.tools[1]).toMatchObject({ name: 'generate_graph', inputSchema: { type: 'object', required: ['description'] } });
   });
 
@@ -842,7 +863,7 @@ describe('node main.ts --mcp', () => {
     const session = await service.open(['ai-graph']);
     try {
       expect(session.specs.map((spec) => spec.name)).toEqual(
-        ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'run_node', 'test_graph', 'list_graphs']);
+        ['authoring_guide', 'generate_graph', 'validate_graph', 'save_graph', 'run_graph', 'describe_graph', 'run_node', 'test_graph', 'list_graphs']);
 
       expect(await session.call('authoring_guide', {})).toContain('Graph DSL');
 
@@ -856,7 +877,7 @@ describe('node main.ts --mcp', () => {
       expect(existsSync(join(root, 'hello.json'))).toBe(true);
       const ran = JSON.parse(await session.call('run_graph', { path: 'hello.json' }));
       expect(ran.status).toBe('success');
-      expect(ran.outputs.Result.value).toBe('over the wire');
+      expect(ran.outputs.result).toBe('over the wire');
 
       expect(await session.call('run_graph', { path: '../hello.json' })).toMatch(/^Tool error: .*outside the folder/);
     } finally {

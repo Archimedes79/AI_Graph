@@ -26,8 +26,8 @@ export function browsesFor(req: Pick<Requirement, 'kind' | 'direction'>): 'file'
 export default function RequirementsDialog({ requirements, onSubmit, onCancel }: RequirementsDialogProps) {
   const [values, setValues] = useState<Record<string, string>>({});
 
-  // Answers are kept by each question's own key, the one the engine writes
-  // them back by (`applyRuntimeValues`).
+  // Answers are kept by each question's own key: the name of the value the
+  // engine writes them back as (`applyValues`).
   useEffect(() => {
     if (requirements) {
       setValues(Object.fromEntries(requirements.map((r) => [r.key, r.current || ''])));

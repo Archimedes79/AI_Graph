@@ -12,8 +12,8 @@ const open = vi.hoisted(() => ({
   rfNodes: [], rfEdges: [], past: [], future: [], subgraphStack: [],
   isExecuting: false, isProject: true, runProgress: null, executionResult: null,
   isDirty: (): boolean => false,
-  setMetadata: () => {}, stopRun: () => {}, undo: () => {}, redo: () => {}, loadGraph: () => {},
-  exportGraph: () => ({}), updateNode: () => {}, runGraph: async () => {}, closeSubgraphsTo: () => {},
+  setMetadata: () => {}, undo: () => {}, redo: () => {}, loadGraph: () => {},
+  exportGraph: () => ({}), updateNode: () => {}, holdDocument: async () => {}, closeSubgraphsTo: () => {},
 }));
 vi.mock('@/store/graphStore', () => ({
   useGraphStore: Object.assign((select: (state: typeof open) => unknown) => select(open), { getState: () => open }),

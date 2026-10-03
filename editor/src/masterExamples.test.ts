@@ -12,6 +12,8 @@ import { listPorts, withPerItem } from '@/authoring/perItem';
 import { heldBy, writeName, writtenInto, type Write } from '@/authoring/generation';
 import { definitionExample } from '@engine/authoring/definition.ts';
 import { executeGraph } from '@engine/execution/executor.ts';
+import { eventOf } from '@engine/execution/graphInterface.ts';
+import { Session } from '@engine/host/session.ts';
 import { registry } from '@engine/elements/registry.ts';
 import { problemsIn } from '@engine/project/check.ts';
 import { readProject } from '@engine/project/folder.ts';
@@ -278,16 +280,14 @@ describe('chat: a page with a chat block, and a model', () => {
     expect(shapeOf(graph)).toEqual(shapeOf(example('chat')));
   });
 
-  it('answers a message, and remembers the turn for the next one', async () => {
-    const { page, chat } = build();
+  it('answers a message, and remembers the turn for the next one -- in the session, not in the document', async () => {
+    const { graph, page, chat } = build();
     const asked: string[] = [];
+    // What the server does with what the page sends: the message under the chat's name, the round its event.
+    const session = await Session.open(parseGraph(JSON.parse(JSON.stringify(graph))), { runtime: () => runtime(asked) });
     const say = async (text: string) => {
-      const block = nodeOf(page).config.gui_widgets!.find((widget: GuiWidget) => widget.id === chat)!;
-      patchBlock(chat, { value: { ...(block.value as object), pending: text } });
-      const { result } = await run(store().rootGraph(), { node_id: page, port_id: `${chat}_out` }, asked);
+      const result = await session.run(eventOf(session.graph, chat, registry), { [chat]: text });
       expect(result.status).toBe('success');
-      // What the run remembered is replayed into the editor's copy, as after any run.
-      store().setExecutionResult(result as never);
     };
     await say('Hello there');
     await say('And again');
@@ -296,6 +296,10 @@ describe('chat: a page with a chat block, and a model', () => {
     expect(asked[1]).toContain('User: Hello there');
     expect(asked[1]).toContain('Assistant: answer 1');
     expect(asked[1].endsWith('message:\nAnd again')).toBe(true);
+    // Both turns are the session's; the block in the document is as it was built.
+    expect((session.view().values[chat] as { messages: unknown[] }).messages).toHaveLength(4);
+    const block = (id: string, of: Graph) => of.nodes.find((node) => node.id === page)!.config.gui_widgets!.find((widget: GuiWidget) => widget.id === id)!;
+    expect(block(chat, store().rootGraph()).value).toEqual(block(chat, graph).value);
   });
 });
 

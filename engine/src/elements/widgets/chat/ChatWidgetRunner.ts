@@ -59,6 +59,19 @@ export class ChatWidgetRunner extends WidgetRunner<ChatValue> {
     };
   }
 
+  /**
+   * Given a message, it is the one in hand, and what was said before stays:
+   * what a page or a script sends a chat. Given a whole conversation, it is
+   * that conversation.
+   */
+  override setValue(stored: RawConfig, value: unknown): void {
+    if (value && typeof value === 'object') {
+      stored.value = chatValue(value);
+      return;
+    }
+    stored.value = { messages: chatValue(stored.value).messages, pending: String(value ?? '') };
+  }
+
   /** The reply closes the turn: question and answer go into the transcript together. */
   override settle(stored: RawConfig, value: unknown): void {
     const { messages, pending } = chatValue(stored.value);
@@ -81,5 +94,10 @@ export class ChatWidgetRunner extends WidgetRunner<ChatValue> {
       + '(everything before it) and "<id>_in" (the reply). A chatbot is therefore TWO nodes: a gui node with one chat '
       + 'block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to '
       + '"<id>_in". Do not add data or code nodes to hold the conversation.';
+  }
+
+  /** A conversation is what using the page said: the session's, never the design's. */
+  override valueIsDesign(): boolean {
+    return false;
   }
 }

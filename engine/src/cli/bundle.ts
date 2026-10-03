@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { Graph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
 import { withoutAuthoring } from '../authoring/handedOn.ts';
-import { writeProject } from '../project/folder.ts';
+import { FRONTEND_DIR, writeProject } from '../project/folder.ts';
 import { installFolder } from '../ai/settings.ts';
 import { NODE_MAJOR, runCmd, runSh, zipMode } from './launchers.ts';
 
@@ -236,7 +236,12 @@ async function pageFiles(pageDir: string): Promise<string[]> {
 export async function writeBundle(
   graph: Graph,
   target: string,
-  options: { pageDir?: string; dataFrom?: string } = {},
+  options: {
+    pageDir?: string;
+    dataFrom?: string;
+    /** The project's own page, written by hand (`frontendOf`): carried whole, and served in place of the built one. */
+    frontend?: string | null;
+  } = {},
 ): Promise<string[]> {
   // A bundle is something handed to someone else. One of a graph with no nodes
   // is a zip that starts, does nothing and says nothing -- and the person who
@@ -292,6 +297,13 @@ export async function writeBundle(
     await mkdir(dirname(resolve(target, file.place)), { recursive: true });
     await cp(file.source, resolve(target, file.place), { recursive: true });
     written.push(file.place);
+  }
+
+  // A page the project brings of its own: all of it, as it is.
+  if (options.frontend) {
+    await cp(options.frontend, resolve(target, FRONTEND_DIR), { recursive: true });
+    written.push(...(await filesIn(options.frontend)).map((file) => `${FRONTEND_DIR}/${file}`));
+    servesPage = true;
   }
 
   // The same pair the downloadable package ships (see launchers.ts): from its

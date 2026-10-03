@@ -5,15 +5,13 @@ import type { Graph, GraphNode, GraphEdge, GraphMetadata, ExecutionResult, NodeT
 import type { RFNodeData } from './nodeData';
 import type { PortRenames } from './portRenames';
 import { derivedNodePorts, showsPage } from '@/document/guiWidgets';
-import { call, type RunTrigger } from '@/api/client';
-import { errorText } from '@/api/errorText';
-import { delivered } from './executionStatus';
+import { call, type RoundSnapshot } from '@/api/client';
+import { useSession, watchSession } from '@/api/session';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
-import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
+import { defaultMetadata as engineDefaults, mergeResults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
-import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import type { TextChange } from '@engine/host/api.ts';
 import { NESTED_GRAPH_FIELD } from '@engine/project/changes.ts';
 import { withoutAuthoring } from '@engine/authoring/handedOn.ts';
@@ -75,7 +73,7 @@ export interface GraphStore {
   past: string[];
   future: string[];
 
-  /** Live progress of the run in flight, or null when nothing is running. */
+  /** Live progress of the round in flight, or null when nothing is running. */
   runProgress: {
     completed: number;
     total: number;
@@ -84,8 +82,6 @@ export interface GraphStore {
     itemTotal: number;
     idleSeconds: number | null;
   } | null;
-  /** Id of the run in flight, so it can be stopped. */
-  currentRunId: string | null;
 
   // UI state
   /** The node whose panel is open beside the canvas: the one the person is on. */
@@ -163,13 +159,8 @@ export interface GraphStore {
   setRFNodes: (nodes: Node<RFNodeData>[]) => void;
   setRFEdges: (edges: Edge[]) => void;
   setEditingNode: (nodeId: string | null) => void;
-  /**
-   * `ran` is the part of *result* that is new, when a page event re-ran only
-   * some nodes and the rest was kept from before. Memory is settled from that
-   * part alone: settling a kept result again would add last turn's answer to a
-   * conversation a second time.
-   */
-  setExecutionResult: (result: ExecutionResult | null, ran?: ExecutionResult) => void;
+  /** What the canvas shows the rounds made: none, before anything ran. */
+  setExecutionResult: (result: ExecutionResult | null) => void;
   loadGraph: (graph: Graph) => void;
   /**
    * An empty graph with the engine's default settings, as a document of its
@@ -250,49 +241,21 @@ export interface GraphStore {
    */
   takeDiskChanges: (changes: TextChange[]) => { taken: string[]; refused: string[] };
   /**
-   * Execute *graph* and put the whole outcome into the store: the result, the
-   * busy flag, and a synthesised error result if the request itself fails.
-   *
-   * Lives here rather than in a component because the store already owns every
-   * piece of state it touches, and because two front-ends need it -- the
-   * editor's toolbar and the deployed runtime page. They had a copy each, and
-   * the copies had already drifted.
-   *
-   * One at a time: asked while a run is going, it does nothing. A run that
-   * ends after another graph was opened (`document`) is dropped, not shown.
+   * Hand the server's session the document: what every round runs, whoever
+   * starts it -- the App tab, the Page tab, the clock, the tool opened in a
+   * window of its own. What runs, not how each node was written: a node's
+   * history is up to half a megabyte, and a round reads none of it. Another
+   * document than the one handed over before is a session of its own, and the
+   * session's stream is listened to anew.
    */
-  runGraph: (graph: Graph, trigger?: RunTrigger | null) => Promise<void>;
+  holdDocument: () => Promise<void>;
   /**
-   * Empty the boxes whose content was a message rather than a setting, once a
-   * run has delivered it. Only for pages that ran, and only when they ran
-   * cleanly: a message that reached nobody should still be there to send again.
-   * Only what *sent* sent: a box typed into again while the run went on holds
-   * the next message, not the one delivered.
+   * A round of the session, as its stream tells it: the busy flag, how far it
+   * is, and -- once it ended -- what it made, on the canvas. A round no event
+   * started is all there is to show; one an event started is laid over what
+   * was shown. A round of a document opened before this one is not this one's.
    */
-  clearSentValues: (result: ExecutionResult, sent: Graph) => void;
-  /** Stop the run in flight. Nodes already finished keep their results. */
-  stopRun: () => Promise<void>;
-}
-
-/**
- * A partial run laid over what the page already showed.
- *
- * The nodes that ran replace their old results; the ones that were not asked
- * keep theirs. A page is the one node that is *partly* re-run -- one of its
- * displays got a new value, the others did not -- so what it received and what
- * it shows are merged block by block rather than replaced.
- */
-export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult): ExecutionResult {
-  const ran = new Map(fresh.node_results.map((r) => [r.node_id, r]));
-  const kept = previous.node_results
-    .filter((r) => !ran.has(r.node_id));
-  const merged = fresh.node_results.map((r) => {
-    const before = previous.node_results.find((old) => old.node_id === r.node_id);
-    return before
-      ? { ...r, inputs: { ...before.inputs, ...r.inputs }, display: { ...before.display, ...r.display } }
-      : r;
-  });
-  return { ...fresh, node_results: [...kept, ...merged], outputs: { ...previous.outputs, ...fresh.outputs } };
+  followRound: (round: RoundSnapshot) => void;
 }
 
 /**
@@ -403,16 +366,13 @@ function normalizeGraph(graph: Graph): Graph {
 /** The engine's defaults (`defaultMetadata`), in the editor's typed view of them. */
 const defaultMetadata = (): GraphMetadata => engineDefaults() as GraphMetadata;
 
-// How often a run in flight is polled. Fast enough that the node name keeps up
-// with a quick graph, slow enough not to flood a local server during a long one.
-const RUN_POLL_INTERVAL_MS = 400;
-
 /**
- * ■ Stop pressed while a run is being started, before the server has said
- * which run it is: sent as soon as it has. The press used to be lost, and the
- * round ran to its end under a Stop that said it had stopped.
+ * Which document the server's session holds -- the `opened` count when it was
+ * handed over -- and which session that is: a round is shown only on the
+ * document it ran, and another session is listened to anew.
  */
-let stopAsked = false;
+let heldOpened: number | null = null;
+let heldSession: string | null = null;
 
 /** How many undo steps are kept. Each entry is a whole serialised graph. */
 const HISTORY_LIMIT = 50;
@@ -512,7 +472,6 @@ export const useGraphStore = create<GraphStore>()(
     past: [],
     future: [],
     runProgress: null,
-    currentRunId: null,
 
     setMetadata: (meta) => {
       // Named without ": ", so it is never taken for a node panel's change (`nodeId: fields`).
@@ -706,26 +665,11 @@ export const useGraphStore = create<GraphStore>()(
       get().applyGraphSnapshot(JSON.stringify(graph), true);
     },
 
-    setExecutionResult: (shown, ran) =>
+    // What a round made is shown, never kept in the document: what using the
+    // graph leaves behind is the session's (docs/architecture.md, "State").
+    setExecutionResult: (shown) =>
       set((state) => {
         state.executionResult = shown;
-        const result = ran ?? shown;
-        if (!result) return;
-        // What the run settles into the graph below is not a continuation of
-        // what was typed before it: added to that undo step, Undo of the word
-        // took back what the run kept.
-        coalescing = null;
-
-        // What the run remembered, replayed into this copy of the graph. The
-        // engine decided what was kept and each element decides where it keeps
-        // it; all that happens here is that the long-lived copy catches up with
-        // the one the run settled -- so a loop progresses across separate Run
-        // clicks, and a conversation keeps its turns.
-        applyMemory(
-          state.rfNodes.map((n: RFNode) => n.data.graphNode as never),
-          result.memory,
-          (node, portId, value) => engineRegistry.node(node.node_type)?.settleMemory(node, portId, value),
-        );
       }),
 
     loadGraph: (graph) => {
@@ -990,114 +934,50 @@ export const useGraphStore = create<GraphStore>()(
       return { path: result.path };
     },
 
-    runGraph: async (graph, trigger = null) => {
-      // A second press -- a double click, or a page event while ▶ Run is
-      // going -- would start a second run beside the first, and whichever
-      // ended first took the Stop button with it.
-      if (get().isExecuting) return;
-      const { setExecutionResult } = get();
-      const started = get().document;
-      const stillOpen = () => get().document === started;
-      // A page event runs part of the graph, so what the rest of the page
-      // shows is still true and stays: pressing "Plot" must not blank the
-      // summary beside it. A full run starts from a clean slate, as before.
-      const previous = trigger ? get().executionResult : null;
-      stopAsked = false;
-      set((state) => {
-        state.isExecuting = true;
-      });
-      if (!trigger) setExecutionResult(null);
-      try {
-        // Started as a background run and polled, rather than awaited as one
-        // blocking request: that is what lets the toolbar name the node in
-        // flight and offer Stop. A run against a slow local model is otherwise
-        // ten minutes of a spinner with no way out but reloading the page.
-        // Posted as what runs (`withoutAuthoring`): a node's history is up to
-        // half a megabyte, and a run reads none of it.
-        const sent = withoutAuthoring(graph);
-        const { run_id: runId, total } = await call('startRun', trigger ? { ...sent, trigger } : sent);
-        set((state) => {
-          state.currentRunId = runId;
-          state.runProgress = {
-            completed: 0, total, label: '', itemDone: 0, itemTotal: 0, idleSeconds: null,
-          };
-        });
-        if (stopAsked) void get().stopRun();
-
-        let snapshot = await call('run', { id: runId });
-        while (!snapshot.done) {
-          await new Promise((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS));
-          snapshot = await call('run', { id: runId });
-          set((state) => {
-            state.runProgress = {
-              completed: snapshot.completed,
-              total: snapshot.total,
-              label: snapshot.current_label,
-              itemDone: snapshot.item_done,
-              itemTotal: snapshot.item_total,
-              idleSeconds: snapshot.idle_seconds,
-            };
-          });
-        }
-
-        // Another graph is open now. Its nodes may share this one's ids, and
-        // what this run made -- a remembered value, a result -- is not theirs.
-        if (!stillOpen()) return;
-        const fresh: ExecutionResult = snapshot.result ?? {
-          status: snapshot.cancelled ? 'cancelled' : 'error',
-          node_results: [],
-          outputs: {},
-          error: snapshot.error ?? 'The run ended without a result.',
-        };
-        const result = previous ? mergeResults(previous, fresh) : fresh;
-        // setExecutionResult also settles memory-feedback values back into the
-        // graph, which is why the result goes through the store rather than
-        // being held in a component.
-        setExecutionResult(result, fresh);
-        get().clearSentValues(fresh, graph);
-      } catch (error) {
-        if (stillOpen()) setExecutionResult({
-          status: 'error',
-          node_results: [],
-          outputs: {},
-          error: errorText(error, 'Execution failed'),
-        });
-      } finally {
-        set((state) => {
-          state.isExecuting = false;
-          state.runProgress = null;
-          state.currentRunId = null;
-        });
+    holdDocument: async () => {
+      const { opened, currentFilePath, rootGraph } = get();
+      const anew = heldOpened !== opened;
+      const { session } = await call('holdGraph', { graph: withoutAuthoring(rootGraph()), path: currentFilePath, anew });
+      heldOpened = opened;
+      if (session !== heldSession) {
+        heldSession = session;
+        watchSession();
       }
     },
 
-    clearSentValues: (result, sent) =>
+    followRound: (round) => {
+      // Another document is open now. Its nodes may share that one's ids, and
+      // what that round made is not theirs.
+      if (heldOpened !== get().opened) return;
       set((state) => {
-        for (const rfNode of state.rfNodes) {
-          const graphNode = rfNode.data.graphNode as GraphNode;
-          const ran = result.node_results.find((r) => r.node_id === graphNode.id);
-          if (!ran || !delivered(ran.status) || !Array.isArray(graphNode.config.gui_widgets)) continue;
-          const sentWidgets = sent.nodes.find((node) => node.id === graphNode.id)?.config.gui_widgets ?? [];
-          for (const widget of graphNode.config.gui_widgets) {
-            const was = sentWidgets.find((w) => w.id === widget.id);
-            if (!was || JSON.stringify(was.value) !== JSON.stringify(widget.value)) continue;
-            if (engineRegistry.widget(widget.kind)?.clearsValueAfterRun(parseWidget(widget))) widget.value = '';
-          }
-        }
-      }),
-
-    stopRun: async () => {
-      const runId = get().currentRunId;
-      if (!runId) {
-        stopAsked = get().isExecuting;
-        return;
-      }
-      try {
-        await call('stopRun', { id: runId });
-      } catch {
-        // The run may have finished between the click and the request; the
-        // polling loop reports the real outcome either way.
-      }
+        state.isExecuting = !round.done;
+        state.runProgress = round.done ? null : {
+          completed: round.completed,
+          total: round.total,
+          label: round.current_label,
+          itemDone: round.item_done,
+          itemTotal: round.item_total,
+          idleSeconds: round.idle_seconds,
+        };
+        if (!round.done) return;
+        const made: ExecutionResult = round.result ?? {
+          status: round.cancelled ? 'cancelled' : 'error',
+          node_results: [],
+          outputs: {},
+          error: round.error ?? 'The round ended without a result.',
+        };
+        // A round an event started ran part of the graph, so what the rest of
+        // the page shows is still true and stays: pressing "Plot" must not
+        // blank the summary beside it. A whole round starts from a clean slate.
+        const shown = state.executionResult as ExecutionResult | null;
+        state.executionResult = (shown && !round.whole ? mergeResults(shown, made) : made) as never;
+      });
     },
   }))
 );
+
+// Every round of the session the editor's document is held in, from whichever
+// page or clock started it: the canvas and the toolbar follow it.
+useSession.subscribe((state, before) => {
+  if (state.round && state.round !== before.round) useGraphStore.getState().followRound(state.round);
+});

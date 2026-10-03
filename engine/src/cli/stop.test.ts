@@ -33,8 +33,8 @@ describe('a served tool that is told to stop', () => {
       nodes: [{ id: 'start', node_type: 'trigger', config: { trigger_on_start: true } }, { id: 'slow', node_type: 'code', inputs: [], outputs: [{ id: 'out', name: 'out' }], config: { code: SLOW } }],
       edges: [],
     }));
-    const kept = `${graphPath}.last-run.json`;
-    const before = JSON.stringify({ runs: 3, result: { status: 'success', node_results: [], outputs: {} }, error: null, finished_at: 1 });
+    const kept = `${graphPath}.state.json`;
+    const before = JSON.stringify({ session: 'kept', graph: 'slow', saved_at: '', slots: {}, held: {}, shown: null, rounds: 3, finished_at: 1 });
     await writeFile(kept, before);
 
     const port = await freePort();
@@ -48,8 +48,8 @@ describe('a served tool that is told to stop', () => {
     try {
       // Up, and its round is in flight: the state a stop has to cope with.
       for (let attempt = 0; attempt < 100; attempt += 1) {
-        const state = await fetch(`http://127.0.0.1:${port}/api/runtime/last`).then((r) => r.json()).catch(() => null) as { running?: boolean } | null;
-        if (state?.running) break;
+        const state = await fetch(`http://127.0.0.1:${port}/api/runtime/session`).then((r) => r.json()).catch(() => null) as { round?: { done: boolean } | null } | null;
+        if (state?.round && !state.round.done) break;
         await new Promise((wake) => setTimeout(wake, 100));
       }
       const asked = Date.now();

@@ -58,12 +58,13 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import type { AiService, Runtime, ToolSpec } from '../../elements/Runtime.ts';
 import { parseGraph, type Graph } from '../../graph.ts';
-import { executeGraph, runNodeAlone } from '../../execution/executor.ts';
+import { executeGraph, memoryFeedbackEdges, runNodeAlone } from '../../execution/executor.ts';
 import { ERROR_PORT } from '../../execution/wiring.ts';
 import { everyGraphIn, testGraph } from '../../authoring/examples.ts';
-import { RUN_PORT, type Trigger } from '../../execution/triggers.ts';
+import { RUN_PORT, triggeredNodes, type Trigger } from '../../execution/triggers.ts';
 import { registry } from '../../elements/registry.ts';
-import { applyRuntimeValues, runtimeRequirements, withDefaults } from '../../execution/runtimeValues.ts';
+import { runtimeRequirements, withDefaults, type RuntimeRequirement } from '../../execution/runtimeValues.ts';
+import { NotOffered, applyValues, eventOf, interfaceOf, outputsOf } from '../../execution/graphInterface.ts';
 import { aiSetting, candidatePaths, configuredMcpServers, configuredSettings, SETTINGS_FILENAME } from '../../ai/settings.ts';
 import { message } from '../http.ts';
 import { nodeRuntime, SECRET_NAME } from '../node.ts';
@@ -71,7 +72,7 @@ import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { withoutAuthoring } from '../../authoring/handedOn.ts';
 import {
-  FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
+  FLOW_FILE, LAYOUT_FILE, NODE_FILE, STATE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
 import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
 import { names, problemsIn, type Problem } from '../../project/check.ts';
@@ -260,22 +261,33 @@ const SPECS: ToolSpec[] = [
   },
   {
     name: 'run_graph',
-    description: 'Run a saved graph once and report what happened: the overall status, each node\'s status and error, and '
-      + `each node's outputs with every value cut to about ${VALUE_LIMIT} characters. Runs the graph's code and calls its `
-      + 'models for real. inputs answers what the graph asks (key = node id, or "nodeId::blockId" for a block on a page). '
-      + 'trigger runs only what one page event starts, the way pressing that button would.',
+    description: 'Run a saved graph once and report what happened: the overall status, each node\'s status and error, '
+      + `each node's outputs, and the graph's outputs by name, with every value cut to about ${VALUE_LIMIT} characters. `
+      + 'Runs the graph\'s code and calls its models for real. A graph is used by name, as a page or any frontend uses it: '
+      + 'values are what it takes -- a block on its page by the block\'s id, an input node by its id -- and event, '
+      + 'one of its events (a block that starts it, a trigger node), runs only what that event starts. '
+      + 'describe_graph lists the names.',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder.' },
-        inputs: { type: 'object', additionalProperties: { type: 'string' }, description: 'Values by node id, or by "nodeId::blockId".' },
-        trigger: {
-          type: 'object',
-          properties: { node_id: { type: 'string' }, port_id: { type: 'string' } },
-          required: ['node_id'],
-          additionalProperties: false,
-          description: 'The page event to simulate: the gui node, and the output port of the block that fired ("<block id>_out").',
-        },
+        values: { type: 'object', description: 'Values by the names the graph takes: what it asks before it runs, and anything else it takes.' },
+        event: { type: 'string', description: 'The event to start the round with, by name. Left out: the whole graph.' },
+      },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'describe_graph',
+    description: 'What a saved graph offers whoever uses it, by name: its events (a block on its page that starts it, a '
+      + 'trigger node), the values it takes (a block a person sets, an input node, where an output node writes) and the '
+      + 'outputs it hands back (a block that shows, an output node) -- and what it asks before it runs. The names '
+      + 'run_graph takes, and a page or any frontend uses.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'The saved graph, as a .json path relative to the server\'s folder (a project: its flow.json).' },
       },
       required: ['path'],
       additionalProperties: false,
@@ -612,24 +624,23 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
     async run_graph(args) {
       const { graph } = await loadGraph(args.path);
 
-      const given = args.inputs ?? {};
-      if (!given || typeof given !== 'object' || Array.isArray(given)) throw new Refused('"inputs" must be an object of values by node id.');
-      const inputs = Object.fromEntries(Object.entries(given as Record<string, unknown>).map(([key, value]) => [key, String(value ?? '')]));
-      const nodeIds = new Set(graph.nodes.map((node) => node.id));
-      const unknown = Object.keys(inputs).filter((key) => !nodeIds.has(key.split('::')[0]));
+      const given = args.values ?? {};
+      if (!given || typeof given !== 'object' || Array.isArray(given)) throw new Refused('"values" must be an object of values by name.');
+      if (args.event !== undefined && args.event !== null && typeof args.event !== 'string') throw new Refused('"event" must be the name of an event.');
 
-      let trigger: Trigger | null = null;
-      if (args.trigger !== undefined && args.trigger !== null) {
-        const asked = args.trigger as { node_id?: unknown; port_id?: unknown };
-        if (typeof asked !== 'object' || typeof asked.node_id !== 'string' || !nodeIds.has(asked.node_id)) {
-          throw new Refused(`"trigger.node_id" must name a node of this graph: ${names(nodeIds)}.`);
-        }
-        trigger = { node_id: asked.node_id, port_id: typeof asked.port_id === 'string' ? asked.port_id : null };
+      let trigger: Trigger | null;
+      const answers: Record<string, unknown> = {};
+      let asked: RuntimeRequirement[];
+      try {
+        trigger = eventOf(graph, args.event as string | null | undefined, registry);
+        const only = trigger ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry)) : null;
+        asked = runtimeRequirements(graph, registry, only);
+        Object.assign(answers, withDefaults(asked, given as Record<string, unknown>));
+        applyValues(graph, answers, registry);
+      } catch (error) {
+        if (error instanceof NotOffered) throw new Refused(`${error.message} describe_graph lists the names.`);
+        throw error;
       }
-
-      const asked = runtimeRequirements(graph, registry);
-      const answers = withDefaults(asked, inputs);
-      applyRuntimeValues(graph, answers, registry);
 
       const result = await executeGraph(graph, { runtime: options.runtime(), registry, trigger });
       const unanswered = asked.filter((requirement) => !answers[requirement.key]);
@@ -642,14 +653,22 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
           ...(node.error ? { error: brief(node.error, ERROR_LIMIT) } : {}),
           outputs: briefAll(node.outputs),
         })),
-        // Keyed the way the graph's output nodes asked, which is what "the result" means to whoever built it.
-        outputs: Object.fromEntries(Object.entries(result.outputs).map(([label, values]) =>
-          [label, briefAll(values as Record<string, unknown>)])),
+        // By name, as a page or any frontend reads them (`graphInterface.ts`).
+        outputs: briefAll(outputsOf(graph, result, registry)),
         ...(unanswered.length ? {
-          unanswered: unanswered.map(({ key, label, kind }) => ({ key, label, kind })),
-          hint: 'The graph asks for these and got nothing. Pass them in "inputs", by key.',
+          unanswered: unanswered.map(({ key, label, kind }) => ({ name: key, label, kind })),
+          hint: 'The graph asks for these and got nothing. Pass them in "values", by name.',
         } : {}),
-        ...(unknown.length ? { ignored_inputs: unknown } : {}),
+      });
+    },
+
+    async describe_graph(args) {
+      const { graph } = await loadGraph(args.path);
+      return json({
+        name: graph.metadata.name,
+        description: graph.metadata.description,
+        ...interfaceOf(graph, registry),
+        asks: runtimeRequirements(graph, registry).map(({ key, label, kind }) => ({ name: key, label, kind })),
       });
     },
 
@@ -675,8 +694,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
             continue;
           }
           if (!entry.isFile() || extname(entry.name).toLowerCase() !== '.json') continue;
-          // A project's own parts: its flow.json stands for all of them.
-          if ([NODE_FILE, INTERFACE_FILE, LAYOUT_FILE].includes(entry.name)) continue;
+          // A project's own parts: its flow.json stands for all of them. What a
+          // session of a graph keeps beside it is no graph either.
+          if ([NODE_FILE, INTERFACE_FILE, LAYOUT_FILE, STATE_FILE].includes(entry.name) || entry.name.endsWith(`.${STATE_FILE}`)) continue;
           try {
             // The same door as every other read, so the same files stay shut.
             await confine(full, 'path');

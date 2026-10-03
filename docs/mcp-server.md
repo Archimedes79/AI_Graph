@@ -62,7 +62,8 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 | `generate_graph` | `description`, `path?`, `save_as?` | Has the model configured on this machine design a graph -- or, with `path`, change that saved graph as described, its ids and what the change does not touch kept, each node's history too. Returns the graph (without any node's history: that stays in the project), the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
 | `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. |
 | `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them. |
-| `run_graph` | `path`, `inputs?`, `trigger?` | Runs once. Reports overall status, each node's status and error, and each node's outputs with every value cut to about 600 characters. |
+| `run_graph` | `path`, `values?`, `event?` | Runs once. Reports overall status, each node's status and error, each node's outputs, and the graph's outputs by name, every value cut to about 600 characters. |
+| `describe_graph` | `path` | What the graph offers by name -- its events, the values it takes, the outputs it hands back -- and what it asks before it runs. The names `run_graph` takes. |
 | `run_node` | `path`, `node_id`, `inputs?` | Runs one node by itself: on the inputs given, or on what the nodes feeding it produce. For writing one node at a time. |
 | `test_graph` | `path`, `node_id?`, `offline?` | Runs each code and AI node once on the example in its `input.js` and holds what comes out to its `output.js` -- also inside the graphs nodes hold, named with the way down (`part ▸ work`) -- and reports each as pass, fail (with what does not fit), error or skipped. |
 | `list_graphs` | — | The graphs under the root: path, name, description, node count. Four folders deep, 200 at most. |
@@ -81,10 +82,13 @@ engine *derives* for `input` and `gui` nodes, not the ones the document claims, 
 remembers; a code node with no `config.code`; and a graph with no `output` node
 and no `gui` node with a block on it, which computes its answer and shows nobody.
 
-`run_graph`'s `inputs` are keyed by node id, or `nodeId::blockId` for a block on a
-page — the same keys as `--inputs` on the command line. `trigger` is
-`{ "node_id": "<gui node>", "port_id": "<block id>_out" }` and runs only what that
-button or box would start. A run calls the configured model (or a node's own) and runs its code for real.
+A graph is used by name, as a page or any frontend uses it (`execution/graphInterface.ts`):
+`run_graph`'s `values` are keyed by the names the graph takes -- a block on its page by the
+block's id, an input node by its own, an output node that writes by its own for *where* --
+the same names as `--value` on the command line, and `event` names one of its events -- a
+block that starts it, a trigger node -- and runs only what that event starts, the way pressing
+that button would. A name the graph does not offer is refused, with the ones it does. A run
+calls the configured model (or a node's own) and runs its code for real.
 
 ## What it is confined to
 

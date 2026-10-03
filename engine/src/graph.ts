@@ -112,29 +112,33 @@ export interface ExecutionResult {
   node_results: NodeResult[];
   outputs: Record<string, unknown>;
   /**
-   * Everything memory nodes kept, in order. The run settled its own copy of the
-   * graph; whoever holds another copy replays this into it (`applyMemory`).
+   * Everything memory nodes kept, in order, as the run settled it into the copy
+   * of the graph it ran on -- the copy a session keeps (`host/session.ts`).
    */
   memory?: MemoryWrite[];
   error?: string | null;
 }
 
 /**
- * Put what a run remembered into another copy of the graph.
+ * A round laid over what the rounds before it showed.
  *
- * The one way memory travels: the engine decides what was kept, each element
- * decides where it keeps it, and a holder of the graph -- the editor's store, a
- * served page, the scheduler between rounds -- only replays.
+ * The nodes that ran replace their old results; the ones that were not asked
+ * keep theirs. A page is the one node that is *partly* re-run -- one of its
+ * displays got a new value, the others did not -- so what it received and what
+ * it shows are merged block by block rather than replaced. What a session shows
+ * is this over every round, and so is the editor's view of a page in use.
  */
-export function applyMemory(
-  nodes: GraphNode[],
-  memory: MemoryWrite[] | undefined,
-  settle: (node: GraphNode, portId: string, value: unknown) => void,
-): void {
-  for (const write of memory ?? []) {
-    const node = nodes.find((candidate) => candidate.id === write.node_id);
-    if (node) settle(node, write.port_id, write.value);
-  }
+export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult): ExecutionResult {
+  const ran = new Map(fresh.node_results.map((r) => [r.node_id, r]));
+  const kept = previous.node_results
+    .filter((r) => !ran.has(r.node_id));
+  const merged = fresh.node_results.map((r) => {
+    const before = previous.node_results.find((old) => old.node_id === r.node_id);
+    return before
+      ? { ...r, inputs: { ...before.inputs, ...r.inputs }, display: { ...before.display, ...r.display } }
+      : r;
+  });
+  return { ...fresh, node_results: [...kept, ...merged], outputs: { ...previous.outputs, ...fresh.outputs } };
 }
 
 /**

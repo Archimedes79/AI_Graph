@@ -37,8 +37,9 @@ ai-settings.json
 # The engine's installed packages.
 engine/node_modules/
 
-# The last scheduled run a served tool keeps beside its graph.
-*.last-run.json
+# What a session of a graph keeps beside it: never deployed, gone after a reset.
+state.json
+*.state.json
 
 # The downloadable package, built by scripts/package.mjs.
 ai-graph*.zip

@@ -45,8 +45,16 @@ export function graphKey(graph: Graph): string {
   return createHash('sha256').update(JSON.stringify(shape)).digest('hex');
 }
 
+/** What one node was left holding, under the key it is found by. */
+export interface Held {
+  key: string;
+  outputs: Record<string, unknown>;
+}
+
 export class Latch {
-  private readonly kept = new Map<string, Record<string, unknown>>();
+  private readonly kept = new Map<string, { node: string; outputs: Record<string, unknown> }>();
+  /** Which node each key was last asked for, so what is kept can be told by node (`heldBy`). */
+  private readonly owners = new Map<string, string>();
 
   /** Whose value this is: see the header. *keepsItsOwn* says which nodes count without their settings. */
   key(graph: Graph, node: GraphNode, keepsItsOwn: (node: GraphNode) => boolean): string {
@@ -55,19 +63,43 @@ export class Latch {
       const from = byId.get(id);
       return from ? [from.id, from.node_type, keepsItsOwn(from) ? null : from.config, from.inputs, from.outputs] : [id];
     });
-    return createHash('sha256').update(JSON.stringify([graphKey(graph), node.id, made])).digest('hex');
+    const key = createHash('sha256').update(JSON.stringify([graphKey(graph), node.id, made])).digest('hex');
+    this.owners.set(key, node.id);
+    // Asked for far more often than kept: what nothing was kept under is let go.
+    if (this.owners.size > 4 * LIMIT) for (const asked of this.owners.keys()) if (!this.kept.has(asked)) this.owners.delete(asked);
+    return key;
   }
 
   get(key: string): Record<string, unknown> | undefined {
     const found = this.kept.get(key);
     // Read is used: a node that only ever stands still must not be the first to go.
     if (found) { this.kept.delete(key); this.kept.set(key, found); }
-    return found;
+    return found?.outputs;
   }
 
   set(key: string, outputs: Record<string, unknown>): void {
     this.kept.delete(key);
-    this.kept.set(key, outputs);
+    this.kept.set(key, { node: this.owners.get(key) ?? '', outputs });
     if (this.kept.size > LIMIT) this.kept.delete(this.kept.keys().next().value!);
+  }
+
+  /**
+   * What each of *nodes* was last left holding: one entry a node, the one used
+   * last -- what a session writes down, so a restarted tool still has it. A
+   * graph edited since keeps its entries under keys nothing asks for any more,
+   * which is why nothing has to sort them out.
+   */
+  heldBy(nodes: ReadonlySet<string>): Record<string, Held> {
+    const held: Record<string, Held> = {};
+    for (const [key, { node, outputs }] of this.kept) if (nodes.has(node)) held[node] = { key, outputs };
+    return held;
+  }
+
+  /** Take back what `heldBy` wrote down. */
+  restore(held: Record<string, Held>): void {
+    for (const [node, { key, outputs }] of Object.entries(held)) {
+      this.owners.set(key, node);
+      this.set(key, outputs);
+    }
   }
 }

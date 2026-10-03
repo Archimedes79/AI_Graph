@@ -28,11 +28,15 @@ data path in the graph resolves inside the bundle. That is why **a bundle carrie
 the graph starts on** (see [What a bundle carries](#what-a-bundle-carries)) -- every one of
 them, or there is no bundle: a tool is handed on whole.
 
-Override an input node:
+Give it a value by name -- an input node by its id, a block on its page by the block's id --
+and start the round one of its events starts, the way pressing that button would:
 
 ```bash
-node engine/src/main.ts my_graph.json --inputs my-text-node-id="Custom input text"
+node engine/src/main.ts my_graph.json --value topic="Custom input text" --event go
 ```
+
+A name the graph does not offer is turned down with the names it does; `describe_graph` over
+MCP and `GET /api/runtime/interface` on a served tool list them.
 
 Run it on a schedule — the whole trigger, with no service to install:
 
@@ -64,10 +68,10 @@ Before any of it: **⧉ Open as a tool**, on the App tab (there while ▶ Run ru
 application), opens the graph you are
 editing as the delivered page, in a window of its own — same entry point (`runtime.html`),
 same routes, no editor around it. It answers "what have I actually built" without packing
-a zip first. It is not a deployment: nothing is written, and the window is served by the
-editor you are sitting in -- which keeps no time for it, so a trigger node's clock ticks in
-that window while it is open, as it would in a bundle's server. (The App tab shows the same page attached to the document,
-so a run there still lights up the graph canvas.)
+a zip first. It is not a deployment: no bundle is written, and the window is served by the
+editor you are sitting in, against the same session as the App tab -- the same values, the
+same rounds, the same clock, which the server keeps as a bundle's server would. A round
+started there lights up the graph canvas too.
 
 From the toolbar, **🚀 Deploy** gives you a zip holding the vendored
 engine, your graph as the project folder it was built as -- `flow.json`, its page in
@@ -102,11 +106,14 @@ The recipient needs Node, and nothing else — no AI-Graph, no Python, no instal
 Or use the API:
 
 ```bash
-curl -X POST http://localhost:8000/api/deploy/bundle \
+jq '{graph: .}' my_graph.json | curl -X POST http://localhost:8000/api/deploy/bundle \
   -H "Content-Type: application/json" \
-  -d @my_graph.json \
+  -d @- \
   --output bundle.zip
 ```
+
+Sent with `"path"` -- the project the graph was opened from, as the editor's Deploy sends
+it -- the bundle carries that project's own page too (below).
 
 See [engine/src/cli/bundle.ts](../engine/src/cli/bundle.ts) for exactly which files a bundle
 contains and why it can never drift from the editor.
@@ -145,11 +152,38 @@ A bundle's server also keeps the clock of the graph's trigger nodes: a trigger t
 fire when the tool starts, or given an interval such as `5m`, runs with nobody watching,
 and the page shows the latest result.
 
+### A page of your own
+
+A project can bring a page written by hand: `frontend/index.html` beside its `flow.json`,
+with whatever else it loads. A served project shows it at `/` in place of the built page,
+and a bundle carries it. It uses the graph the way any frontend does -- through the runtime
+API, by name, never by node or port:
+
+| Route | What it is for |
+|---|---|
+| `GET /api/runtime/interface` | What the graph offers: its events, the values it takes and the outputs it hands back, by name -- a block on its page by the block's id, an input, output or trigger node by its own -- and the session's id |
+| `GET /api/runtime/page` | The page as it was designed, for a frontend that draws its blocks: name, description, colour scheme, blocks |
+| `GET /api/runtime/stream` | Server-sent events: `session` (values, outputs, rounds) on connect and after every change, `round` as each round starts, goes and ends -- this page's, the clock's, another tab's |
+| `POST /api/runtime/requirements` | `{ event, values }`: what that round would still ask before it runs -- a file nobody chose, a place to write -- each under the name of the value that answers it |
+| `POST /api/runtime/rounds` | `{ event, values }`: start a round; watch it on the stream, or at `GET /api/runtime/rounds/:id`; stop it at `POST /api/runtime/rounds/:id/stop` |
+| `POST /api/runtime/run` | The same, answered once the round has ended: `{ status, outputs, values }` -- a function call |
+| `GET /api/runtime/session` | What the stream says on connect, for a page that does not listen |
+| `POST /api/runtime/reset` | Forget what using the graph left behind: it is as designed again |
+
+[`examples/nested_statistics/frontend/index.html`](../examples/nested_statistics/frontend/index.html)
+is one: a hundred lines that draw a field for every value the graph takes, a button for
+every event -- or one Run for a graph that has none -- and a box for every output, and
+follow the stream. What using the graph leaves behind is kept by the server, in
+`state.json` beside `flow.json` (see [State](architecture.md#state)), so a page reloaded,
+or opened in a second tab, shows what the first one did. The rules of the routes -- the
+session's id, what is refused and how -- are in
+[connection-points.md](connection-points.md#the-runtime-api).
+
 **Stopping it.** Ctrl+C in its terminal, `kill`, a supervisor or `docker stop` all ask the
 server to stop rather than ending it where it stands: no new round starts, runs in flight
 are cancelled — the model call is aborted, the code node's process ended — and the process
 exits with 0, normally well under a second and after eight at most. A round that was cut
-off is not remembered; the page shows the last one that finished. A second Ctrl+C stops at
+off commits nothing; the page shows what the last one that finished left. A second Ctrl+C stops at
 once. (`stop.cmd` on Windows still ends the process outright: Windows has no SIGTERM to
 send to another process.)
 

@@ -5,7 +5,7 @@ import { useGraphStore } from '@/store/graphStore';
 import { ApiError, call, downloadBundle, watchGeneration, type AICall } from '@/api/client';
 import { errorText } from '@/api/errorText';
 import type { Graph } from '@/graph';
-import { useDeliveredRun } from '@/page/useDeliveredRun';
+import { useRound } from '@/page/useRound';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import { useGraphSweep } from '@/authoring/useGraphSweep';
 import Modal from '@/ui/Modal';
@@ -91,7 +91,7 @@ export default function Toolbar({
   const [deployBusy, setDeployBusy] = useState('');
   const [deployError, setDeployError] = useState('');
   // Asking what the graph needs, then running: the delivered page's own steps.
-  const delivered = useDeliveredRun();
+  const delivered = useRound(() => useGraphStore.getState().holdDocument());
 
   const [showAiGraph, setShowAiGraph] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
@@ -116,7 +116,7 @@ export default function Toolbar({
    * back up to the top first, where the page is and where the results land.
    * A graph run whole at start is asked first what it still needs -- a file
    * nobody chose, a place to write -- by the delivered tool's own steps
-   * (`useDeliveredRun`).
+   * (`useRound`).
    */
   const appRunning = useApplication((s) => s.running);
   const hasPage = useTopHasPage();
@@ -140,7 +140,7 @@ export default function Toolbar({
   // Another graph opened, or started anew: the application was the last one's.
   // Not a step into a node's graph and out, which is the same document.
   const opened = useGraphStore((s) => s.opened);
-  useEffect(() => stopApplication, [opened]);
+  useEffect(() => () => { void stopApplication(); }, [opened]);
 
   // Deploying used to have no busy state and no error handling, so a slow or
   // rejecting backend looked exactly like a dead button.
@@ -159,7 +159,8 @@ export default function Toolbar({
   const handleDownloadBundle = () =>
     runDeployAction('Bundle download', async () => {
       // The tool someone is handed is the whole thing, not the level that is open.
-      await downloadBundle(useGraphStore.getState().rootGraph());
+      const { rootGraph, currentFilePath } = useGraphStore.getState();
+      await downloadBundle({ graph: rootGraph(), path: currentFilePath });
     });
 
   const handleOpenAiGraph = () => {
@@ -315,7 +316,7 @@ export default function Toolbar({
 
         {appRunning || isExecuting ? (
           <button
-            onClick={stopApplication}
+            onClick={() => { void stopApplication(); }}
             title="Stop the application: its clocks, and the round in flight"
             className="h-9 px-4 flex-shrink-0 rounded-lg text-sm font-semibold flex items-center gap-2"
             style={{ background: DANGER, color: 'white' }}

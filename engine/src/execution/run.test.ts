@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyMemory, parseGraph, type Graph } from '../graph.ts';
+import { parseGraph, type Graph } from '../graph.ts';
 import { executeGraph, inputsFor } from './executor.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { registry } from '../elements/registry.ts';
@@ -86,15 +86,12 @@ describe('what a page shows', () => {
 });
 
 describe('what a run remembers', () => {
-  it('lists every value a memory node kept, so another copy of the graph can be brought up to date', async () => {
-    const result = await executeGraph(loop(), { runtime: runtime(), registry });
+  it('lists every value a memory node kept, and keeps it in the copy of the graph it ran on', async () => {
+    const graph = loop();
+    const result = await executeGraph(graph, { runtime: runtime(), registry });
     expect(result.memory).toEqual([{ node_id: 'page', port_id: 'shown_in', value: 42 }]);
-
-    // Replayed into a fresh copy -- what the editor's store and the scheduler do.
-    const copy = loop();
-    applyMemory(copy.nodes, result.memory, (node, portId, value) =>
-      registry.node(node.node_type)!.settleMemory(node, portId, value));
-    const block = (copy.nodes[0].config.gui_widgets as { id: string; value: unknown }[]).find((w) => w.id === 'shown')!;
+    // That copy is what a session keeps (`host/session.ts`).
+    const block = (graph.nodes[0].config.gui_widgets as { id: string; value: unknown }[]).find((w) => w.id === 'shown')!;
     expect(block.value).toBe(42);
   });
 

@@ -1,11 +1,12 @@
 // The clock of a tool that runs by itself: what its trigger nodes start, one
 // round after another.
 //
-// One implementation for every host that keeps a tool's time -- the server,
-// for the tool it serves (`host/schedule.ts`), and the editor's ▶ Run, for the
-// application it runs -- so the two cannot come to disagree about when a round
-// is due. Two copies had: one armed an on-start trigger's clock when the tool
-// started, the other after its first round.
+// Kept by the server's session (`host/session.ts`) -- for the tool it serves,
+// and for the application the editor's ▶ Run starts -- so there is one clock,
+// and it goes on whether or not a page is open. There were two copies, the
+// server's and the browser's, and they came to disagree about when a round is
+// due: one armed an on-start trigger's clock when the tool started, the other
+// after its first round.
 //
 // What starting runs is `startEvents`'s to say: each trigger node set to fire
 // at start fires first. Each one with an interval then keeps its own time,

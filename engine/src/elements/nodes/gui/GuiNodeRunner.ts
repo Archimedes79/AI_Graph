@@ -1,7 +1,8 @@
 import { NodeRunner, type TextFile, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { type Widget, type WidgetRunner, type WidgetPresentation } from '../../WidgetRunner.ts';
-import type { GraphNode, Port, RawConfig } from '../../../graph.ts';
+import type { GraphNode, NodeResult, Port, RawConfig } from '../../../graph.ts';
+import type { Offer } from '../../../execution/graphInterface.ts';
 import { port } from '../../port.ts';
 import type { Problem } from '../../../execution/wiring.ts';
 import { WIDGETS } from '../../widgets/roster.ts';
@@ -105,16 +106,31 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
 
   override readonly hasInterface = true;
 
-  /**
-   * A block that starts the graph does so on its `_out` port: what the page
-   * names when it fires. One it has -- a block that only shows hands nothing
-   * on, and starts nothing, whatever it was once told.
-   */
+  /** The ports its blocks' events fire on (`offers`). */
   override eventPorts(node: GraphNode): string[] {
+    return this.offers(node).flatMap((offer) => (offer.kind === 'event' && offer.port ? [offer.port] : []));
+  }
+
+  /**
+   * Its blocks, each under its id: as an event, a block that starts the graph,
+   * on its `_out` port -- one it has: a block that only shows hands nothing
+   * on, and starts nothing, whatever it was once told; as a value, one a
+   * person sets (`WidgetRunner.takesValue`); as an output, one that shows what
+   * arrives on its `_in` port.
+   */
+  override offers(node: GraphNode): Offer[] {
     return this.config(node).widgets.flatMap((widget) => {
       const element = BY_KIND.get(widget.kind);
-      const out = `${widget.id}_out`;
-      return element?.firesRun(widget) && element.ports(widget).outputs.some((port) => port.id === out) ? [out] : [];
+      if (!element) return [];
+      const { inputs, outputs } = element.ports(widget);
+      const out = outputs.find((port) => port.id === `${widget.id}_out`);
+      const into = inputs.find((port) => port.id === `${widget.id}_in`);
+      const named = { name: widget.id, label: widget.label || widget.id, key: widget.id };
+      const offers: Offer[] = [];
+      if (out && element.firesRun(widget)) offers.push({ ...named, kind: 'event', type: out.data_type, port: out.id });
+      if (out && element.takesValue(widget)) offers.push({ ...named, kind: 'value', type: out.data_type, ...(out.multi ? { list: true } : {}) });
+      if (into) offers.push({ ...named, kind: 'output', type: into.data_type });
+      return offers;
     });
   }
 
@@ -167,24 +183,42 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     return shown;
   }
 
-  /** What its blocks ask before the graph runs, each under the key of the block it belongs to. */
+  /** What its blocks ask before the graph runs, each under its block's name (`offers`). */
   override runtimeRequirements(node: GraphNode) {
     return this.config(node).widgets.flatMap((widget) => {
       const element = BY_KIND.get(widget.kind);
       // Each asked under its block, and used only where what the block hands on is.
       const ports = element?.ports(widget).outputs.map((port) => port.id) ?? [];
-      return (element?.runtimeRequirements(widget) ?? []).map((asked) => ({ key: `${node.id}::${widget.id}`, ...asked, ports }));
+      return (element?.runtimeRequirements(widget) ?? []).map((asked) => ({ key: widget.id, ...asked, ports }));
     });
   }
 
-  /** An answer goes to the block it was asked for, which keeps it where it keeps what it holds. */
-  override applyRuntimeValue(node: GraphNode, widgetId: string | null, value: string): void {
-    const widgets = node.config.gui_widgets;
-    if (!widgetId || !Array.isArray(widgets)) return;
-    for (const raw of widgets) {
-      const stored = raw as RawConfig;
-      if (stored?.id === widgetId) BY_KIND.get(String(stored.kind) as Widget['kind'])?.applyRuntimeValue(stored, value);
-    }
+  /**
+   * A value goes to the block it was given for, which keeps it where it keeps
+   * what it holds -- and only to one that takes a value: a heading's text is
+   * its design, whatever a caller sends under its id.
+   */
+  override setValue(node: GraphNode, key: string | null, value: unknown): void {
+    const stored = this.blocks(node).find((block) => block.id === key);
+    const element = stored && BY_KIND.get(String(stored.kind) as Widget['kind']);
+    if (stored && element?.takesValue(parseWidget(stored))) element.setValue(stored, value);
+  }
+
+  override value(node: GraphNode, key: string | null): unknown {
+    return this.blocks(node).find((block) => block.id === key)?.value ?? null;
+  }
+
+  /**
+   * What a block shows from the page's result: what it draws (`display`) --
+   * an image's path read into the picture -- or, for one that also hands
+   * something on, what arrived on its port.
+   */
+  override shows(node: GraphNode, result: NodeResult, key: string | null): unknown {
+    const shown = key === null ? undefined : result.display?.[key];
+    if (shown !== undefined) return shown;
+    const widget = this.config(node).widgets.find((one) => one.id === key);
+    const port = widget && BY_KIND.get(widget.kind)?.ports(widget).inputs[0]?.id;
+    return port ? result.inputs[port] : undefined;
   }
 
   /** A block that closes a loop keeps the fresh value, ready for the next run. */
@@ -200,6 +234,37 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
       const element = BY_KIND.get(String(stored.kind) as Widget['kind']);
       if (element) element.settle(stored, value);
       else stored.value = value as never;
+    }
+  }
+
+  /**
+   * What its blocks hold, each under its id: what was typed or chosen, a
+   * conversation, what a loop fed back. A block without a port is its design.
+   */
+  override state(node: GraphNode): Record<string, unknown> {
+    const slots: Record<string, unknown> = {};
+    for (const stored of this.blocks(node)) {
+      const widget = parseWidget(stored);
+      if (BY_KIND.get(widget.kind)?.keepsState(widget)) slots[widget.id] = stored.value ?? null;
+    }
+    return slots;
+  }
+
+  override setState(node: GraphNode, slots: Record<string, unknown>): void {
+    for (const stored of this.blocks(node)) {
+      const id = String(stored.id ?? '');
+      if (!(id in slots)) continue;
+      if (slots[id] === null) delete stored.value;
+      else stored.value = slots[id];
+    }
+  }
+
+  /** A block that holds a message empties it once a round has delivered it (`clearsValueAfterRun`). */
+  override clearDelivered(node: GraphNode, sent: Record<string, unknown>): void {
+    for (const stored of this.blocks(node)) {
+      const widget = parseWidget(stored);
+      if (!BY_KIND.get(widget.kind)?.clearsValueAfterRun(widget)) continue;
+      if (JSON.stringify(stored.value ?? null) === JSON.stringify(sent[widget.id] ?? null)) stored.value = '';
     }
   }
 

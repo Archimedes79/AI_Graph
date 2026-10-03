@@ -16,10 +16,9 @@ import {
 import type { EngineGraph, Graph } from '@/graph';
 
 export type {
-  AICall, BrowseEntry, BrowsePage, GenerateRequest, GenerateResponse, ProbeReport, ProviderStatus, Requirement,
-  RunSnapshot, RunTrigger, SettingsPatch, SettingsStatus, ToolAiSettings,
+  AICall, BrowseEntry, BrowsePage, ClockView, GenerateRequest, GenerateResponse, InterfaceView, PageView, ProbeReport,
+  ProviderStatus, Requirement, RoundSnapshot, SessionView, SettingsPatch, SettingsStatus, ToolAiSettings,
 } from '@engine/host/api.ts';
-export type { ScheduleState } from '@engine/host/schedule.ts';
 
 /** A call the server answered with an error. `message` is its `detail`; `body` the rest of what it said. */
 export class ApiError extends Error {
@@ -45,9 +44,14 @@ type EditorView<T> =
  * Call one route of the contract.
  *
  * GET and DELETE carry the request on the query; POST as a JSON body.
- * `:params` are filled into the path.
+ * `:params` are filled into the path. *keepalive*: the request outlives the
+ * page that sends it -- one sent as the page closes.
  */
-export async function call<K extends RouteName>(name: K, request?: RequestOf<K>): Promise<EditorView<ResponseOf<K>>> {
+export async function call<K extends RouteName>(
+  name: K,
+  request?: RequestOf<K>,
+  { keepalive = false }: { keepalive?: boolean } = {},
+): Promise<EditorView<ResponseOf<K>>> {
   const route = API[name];
   const { path, rest } = pathFor(name, (request ?? {}) as Record<string, unknown>);
   let url = path;
@@ -61,7 +65,7 @@ export async function call<K extends RouteName>(name: K, request?: RequestOf<K>)
     url += `?${new URLSearchParams(rest as Record<string, string>)}`;
   }
 
-  const response = await fetch(url, { method: route.method, headers, body });
+  const response = await fetch(url, { method: route.method, headers, body, keepalive });
   if (!response.ok) {
     const failure = await response.json().catch(() => ({})) as Partial<Failure>;
     throw new ApiError(response.status, failure);
@@ -118,8 +122,8 @@ export async function watchGeneration<T>(
 }
 
 /** Save the deploy bundle the way a browser saves any download, under the name the engine gave it. */
-export async function downloadBundle(graph: RequestOf<'bundle'>): Promise<void> {
-  const zip = await call('bundle', graph);
+export async function downloadBundle(asked: RequestOf<'bundle'>): Promise<void> {
+  const zip = await call('bundle', asked);
   const url = URL.createObjectURL(zip);
   const link = document.createElement('a');
   link.href = url;

@@ -97,6 +97,34 @@ export function projectFolderOf(path: string): string | null {
 }
 
 /**
+ * A page of a project's own, written by hand: served at `/` in place of the
+ * built page when it holds an `index.html`, and carried by a bundle. It uses
+ * the graph only through the runtime API, by name (`host/api.ts`). Not `page/`:
+ * that is the built-in page's, its blocks in `page.json`.
+ */
+export const FRONTEND_DIR = 'frontend';
+
+/** The project's own frontend (`FRONTEND_DIR`), when the graph at *path* is a project that has one. */
+export function frontendOf(path: string): string | null {
+  const folder = projectFolderOf(path);
+  const frontend = folder ? join(folder, FRONTEND_DIR) : null;
+  return frontend && existsSync(join(frontend, 'index.html')) ? frontend : null;
+}
+
+/** What a session of a project keeps beside its `flow.json`: never read or written as part of the project. */
+export const STATE_FILE = 'state.json';
+
+/**
+ * Where a session of the graph at *path* keeps what using it leaves behind
+ * (`host/session.ts`): `state.json` in a project folder, `<file>.state.json`
+ * beside a single graph file.
+ */
+export function stateFileOf(path: string): string {
+  const folder = projectFolderOf(path);
+  return folder ? join(folder, STATE_FILE) : `${resolve(path)}.state.json`;
+}
+
+/**
  * Where each of *nodes* keeps its files, relative to the project folder: the
  * page in `page/`, every other node in `nodes/<id>/`. A second page -- a
  * problem `check` names -- is a node like any other until it is the first.

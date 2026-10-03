@@ -4,6 +4,7 @@ import { type GraphNode, type Port } from '../../../graph.ts';
 import { listFolder } from '../../folderListing.ts';
 import { port } from '../../port.ts';
 import { errorOutput } from '../../../execution/wiring.ts';
+import type { Offer } from '../../../execution/graphInterface.ts';
 
 export interface InputConfig {
   value: string;
@@ -99,8 +100,33 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
     }];
   }
 
-  override applyRuntimeValue(node: GraphNode, _widgetId: string | null, value: string): void {
-    node.config.value = value;
+  /** A value under its own id: its text, or the folder it lists. */
+  override offers(node: GraphNode): Offer[] {
+    const { mode } = this.config(node);
+    return [{
+      kind: 'value', name: node.id, label: node.label || node.id, key: null,
+      type: mode === 'text' ? 'text' : 'file_path',
+      ...(node.description ? { description: node.description } : {}),
+    }];
+  }
+
+  override setValue(node: GraphNode, _key: string | null, value: unknown): void {
+    node.config.value = value as never;
+  }
+
+  override value(node: GraphNode): unknown {
+    return this.config(node).value;
+  }
+
+  /** What it was given when the graph was used: its text, or its folder. */
+  override state(node: GraphNode): Record<string, unknown> {
+    return { value: node.config.value ?? null };
+  }
+
+  override setState(node: GraphNode, slots: Record<string, unknown>): void {
+    if (!('value' in slots)) return;
+    if (slots.value === null) delete node.config.value;
+    else node.config.value = slots.value;
   }
 
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {

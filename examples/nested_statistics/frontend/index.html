@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nested statistics</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  label { display: block; font-weight: 600; margin-top: 1rem; }
+  textarea, input { width: 100%; box-sizing: border-box; font: inherit; padding: .4rem; }
+  textarea { min-height: 7rem; }
+  button { font: inherit; padding: .4rem 1rem; margin: 1rem .5rem 0 0; cursor: pointer; }
+  #status { color: GrayText; min-height: 1.5em; margin-top: 1rem; }
+  h2 { font-size: 1rem; margin: 1.5rem 0 .25rem; }
+  pre { margin: 0; padding: .75rem; overflow: auto; white-space: pre-wrap;
+        background: color-mix(in srgb, CanvasText 6%, Canvas); border-radius: .4rem; }
+</style>
+</head>
+<body>
+<!--
+  A page written by hand, beside the project's flow.json: frontend/index.html.
+  A served project shows it in place of the built page, and a bundle carries it.
+
+  It knows nothing of the graph but the names the runtime API gives it, and
+  calls nothing else:
+
+    GET  /api/runtime/interface   what the graph takes and hands back, by name
+    GET  /api/runtime/stream      what happens: every round, and the session after it
+    POST /api/runtime/rounds      { event, values }: start a round
+    POST /api/runtime/reset       forget what using the graph left behind
+
+  So it would draw a form for any graph. This one measures a paragraph.
+-->
+<h1 id="name">…</h1>
+<p id="description"></p>
+<form id="values"></form>
+<div id="events"></div>
+<div id="status"></div>
+<div id="outputs"></div>
+
+<script type="module">
+  /** One call of the runtime API: a GET, or a POST of *body*; its refusal is its own words. */
+  const api = async (route, body) => {
+    const response = await fetch(`/api/runtime/${route}`, body === undefined ? undefined : {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const answer = await response.json();
+    if (!response.ok) throw new Error(answer.detail);
+    return answer;
+  };
+
+  const say = (text) => { document.getElementById('status').textContent = text; };
+  const shown = (value) => (value === undefined ? '—' : typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+  const element = (tag, properties = {}) => Object.assign(document.createElement(tag), properties);
+
+  const graph = await api('interface');
+  document.title = graph.name;
+  document.getElementById('name').textContent = graph.name;
+  document.getElementById('description').textContent = graph.description;
+
+  // A field for every value the graph takes: text in a box, anything else on a line.
+  const fields = new Map();
+  for (const value of graph.values) {
+    const input = element(value.type === 'text' ? 'textarea' : 'input', { id: `value-${value.name}`, name: value.name });
+    fields.set(value.name, input);
+    document.getElementById('values').append(element('label', { htmlFor: input.id, textContent: value.label }), input);
+  }
+
+  // A button for every event; a graph that has none runs whole.
+  const start = async (event) => {
+    const values = Object.fromEntries([...fields].map(([name, input]) => [name, input.value]));
+    try {
+      await api('rounds', { session: graph.session, event, values });
+    } catch (error) {
+      say(error.message);
+    }
+  };
+  const events = graph.events.length ? graph.events : [{ name: null, label: 'Run' }];
+  for (const event of events) {
+    document.getElementById('events').append(element('button', { textContent: event.label, onclick: () => start(event.name) }));
+  }
+  document.getElementById('events').append(element('button', {
+    textContent: 'Start over', title: 'Forget what using the graph left behind',
+    onclick: () => api('reset', { session: graph.session }).catch((error) => say(error.message)),
+  }));
+
+  // A place for every output the graph hands back.
+  const outputs = new Map();
+  for (const output of graph.outputs) {
+    const pre = element('pre', { textContent: '—' });
+    outputs.set(output.name, pre);
+    document.getElementById('outputs').append(element('h2', { textContent: output.label }), pre);
+  }
+
+  // What happens, as it happens -- this page's rounds, a clock's, another tab's.
+  const stream = new EventSource(`/api/runtime/stream?session=${encodeURIComponent(graph.session)}`);
+  stream.addEventListener('session', ({ data }) => {
+    const session = JSON.parse(data);
+    for (const [name, input] of fields) if (document.activeElement !== input) input.value = shown(session.values[name]).replace(/^—$/, '');
+    for (const [name, pre] of outputs) pre.textContent = shown(session.outputs[name]);
+    // Started over: nothing has run, so nothing is to be said about the last round.
+    if (!session.rounds && !session.round) say('');
+  });
+  stream.addEventListener('round', ({ data }) => {
+    const round = JSON.parse(data);
+    if (round.done) say(round.error ? `Failed: ${round.error}` : round.cancelled ? 'Stopped.' : 'Done.');
+    else if (round.current_label) say(`${round.current_label}… (${round.completed} of ${round.total})`);
+    else say(`Running… (${round.completed} of ${round.total})`);
+  });
+  stream.onerror = () => say('The tool is not answering. Is it still running?');
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { usePage } from '@/page/GuiPage';
+import { usePage } from '@/page/usePage';
 import { DIM, LINE, MUTED, SUCCESS, TEXT } from '@/ui/theme';
 
 export type EditorView = 'graph' | 'design' | 'app';

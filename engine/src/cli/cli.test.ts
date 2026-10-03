@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
@@ -28,15 +28,16 @@ describe('parseInterval', () => {
 });
 
 describe('parseArgs', () => {
-  it('takes the graph, and repeats --inputs into a map', () => {
-    const options = parseArgs(['g.json', '--inputs', 'a=1', '--inputs', 'b=2']);
+  it('takes the graph, repeats --value into values by name, and takes an --event', () => {
+    const options = parseArgs(['g.json', '--value', 'a=1', '--value', 'b=2', '--event', 'go']);
     expect(options.graphPath).toBe('g.json');
-    expect(options.inputs).toEqual({ a: '1', b: '2' });
+    expect(options.values).toEqual({ a: '1', b: '2' });
+    expect(options.event).toBe('go');
   });
 
   it('keeps the rest of a value containing an equals sign', () => {
     // A path or a query string is a perfectly ordinary answer.
-    expect(parseArgs(['g.json', '--inputs', 'q=a=b']).inputs).toEqual({ q: 'a=b' });
+    expect(parseArgs(['g.json', '--value', 'q=a=b']).values).toEqual({ q: 'a=b' });
   });
 
   it('defaults to the project in this folder, the way a bundle is laid out', () => {
@@ -167,6 +168,52 @@ describe('run-node', () => {
 });
 
 /** A clock on the command line: the rule a served tool's clock keeps too. */
+describe('a round by name, as a page asks for one', () => {
+  const echo = () => ({
+    metadata: { name: 'Echo' },
+    nodes: [
+      { id: 'page', node_type: 'gui', config: { gui_widgets: [{ id: 'pick', kind: 'select', options: 'a\nb', value: 'a', run_on_change: true }, { id: 'other', kind: 'button' }] } },
+      { id: 'say', node_type: 'code', inputs: [port('pick', 'input')], outputs: [port('out', 'output')], config: { code: 'function run(i) { return { out: "picked " + i.pick }; }' } },
+      { id: 'idle', node_type: 'code', outputs: [port('out', 'output')], config: { code: 'function run() { return { out: "ran" }; }' } },
+    ],
+    edges: [
+      { id: 'p', source_node_id: 'page', source_port_id: 'pick_out', target_node_id: 'say', target_port_id: 'pick' },
+      { id: 'o', source_node_id: 'page', source_port_id: 'other_out', target_node_id: 'idle', target_port_id: '__run' },
+    ],
+  });
+
+  it('runs what --event starts, on the values --value gives by name', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-named-'));
+    const graph = join(dir, 'echo.json');
+    await writeFile(graph, JSON.stringify(echo()));
+    try {
+      const { code, out } = await printed([graph, '--event', 'pick', '--value', 'pick=b']);
+      expect(code).toBe(0);
+      const ran = JSON.parse(out) as { node_results: { node_id: string; outputs: { out?: string } }[] };
+      expect(ran.node_results.find((result) => result.node_id === 'say')?.outputs.out).toBe('picked b');
+      // Only what the event starts: the button's node was not asked.
+      expect(ran.node_results.map((result) => result.node_id)).not.toContain('idle');
+      // A function call: the graph is as it was, and nothing is kept beside it.
+      expect(JSON.parse(await readFile(graph, 'utf8'))).toEqual(echo());
+      expect(await readdir(dir)).toEqual(['echo.json']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('turns down a name the graph does not offer, before anything runs', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ai-graph-named-'));
+    const graph = join(dir, 'echo.json');
+    await writeFile(graph, JSON.stringify(echo()));
+    try {
+      await expect(printed([graph, '--value', 'nobody=x'])).rejects.toThrow(/No value called "nobody": this graph takes "pick"/);
+      await expect(printed([graph, '--event', 'nothing'])).rejects.toThrow(/No event called "nothing": this graph starts on "pick", "other"/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('--every', () => {
   it('runs one graph round after round: what a round leaves in a data node is what the next starts from', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'ai-graph-every-'));
@@ -272,7 +319,7 @@ describe('--serve and --editor, as they are started', () => {
       await server.up();
       await new Promise((wake) => setTimeout(wake, 500));
       expect(server.child.exitCode, server.said()).toBeNull();
-      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/interface`)).status).toBe(200);
     } finally {
       await server.stop();
     }
@@ -310,7 +357,7 @@ describe('--serve and --editor, as they are started', () => {
       const beside = started(['--editor', dir, '--port', String(port)], undefined, dir);
       try {
         await beside.up();
-        expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(404);
+        expect((await fetch(`http://127.0.0.1:${port}/api/runtime/interface`)).status).toBe(404);
       } finally {
         await beside.stop();
       }
@@ -318,7 +365,7 @@ describe('--serve and --editor, as they are started', () => {
       const given = started(['graph.json', '--editor', dir, '--port', String(other)], undefined, dir);
       try {
         await given.up();
-        expect((await fetch(`http://127.0.0.1:${other}/api/runtime/graph`)).status).toBe(200);
+        expect((await fetch(`http://127.0.0.1:${other}/api/runtime/interface`)).status).toBe(200);
       } finally {
         await given.stop();
       }

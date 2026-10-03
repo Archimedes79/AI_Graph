@@ -330,94 +330,24 @@ describe('graphStore width/height persistence', () => {
   });
 });
 
-describe('graphStore: what a run remembered', () => {
-  // Which values a run keeps is the engine's decision (engine/src/run.test.ts).
-  // The store's part is to replay that list into its own long-lived copy of the
-  // graph, so the next run starts from it -- and to do nothing else.
-  const gui = (kind: 'text_io' | 'chat') => {
-    const widget = WIDGET_BUILDERS[kind].create('block', 'Block');
-    const node = graphNode({
-      id: 'gui1', node_type: 'gui',
-      config: { ...blankConfig(), gui_widgets: [widget] },
-      ...guiWidgetPorts(widget),
-    });
-    return { widget, node };
-  };
-  const stored = (widgetId: string) => useGraphStore.getState().rfNodes
-    .find((n) => n.id === 'gui1')!.data.graphNode.config.gui_widgets.find((w) => w.id === widgetId)!;
-
-  it('puts a data node\'s new value where the data node keeps it', () => {
-    loadTestGraph([graphNode({ id: 'data1', node_type: 'data', config: { ...blankConfig(), data_value: 'old value' } })]);
-    useGraphStore.getState().setExecutionResult({
-      status: 'success', node_results: [],
-      memory: [{ node_id: 'data1', port_id: 'input', value: 'new value' }],
-    } as never);
-    expect(useGraphStore.getState().rfNodes[0].data.graphNode.config.data_value).toBe('new value');
-  });
-
-  it('puts a value that came back around a loop into the block it arrived at', () => {
-    const { widget, node } = gui('text_io');
-    // A box that only shows: what arrives is all it holds. One a person also
-    // types into keeps what they typed -- the case below.
-    widget.mode = 'output';
-    loadTestGraph([node]);
-    useGraphStore.getState().setExecutionResult({
-      status: 'success', node_results: [],
-      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: [{ x: 1, y: 2 }] }],
-    } as never);
-    // Structured values stay structured: a chart's points are not text.
-    expect(stored(widget.id).value).toEqual([{ x: 1, y: 2 }]);
-  });
-
-  it('leaves what a person typed in a box they type into, whatever came back around the loop', () => {
-    // The reply is shown from what the run delivered. Kept as the box's value,
-    // it was the next message: the model's answer sent back as the person's.
-    const { widget, node } = gui('text_io');
-    widget.value = 'my question';
-    loadTestGraph([node]);
-    useGraphStore.getState().setExecutionResult({
-      status: 'success', node_results: [],
-      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: 'the model reply' }],
-    } as never);
-    expect(stored(widget.id).value).toBe('my question');
-  });
-
-  it('lets the block say what arriving means: a reply becomes a turn of the conversation', () => {
-    const { widget, node } = gui('chat');
-    widget.value = { messages: [], pending: 'hello' };
-    loadTestGraph([node]);
-    useGraphStore.getState().setExecutionResult({
-      status: 'success', node_results: [],
-      memory: [{ node_id: 'gui1', port_id: `${widget.id}_in`, value: 'hi there' }],
-    } as never);
-    expect(stored(widget.id).value).toEqual({
-      messages: [{ role: 'user', text: 'hello' }, { role: 'assistant', text: 'hi there' }],
-      pending: '',
-    });
-  });
-
-  it('keeps nothing the run did not say it kept', () => {
-    const { widget, node } = gui('text_io');
-    loadTestGraph([node]);
-    useGraphStore.getState().setExecutionResult({
-      status: 'success',
-      node_results: [{ node_id: 'gui1', status: 'success', inputs: { [`${widget.id}_in`]: 'hello' }, outputs: {} }],
-    } as never);
-    expect(stored(widget.id).value).toBe('');
-  });
-
-  it('replays only the part of a merged result that is new', () => {
-    // A page event re-ran half the graph; what is shown is the old result with
-    // the new one laid over it. Replaying the old half again would add last
-    // turn's answer to the conversation a second time.
-    const { widget, node } = gui('chat');
-    widget.value = { messages: [], pending: 'second' };
-    loadTestGraph([node]);
-    const write = (value: string) => ({ node_id: 'gui1', port_id: `${widget.id}_in`, value });
-    const shown = { status: 'success', node_results: [], memory: [write('first answer'), write('second answer')] };
-    const ran = { status: 'success', node_results: [], memory: [write('second answer')] };
-    useGraphStore.getState().setExecutionResult(shown as never, ran as never);
-    expect((stored(widget.id).value as { messages: unknown[] }).messages).toHaveLength(2);
+describe('graphStore: what a round remembered', () => {
+  // What using a graph leaves behind is the server's session's, never the
+  // document's (docs/architecture.md, "State"): a round's result is shown on
+  // the canvas, and nothing of what it kept is written into the graph -- no
+  // undo step, nothing to save, nothing Deploy would ship.
+  it('shows what a round made, and keeps none of it in the document', () => {
+    const chat = WIDGET_BUILDERS.chat.create('talk', 'Talk');
+    const page = graphNode({ id: 'gui1', node_type: 'gui', config: { ...blankConfig(), gui_widgets: [chat] }, ...guiWidgetPorts(chat) });
+    loadTestGraph([graphNode({ id: 'data1', node_type: 'data', config: { ...blankConfig(), data_value: 'old value' } }), page]);
+    const before = useGraphStore.getState().exportGraph();
+    const result = {
+      status: 'success', node_results: [{ node_id: 'data1', status: 'success', inputs: {}, outputs: { output: 'new value' } }],
+      memory: [{ node_id: 'data1', port_id: 'input', value: 'new value' }, { node_id: 'gui1', port_id: 'talk_in', value: 'hi there' }],
+    };
+    useGraphStore.getState().setExecutionResult(result as never);
+    expect(useGraphStore.getState().executionResult).toBe(result);
+    expect(useGraphStore.getState().exportGraph()).toEqual(before);
+    expect(useGraphStore.getState().isDirty()).toBe(false);
   });
 });
 

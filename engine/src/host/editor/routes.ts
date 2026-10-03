@@ -12,10 +12,11 @@
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { parseGraph, type Graph } from '../../graph.ts';
+import { parseGraph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExample } from '../../authoring/examples.ts';
+import { withoutAuthoring } from '../../authoring/handedOn.ts';
 import { registry } from '../../elements/registry.ts';
 import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
@@ -23,6 +24,7 @@ import { nodeRuntime } from '../node.ts';
 import { aiSetting, settingsPath } from '../../ai/settings.ts';
 import { Download, Refusal, message, type Handlers } from '../http.ts';
 import type { AICall, GraphFile } from '../api.ts';
+import { holderOf, type SessionHolder } from '../session.ts';
 import * as files from './files.ts';
 import { NotAGraph, NotFound } from '../../errors.ts';
 import * as settings from './settings.ts';
@@ -31,10 +33,11 @@ import * as gen from './generate.ts';
 import { zip } from './zip.ts';
 
 /**
- * @param held the graph this server serves as a tool — see `holdGraph`. The
- *   editor's own server starts with none; the page puts one there.
+ * @param held the session this server holds, and how a graph is handed to it
+ *   -- see `holdGraph`. The editor's own server starts with none; the page
+ *   hands one over.
  */
-export function editorRoutes(held: { graph: Graph | null } = { graph: null }): Handlers {
+export function editorRoutes(held: SessionHolder = holderOf()): Handlers {
   // Asking what arrives at a node, again and again while writing it, need not
   // ask the model upstream again each time when nothing there has changed.
   const reuse = new LastOutputs();
@@ -150,11 +153,12 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
     }),
 
     async bundle(asked) {
-      const graph = parseGraph(asked);
+      const graph = parseGraph(asked.graph);
       const work = await mkdtemp(join(tmpdir(), 'ai-graph-bundle-'));
       try {
-        // The page `--bundle` carries: a bundle from the editor is the same bundle.
-        await writeBundle(graph, work, { pageDir: builtPage() });
+        // The page `--bundle` carries -- a bundle from the editor is the same
+        // bundle -- and the project's own, when it has one.
+        await writeBundle(graph, work, { pageDir: builtPage(), frontend: asked.path ? project.frontendOf(asked.path) : null });
         const entries = [];
         for (const file of await allFiles(work)) {
           const path = file.slice(work.length + 1);
@@ -169,12 +173,22 @@ export function editorRoutes(held: { graph: Graph | null } = { graph: null }): H
       }
     },
 
-    // What "open it as a tool" costs: one graph, kept. The runtime page then
-    // asks for it over the `graph` route like any deployed page does, so
-    // nothing about the delivered side knows it is being previewed.
-    holdGraph(asked) {
-      held.graph = parseGraph(asked);
-      return { ok: true };
+    // The document, handed to the server's session: what every round runs,
+    // whoever starts it -- and what `runtime.html` opened against it shows, as
+    // any deployed page does, so nothing about the delivered side knows it is
+    // being previewed. What runs, not how each node was written.
+    async holdGraph(asked) {
+      const session = await held.hold(withoutAuthoring(parseGraph(asked.graph)), { path: asked.path, anew: asked.anew });
+      return { session: session.id, dropped: session.dropped };
+    },
+
+    async startApplication(asked) {
+      return held.asked(asked.session).startApplication();
+    },
+
+    async stopApplication(asked) {
+      await held.asked(asked.session).stopApplication();
+      return { stopped: true };
     },
 
     aiSettings: () => settings.status(),

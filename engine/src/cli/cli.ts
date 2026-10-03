@@ -5,7 +5,8 @@
 //     node src/main.ts check my_project/ other.json   what is wrong, without running
 //     node src/main.ts test my_project/ --offline     each node on its input.js, held to its output.js
 //     node src/main.ts run-node my_project/ count     one node, on its input.js (or '{"input": …}')
-//     node src/main.ts graph.json --inputs key=value  answering what it asks
+//     node src/main.ts graph.json --value name=text  a value it takes, by name
+//     node src/main.ts graph.json --event go          the round one event starts
 //     node src/main.ts graph.json --every 5m           again, after each run
 //     node src/main.ts graph.json --bundle ./out       hand it to someone else
 //     node src/main.ts graph.json --serve             open its page in a browser
@@ -23,26 +24,30 @@
 
 import { createInterface } from 'node:readline/promises';
 import type { Graph } from '../graph.ts';
-import { loadGraph, projectFolderOf } from '../project/folder.ts';
+import { frontendOf, loadGraph, projectFolderOf } from '../project/folder.ts';
 import { checkPath } from '../project/folderCheck.ts';
-import { executeGraph, nodeName, runNodeAlone } from '../execution/executor.ts';
+import { executeGraph, memoryFeedbackEdges, nodeName, runNodeAlone } from '../execution/executor.ts';
 import { runExample, testGraph } from '../authoring/examples.ts';
 import { registry } from '../elements/registry.ts';
 import { nodeRuntime } from '../host/node.ts';
-import { applyRuntimeValues, runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
+import { runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
+import { applyValues, eventOf } from '../execution/graphInterface.ts';
 import { builtPage, WEB_DIR, writeBundle } from './bundle.ts';
 import { portTaken, serve } from '../host/serve.ts';
 import { untilStopped } from '../host/lifecycle.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { after, graphTriggers, parseInterval } from '../execution/triggers.ts';
+import { after, graphTriggers, parseInterval, triggeredNodes, type Trigger } from '../execution/triggers.ts';
 
 export interface CliOptions {
   graphPath: string;
   /** Whether the graph was named, rather than taken to be the project in this folder, the way a bundle is laid out. */
   graphNamed: boolean;
-  inputs: Record<string, string>;
+  /** Values by the names the graph offers (`graphInterface.ts`): what it asks, and anything else it takes. */
+  values: Record<string, string>;
+  /** The event a round is started by, by name; none, the whole graph. */
+  event?: string;
   /** Seconds between the end of one run and the start of the next. */
   every?: number;
   /** Stop after this many runs. Undefined means keep going. */
@@ -68,12 +73,14 @@ const DEFAULT_PORT = 8000;
 const PORTS_TRIED = 10;
 
 export function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = { graphPath: '', graphNamed: false, inputs: {} };
+  const options: CliOptions = { graphPath: '', graphNamed: false, values: {} };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--inputs') {
-      const [key, ...rest] = (argv[++i] ?? '').split('=');
-      if (key) options.inputs[key] = rest.join('=');
+    if (arg === '--value') {
+      const [name, ...rest] = (argv[++i] ?? '').split('=');
+      if (name) options.values[name] = rest.join('=');
+    } else if (arg === '--event') {
+      options.event = argv[++i] ?? '';
     } else if (arg === '--every') {
       options.every = parseInterval(argv[++i] ?? '');
     } else if (arg === '--limit') {
@@ -109,7 +116,7 @@ export function parseArgs(argv: string[]): CliOptions {
       // looking for a graph called "--ai-provider", and after the graph it
       // was dropped without a word.
       throw new Error(
-        `Unknown option "${arg}". This command knows --inputs, --every, --limit, --bundle, `
+        `Unknown option "${arg}". This command knows --value, --event, --every, --limit, --bundle, `
           + '--serve, --port, --editor, --host, --mcp and --mcp-root.',
       );
     } else if (!options.graphPath) {
@@ -137,7 +144,7 @@ async function answer(
         if (!requirement.current) {
           throw new Error(
             `Missing a value for '${requirement.label}' and nothing is available to ask. `
-            + `Pass --inputs ${requirement.key}=…`,
+            + `Pass --value ${requirement.key}=…`,
           );
         }
         resolved[requirement.key] = requirement.current;
@@ -153,7 +160,7 @@ async function answer(
   return resolved;
 }
 
-async function runOnce(graph: Graph): Promise<number> {
+async function runOnce(graph: Graph, trigger: Trigger | null): Promise<number> {
   const runtime = nodeRuntime({
     report: (event) => {
       if (event.type === 'batch') process.stderr.write(`\r  ${event.done}/${event.total}`);
@@ -164,7 +171,7 @@ async function runOnce(graph: Graph): Promise<number> {
     },
   });
 
-  const result = await executeGraph(graph, { runtime, registry });
+  const result = await executeGraph(graph, { runtime, registry, trigger });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   return result.status === 'error' ? 1 : 0;
 }
@@ -181,7 +188,7 @@ async function runOnce(graph: Graph): Promise<number> {
  * a counter counted to one for ever. And a round that could not even start is
  * said, and the next one is tried: the next may be fine.
  */
-async function runEvery(graph: Graph, options: CliOptions): Promise<number> {
+async function runEvery(graph: Graph, trigger: Trigger | null, options: CliOptions): Promise<number> {
   const seconds = options.every ?? 0;
   let code = 0;
   for (let round = 0; options.limit === undefined || round < options.limit; round += 1) {
@@ -189,7 +196,7 @@ async function runEvery(graph: Graph, options: CliOptions): Promise<number> {
       process.stderr.write(`\nWaiting ${seconds}s…\n`);
       await new Promise<void>((wake) => { after(seconds * 1000, wake); });
     }
-    code = await runOnce(graph).catch((error: unknown) => {
+    code = await runOnce(graph, trigger).catch((error: unknown) => {
       process.stderr.write(`\nThis run failed: ${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
     });
@@ -202,7 +209,7 @@ async function makeBundle(options: CliOptions): Promise<number> {
   const graph = await loadGraph(options.graphPath);
   // A bundle without the built page still runs on the terminal; with it, the
   // recipient gets the tool they were shown.
-  const written = await writeBundle(graph, options.bundle!, { pageDir: builtPage() });
+  const written = await writeBundle(graph, options.bundle!, { pageDir: builtPage(), frontend: frontendOf(options.graphPath) });
   process.stderr.write(
     `Wrote ${written.length} files to ${options.bundle}
 `
@@ -431,7 +438,10 @@ export async function main(argv: string[]): Promise<number> {
     const intervals = graphTriggers(graph).filter((trigger) => trigger.every).map((trigger) => parseInterval(trigger.every));
     if (intervals.length) options.every = Math.min(...intervals);
   }
-  // Asked once, however many rounds follow.
-  applyRuntimeValues(graph, await answer(runtimeRequirements(graph, registry), options.inputs), registry);
-  return options.every ? runEvery(graph, options) : runOnce(graph);
+  // An event by name, and only what it runs is asked about; the values by name
+  // too, as a page sends them -- asked once, however many rounds follow.
+  const trigger = eventOf(graph, options.event, registry);
+  const only = trigger ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry)) : null;
+  applyValues(graph, await answer(runtimeRequirements(graph, registry, only), options.values), registry);
+  return options.every ? runEvery(graph, trigger, options) : runOnce(graph, trigger);
 }

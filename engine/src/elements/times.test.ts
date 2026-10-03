@@ -74,7 +74,7 @@ describe('the base classes', () => {
   it('name as build time what only building asks', () => {
     // Said here in full, so that making something build time -- or taking it
     // out -- is a decision somebody made, not a bar that moved.
-    expect(buildTime.sort()).toEqual(['asksModel', 'deployNeeds', 'engineRuns', 'generation', 'graphAuthorNote', 'problems', 'receives', 'referencedPaths', 'whatRuns']);
+    expect(buildTime.sort()).toEqual(['asksModel', 'deployNeeds', 'engineRuns', 'generation', 'graphAuthorNote', 'problems', 'receives', 'referencedPaths', 'valueIsDesign', 'whatRuns']);
   });
 });
 
@@ -117,7 +117,7 @@ describe('what a run calls', () => {
     ...readdirSync(join(SRC, 'execution')).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name))
       .map((name) => `execution/${name}`),
     'elements/body.ts', 'elements/folderListing.ts', 'elements/images.ts', 'authoring/logic.ts',
-    'host/serve.ts', 'host/runs.ts', 'host/rounds.ts', 'host/schedule.ts', 'host/node.ts',
+    'host/serve.ts', 'host/session.ts', 'host/rounds.ts', 'host/node.ts',
   ];
 
   it.each(RUN_TIME)('%s reaches nothing that is build time', (path) => {

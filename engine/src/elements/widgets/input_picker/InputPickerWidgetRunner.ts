@@ -2,7 +2,6 @@ import { WidgetRunner, type Widget } from '../../WidgetRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
 import { listFolder } from '../../folderListing.ts';
 import { port } from '../../port.ts';
-import type { RawConfig } from '../../../graph.ts';
 
 export interface PickerConfig {
   /** The chosen path. */
@@ -59,11 +58,6 @@ export class InputPickerWidgetRunner extends WidgetRunner<PickerConfig> {
       direction: 'input' as const,
       current: '',
     }];
-  }
-
-  /** The answer is the path it holds. */
-  override applyRuntimeValue(stored: RawConfig, value: string): void {
-    stored.value = value;
   }
 
   // ── Build time ────────────────────────────────────────────────────────────

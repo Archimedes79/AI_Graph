@@ -19,10 +19,7 @@ import type { Runtime } from '../../Runtime.ts';
 export class ButtonWidgetRunner extends WidgetRunner<Record<string, never>> {
   readonly widgetKind = 'button' as const;
 
-  /**
-   * Nothing to set: a press is all it is. The count its value holds is the
-   * page's, so that every press is a change it reports; the graph never reads it.
-   */
+  /** Nothing to set: a press is all it is. */
   config(): Record<string, never> {
     return {};
   }
@@ -34,6 +31,11 @@ export class ButtonWidgetRunner extends WidgetRunner<Record<string, never>> {
   /** Pressing it is the event; there is no setting that would make it not one. */
   override firesRun(): boolean {
     return true;
+  }
+
+  /** What it hands on is that it was pressed, which nobody gives it: it is an event, not a value. */
+  override takesValue(): boolean {
+    return false;
   }
 
   async execute(widget: Widget, _inputs: Record<string, unknown>, runtime: Runtime) {

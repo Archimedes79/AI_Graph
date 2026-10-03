@@ -113,21 +113,21 @@ describe('a change in a node\'s panel', () => {
   });
 });
 
-describe('what a run keeps, landing while a word is typed', () => {
-  const ranWithMemory = () => store().setExecutionResult({
-    status: 'success', outputs: {}, node_results: [],
-    memory: [{ node_id: 'history', port_id: 'input', value: 'turn 1' }],
-  } as never);
-
-  it('ends the word\'s undo step: Undo takes back what was typed after it, and leaves what the run kept', () => {
+describe('what a round shows, landing while a word is typed', () => {
+  it('is no edit of the document: the word stays one undo step, and Undo takes back all of it', () => {
     const panel = nodePanel('code');
+    const before = store().past.length;
     say(panel, 'C'); vi.advanceTimersByTime(WRITE_AFTER_MS);
-    ranWithMemory();
+    // What the session keeps is its own: the round is shown, and written nowhere.
+    store().setExecutionResult({
+      status: 'success', outputs: {},
+      node_results: [{ node_id: 'history', status: 'success', inputs: {}, outputs: { output: 'turn 1' } }],
+    });
     // Well within the moment in which typing into the same field adds to its step.
     say(panel, 'Co'); vi.advanceTimersByTime(WRITE_AFTER_MS);
+    expect(store().past.length).toBe(before + 1);
     store().undo();
-    expect(stored('code').description).toBe('C');
-    expect(stored('history').config.data_value).toBe('turn 1');
+    expect(stored('code').description).toBe('');
   });
 });
 

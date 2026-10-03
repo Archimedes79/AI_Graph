@@ -1,15 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { parseGraph } from '../graph.ts';
 import { registry } from '../elements/registry.ts';
-import { applyRuntimeValues, runtimeRequirements } from './runtimeValues.ts';
+import { runtimeRequirements } from './runtimeValues.ts';
+import { applyValues } from './graphInterface.ts';
 import { memoryFeedbackEdges } from './executor.ts';
 import { triggeredNodes } from './triggers.ts';
 
 /**
- * A question's key is the whole address of its answer. The server used to
- * split it into a node and a block for the wire, and each page rebuilt it --
- * or, on the delivered page, wrote the answer where it guessed the element
- * keeps it. Answered by key, each element puts its answer where it keeps it.
+ * A question's key is the name of the value that answers it -- the name any
+ * caller gives that value under (`graphInterface.ts`). The server used to split
+ * a key into a node and a block for the wire, and each page rebuilt it.
+ * Answered by name, each element puts its answer where it keeps it.
  */
 describe('what a graph asks before it runs', () => {
   const graph = () => parseGraph({
@@ -20,18 +21,23 @@ describe('what a graph asks before it runs', () => {
     ],
   });
 
-  it('is answered by the keys it asks with, and says which nodes took an answer', () => {
+  it('is answered by the names it asks with -- a block by its id, a node by its own', () => {
     const asked = graph();
     const keys = runtimeRequirements(asked, registry).map((requirement) => requirement.key);
-    expect(keys).toEqual(['ask', 'page::pick']);
+    expect(keys).toEqual(['ask', 'pick']);
 
-    const answered = applyRuntimeValues(asked, { ask: 'in.txt', 'page::pick': 'data', gone: 'x' }, registry);
-    expect([...answered].sort()).toEqual(['ask', 'page']);
+    applyValues(asked, { ask: 'in.txt', pick: 'data' }, registry);
     expect(runtimeRequirements(asked, registry)).toEqual([
       expect.objectContaining({ key: 'ask', current: 'in.txt' }),
     ]);
     expect((asked.nodes[1].config.gui_widgets as Array<{ value: string }>)[0].value).toBe('data');
     expect(asked.nodes[2].config.value).toBe('kept');
+  });
+
+  it('refuses an answer under a name the graph does not take, before it writes any', () => {
+    const asked = graph();
+    expect(() => applyValues(asked, { ask: 'in.txt', gone: 'x' }, registry)).toThrow(/No value called "gone": this graph takes "ask", "pick", "quiet"/);
+    expect(asked.nodes[0].config.value).toBe('');
   });
 
   it('asks for one event only what that event runs: pressing "Plot" does not ask for the file only "Summarize" reads', () => {
@@ -54,10 +60,10 @@ describe('what a graph asks before it runs', () => {
     const askedFor = (event: string | null) => runtimeRequirements(
       tools, registry, event ? triggeredNodes(tools, { node_id: 'page', port_id: event }, feedback) : null,
     ).map((requirement) => requirement.key);
-    expect(askedFor('plot_out')).toEqual(['page::csv']);
-    expect(askedFor('summarize_out')).toEqual(['page::text']);
+    expect(askedFor('plot_out')).toEqual(['csv']);
+    expect(askedFor('summarize_out')).toEqual(['text']);
     // A run of everything asks everything.
-    expect(askedFor(null)).toEqual(['page::text', 'page::csv']);
+    expect(askedFor(null)).toEqual(['text', 'csv']);
   });
 
   it('asks for a text wired into an input that reads its file as a file, to be browsed for', () => {

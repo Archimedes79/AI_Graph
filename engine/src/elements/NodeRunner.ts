@@ -4,7 +4,8 @@
 // with files of its own in a project folder, and a way for an AI to write it.
 // A block on a page shows or hands on what it holds, and writes nothing.
 
-import type { Graph, GraphNode, NodeType, Port } from '../graph.ts';
+import type { Graph, GraphNode, NodeResult, NodeType, Port } from '../graph.ts';
+import type { Offer } from '../execution/graphInterface.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
 import { collectedInterface, type Schema } from '../execution/interface.ts';
 import { runsPerItem } from '../execution/batching.ts';
@@ -323,14 +324,38 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
    *
    * Asked of the element rather than looked up by node type, so a new element
    * that prompts says so in its own file — and the editor's dialog, a
-   * terminal's prompts and a bundle's `--inputs` all read the same list.
+   * terminal's prompts and a command line's `--value` all read the same list.
    */
   runtimeRequirements(_node: GraphNode): RuntimeRequirement[] {
     return [];
   }
 
-  /** Put one supplied value where this element keeps it. */
-  applyRuntimeValue(_node: GraphNode, _widgetId: string | null, _value: string): void {}
+  /**
+   * What this node offers whoever uses the graph from outside -- a page, a
+   * script, the graph above: an event that starts a round, a value a round can
+   * be given, an output it hands back. Each under a name a caller uses, never a
+   * port: `execution/graphInterface.ts` gathers them into the graph's own.
+   */
+  offers(_node: GraphNode): Offer[] {
+    return [];
+  }
+
+  /**
+   * Put a value given from outside -- by a person before a run, a page, a
+   * script -- where this element keeps it. *key* is the offer's: a block's id,
+   * or null for the node itself.
+   */
+  setValue(_node: GraphNode, _key: string | null, _value: unknown): void {}
+
+  /** What the value this node offers under *key* holds now. */
+  value(_node: GraphNode, _key: string | null): unknown {
+    return undefined;
+  }
+
+  /** What this node hands back under the output it offers as *key*, from its result in a round. */
+  shows(_node: GraphNode, _result: NodeResult, _key: string | null): unknown {
+    return undefined;
+  }
 
   /** Run once, for inputs already collected from the wires. */
   abstract execute(
@@ -345,6 +370,29 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
    * is why the executor asks instead of branching on the node type.
    */
   settleMemory(_node: GraphNode, _portId: string, _value: unknown): void {}
+
+  /**
+   * What this node keeps between rounds, slot by slot: what using the graph
+   * changes about it, as against how it was designed -- a page's blocks by id,
+   * a data node's `data_value`, an input node's `value`. A session reads it
+   * after a round and puts it back before the next (`setState`), on a copy, so
+   * that using a graph never changes its design (`host/session.ts`). Nothing,
+   * for a node that keeps nothing. A slot that holds nothing is `null`.
+   */
+  state(_node: GraphNode): Record<string, unknown> {
+    return {};
+  }
+
+  /** Put slots `state` read back where this element keeps them. */
+  setState(_node: GraphNode, _slots: Record<string, unknown>): void {}
+
+  /**
+   * Empty what this node held only until a round delivered it: a message,
+   * said once -- not a setting somebody would have to type again. *sent* is
+   * its slots as the round was handed them; what changed since is not what
+   * was delivered, and stays.
+   */
+  clearDelivered(_node: GraphNode, _sent: Record<string, unknown>): void {}
 
   /**
    * What this node shows, per block id, given everything that arrived.

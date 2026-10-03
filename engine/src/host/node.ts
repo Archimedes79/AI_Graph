@@ -60,9 +60,9 @@ export const nodeFiles: FileService = {
  * Running an authored body.
  *
  * A separate process, not `eval`: a body that loops forever, exits, or writes
- * to stdout costs a subprocess rather than the run. It sees plain JSON on argv
- * and nothing of this engine, so nothing about how the graph executes leaks
- * into what someone writes.
+ * to stdout costs a subprocess rather than the run. It is handed plain JSON on
+ * stdin and nothing of this engine, so nothing about how the graph executes
+ * leaks into what someone writes.
  *
  * The interpreter is the one already running this engine. That is the whole
  * reason bodies are JavaScript: a recipient who can run the engine can run
