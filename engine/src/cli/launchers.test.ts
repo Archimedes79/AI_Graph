@@ -20,13 +20,13 @@ describe('run.sh', () => {
     expect(at('cd "$(dirname "$0")"')).toBeGreaterThan(0);
     expect(at('command -v node')).toBeGreaterThan(at('cd "$(dirname'));
     expect(at(`< ${NODE_MAJOR} ? 1 : 0`)).toBeGreaterThan(at('command -v node'));
-    expect(at('exec node engine/main.ts graph.json --serve "$@"')).toBeGreaterThan(at(`< ${NODE_MAJOR}`));
+    expect(at('exec "$NODE" engine/main.ts graph.json --serve "$@"')).toBeGreaterThan(at(`< ${NODE_MAJOR}`));
   });
 
   it('passes a port only when asked to, and then only when PORT is set', () => {
     expect(script).not.toContain('PORT');
     expect(runSh({ command: 'engine/src/main.ts', portFromEnv: true }))
-      .toContain('exec node engine/src/main.ts ${PORT:+--port "$PORT"} "$@"');
+      .toContain('exec "$NODE" engine/src/main.ts ${PORT:+--port "$PORT"} "$@"');
   });
 });
 
@@ -36,7 +36,7 @@ describe('run.cmd', () => {
 
   it('uses Windows line endings and backslashes', () => {
     expect(script).not.toMatch(/[^\r]\n/);
-    expect(script).toContain('node engine\\src\\main.ts --editor editor\\dist %PORTARG% %*');
+    expect(script).toContain('%NODE% engine\\src\\main.ts --editor editor\\dist %PORTARG% %*');
   });
 
   it('starts from its own folder and checks for Node first', () => {
@@ -44,7 +44,7 @@ describe('run.cmd', () => {
     expect(at('cd /d "%~dp0"')).toBeGreaterThan(0);
     expect(at('where node')).toBeGreaterThan(at('cd /d'));
     expect(at(`< ${NODE_MAJOR} ? 1 : 0`)).toBeGreaterThan(at('where node'));
-    expect(at('node engine\\src\\main.ts')).toBeGreaterThan(at(`< ${NODE_MAJOR}`));
+    expect(at('%NODE% engine\\src\\main.ts')).toBeGreaterThan(at(`< ${NODE_MAJOR}`));
   });
 
   it('keeps the window open on every way out that is a failure', () => {
@@ -69,7 +69,26 @@ describe('zipMode', () => {
   it('makes shell scripts executable and leaves everything else alone', () => {
     expect(zipMode('run.sh')).toBe(0o755);
     expect(zipMode('ai-graph-v1/run.sh')).toBe(0o755);
+    expect(zipMode('ai-graph-v1/run.command')).toBe(0o755);
     expect(zipMode('run.cmd')).toBeUndefined();
     expect(zipMode('engine/main.ts')).toBeUndefined();
+  });
+
+  it('makes the Node a download carries executable', () => {
+    expect(zipMode('ai-graph-v1/node/node')).toBe(0o755);
+    expect(zipMode('ai-graph-v1/node/LICENSE')).toBeUndefined();
+  });
+});
+
+describe('the Node a folder carries', () => {
+  it('is used before the computer\'s, which is then not needed', () => {
+    const sh = runSh({ command: 'engine/main.ts' }).split('\n');
+    const at = (text: string) => sh.findIndex((line) => line.includes(text));
+    expect(at('if [ -x node/node ]; then')).toBeLessThan(at('command -v node'));
+    expect(sh[at('if [ -x node/node ]; then') + 1]).toBe('  NODE=node/node');
+    const cmd = runCmd({ command: 'engine/main.ts' }).split('\r\n');
+    const atCmd = (text: string) => cmd.findIndex((line) => line.includes(text));
+    expect(atCmd('if exist "node\\node.exe" (')).toBeLessThan(atCmd('where node'));
+    expect(cmd[atCmd('if exist "node\\node.exe" (') + 1]).toBe('  set "NODE=node\\node.exe"');
   });
 });

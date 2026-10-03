@@ -59,12 +59,56 @@ function version() {
   return `AI-Graph ${name}\ncommit ${commit}\nbuilt ${new Date().toISOString()}\n`;
 }
 
+// `--node <folder>`: an unpacked Node.js download for one system -- node.exe
+// at its top on Windows, bin/node elsewhere -- whose binary and LICENSE go into
+// the zip as node/. That zip is for that system only, and needs nothing
+// installed: having to install Node 24 first was what stopped people who only
+// wanted to try it, and was why they reached for the container instead.
+const args = process.argv.slice(2);
+const nodeAt = args.indexOf('--node');
+const nodeFolder = nodeAt >= 0 ? args.splice(nodeAt, 2)[1] : undefined;
+
+/** The Node binary in *folder*, and where it goes in the zip. */
+async function bundledNode(folder) {
+  for (const [from, to] of [['node.exe', 'node/node.exe'], ['bin/node', 'node/node']]) {
+    try {
+      return { to, content: await readFile(join(folder, from)), license: await readFile(join(folder, 'LICENSE')) };
+    } catch {
+      // Not this system's layout: the other one.
+    }
+  }
+  throw new Error(`No node.exe or bin/node, with its LICENSE, in ${folder}`);
+}
+
+const node = nodeFolder ? await bundledNode(nodeFolder) : undefined;
+
+const NEEDS = node
+  ? `Nothing. Node.js, which runs it, is in node/ -- with its licence, node/LICENSE --
+and the launchers use it. The engine is TypeScript that Node runs directly, it
+has no dependencies, and the page in editor/dist is already built. Nothing is
+installed, and nothing is installed while a graph runs.
+
+This download is for one system. The one ending in -node-required runs on any,
+with a Node ${NODE_MAJOR} or newer of your own.`
+  : `Node ${NODE_MAJOR} or newer. That is the whole list: the engine is TypeScript that Node
+runs directly, it has no dependencies, and the page in editor/dist is already
+built. Nothing is installed, and nothing is installed while a graph runs.
+
+    node --version
+
+The launchers check this before starting and say so if it is missing or too
+old; on Windows the window stays open until you have read it. The downloads
+named after a system (windows-x64, macos-arm64, ...) carry their own Node and
+need nothing.`;
+
 const README = `# AI-Graph
 
 Unzip, then:
 
-    ./run.sh          (macOS, Linux)
-    run.cmd           (Windows -- type the extension, or double-click)
+    run.cmd           (Windows -- double-click it)
+    run.command       (macOS -- double-click it; if macOS refuses the first time,
+                       System Settings > Privacy & Security > Open Anyway)
+    ./run.sh          (macOS, Linux, in a terminal)
 
 The editor opens in your browser, on http://127.0.0.1:8000 or, if something is
 already there, the next free port -- the address is printed either way. Set
@@ -74,18 +118,11 @@ VERSION says which build this is and which commit it was made from.
 
 ## What this needs
 
-Node ${NODE_MAJOR} or newer. That is the whole list: the engine is TypeScript that Node
-runs directly, it has no dependencies, and the page in editor/dist is already
-built. Nothing is installed, and nothing is installed while a graph runs.
-
-    node --version
-
-run.sh and run.cmd check this before starting and say so if it is missing or
-too old; on Windows the window stays open until you have read it.
+${NEEDS}
 
 ## What is in here
 
-    run.sh, run.cmd   start it
+    run.*       start it${node ? '\n    node/       Node.js, which runs it, and its licence' : ''}
     VERSION     what this was built from
     engine/     the engine and the editor's server, as source
     editor/dist the editor's page, built; its licenses.txt names the
@@ -105,7 +142,7 @@ const files = [
   'LICENSE',
 ];
 
-const out = process.argv[2] ?? join(ROOT, 'ai-graph.zip');
+const out = args[0] ?? join(ROOT, 'ai-graph.zip');
 // Everything sits under one folder named after the file, so unzipping in a
 // downloads directory produces one directory rather than scattering 87 files
 // across it.
@@ -117,12 +154,19 @@ for (const path of files) {
 }
 const extra = {
   'run.sh': runSh(LAUNCHER),
+  // The same script under the name a Mac's Finder runs on a double-click, in a
+  // Terminal window: run.sh it opens in a text editor.
+  'run.command': runSh(LAUNCHER),
   'run.cmd': runCmd(LAUNCHER),
   'README.md': README,
   'VERSION': version(),
 };
 for (const [name, text] of Object.entries(extra)) {
   entries.push({ path: `${top}/${name}`, content: Buffer.from(text, 'utf8'), mode: zipMode(name) });
+}
+if (node) {
+  entries.push({ path: `${top}/${node.to}`, content: node.content, mode: zipMode(node.to) });
+  entries.push({ path: `${top}/node/LICENSE`, content: node.license });
 }
 
 await mkdir(dirname(out), { recursive: true });

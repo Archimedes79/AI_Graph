@@ -80,7 +80,7 @@ jobs:
         run: node --test scripts/launcher.test.mjs
 
   # The download, unzipped and started the way a person starts it -- on
-  # Windows too, where run.cmd is the only way in. v0.2.0's zip was intact and
+  # Windows and macOS too, where run.cmd and run.command are the ways in. v0.2.0's zip was intact and
   # still "did not start": its run.cmd assumed a new enough Node, always asked
   # for port 8000, and closed its window before the error could be read, and
   # its run.sh came out of the archive without an executable bit. Nothing else
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -135,10 +135,30 @@ jobs:
       - name: Build the editor
         run: npm run build
 
+      # One zip per system that carries Node itself, so nothing needs to be
+      # installed first; and one for any system, with a Node 24 of one's own.
+      # Named without the version, so the README's links to
+      # releases/latest/download/<name> always mean the newest release.
+      # Node is the official download of the very version this job ran the
+      # tests on, checked against the checksums nodejs.org publishes for it.
       - name: Package
         env:
           AI_GRAPH_VERSION: ${{ github.ref_name }}
-        run: node scripts/package.mjs "ai-graph-${{ github.ref_name }}.zip"
+        run: |
+          set -euo pipefail
+          node scripts/package.mjs ai-graph-node-required.zip
+          v=$(node -p process.version)
+          base="https://nodejs.org/dist/$v"
+          curl -fsSLO "$base/SHASUMS256.txt"
+          for pair in win-x64:windows-x64 darwin-arm64:macos-arm64 darwin-x64:macos-x64 linux-x64:linux-x64; do
+            target=${pair%%:*}; name=${pair##*:}
+            case $target in win-*) file="node-$v-$target.zip" ;; *) file="node-$v-$target.tar.gz" ;; esac
+            curl -fsSLO "$base/$file"
+            grep " $file\$" SHASUMS256.txt | sha256sum -c -
+            case $file in *.zip) unzip -q "$file" ;; *) tar -xzf "$file" ;; esac
+            node scripts/package.mjs "ai-graph-$name.zip" --node "node-$v-$target"
+          done
+          ls -la ai-graph-*.zip
 
       # `gh` is on the runner already, so the release needs no third-party
       # action and no token beyond the one this job is given.
@@ -146,8 +166,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            "ai-graph-${{ github.ref_name }}.zip" \
+          gh release create "${{ github.ref_name }}" ai-graph-*.zip \
             --title "AI-Graph ${{ github.ref_name }}" \
             --generate-notes
 
