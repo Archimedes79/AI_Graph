@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GuiWidget } from '@/graph';
 import { GuiSurfacePage } from '@/page/GuiPage';
 import { useRound } from '@/page/useRound';
@@ -12,6 +12,9 @@ import { setEdit, useSession, watchSession } from '@/api/session';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
 
+/** Which design of which session: what a drawn page was drawn from. */
+const designOf = (session: string, revision: number): string => `${session}#${revision}`;
+
 /**
  * The deployed graph's front-end.
  *
@@ -21,7 +24,9 @@ import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
  * name holds, what each output showed, the round going or gone. A block used
  * sets a value by its name; one that starts the graph starts a round by its
  * name. What using it leaves behind is the server's, so a page reloaded, or
- * opened in a second window, shows what the first one did.
+ * opened in a second window, shows what the first one did. The design is
+ * loaded again whenever the server holds another one -- the editor's
+ * document, edited while the tool is open beside it.
  *
  * Every block is drawn through the component the editor used -- `GuiPage`,
  * each widget's `View` -- so a deployed tool cannot look or behave
@@ -30,26 +35,37 @@ import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
  * Served by the bundle's `engine/host/serve.ts` at `runtime.html`.
  */
 export default function RuntimeApp() {
-  const [design, setDesign] = useState<(PageDesign & { startsWhole: boolean }) | null>(null);
+  const [design, setDesign] = useState<(PageDesign & { startsWhole: boolean; drawn: string }) | null>(null);
   const [loadError, setLoadError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const session = useSession();
   // A deployed tool looks like the thing that was designed, scheme included.
   useSchemeOnRoot(design?.scheme);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     Promise.all([call('page'), call('interface')])
       .then(([page, offered]) => setDesign({
         name: page.name,
         description: page.description,
         scheme: page.scheme,
         blocks: page.blocks as unknown as GuiWidget[],
+        events: offered.events.map(({ name }) => name),
+        values: offered.values.map(({ name }) => name),
         outputs: offered.outputs.map(({ name, label }) => ({ name, label })),
         startsWhole: page.starts_whole,
+        drawn: designOf(page.session, page.design_revision),
       }))
       .catch((error) => setLoadError(errorText(error, 'Could not load the tool.')));
-    return watchSession();
   }, []);
+  useEffect(() => {
+    load();
+    return watchSession();
+  }, [load]);
+  // Another design than the one drawn: another session, or this one's edited.
+  const held = session.view ? designOf(session.view.session, session.view.design_revision) : null;
+  useEffect(() => {
+    if (design && held && held !== design.drawn) load();
+  }, [design, held, load]);
 
   // Anything the graph still needs before it can run (a file to read, a place
   // to write) is asked for in the same window the editor uses -- the deployed

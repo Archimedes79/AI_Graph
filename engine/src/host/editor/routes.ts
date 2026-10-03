@@ -178,7 +178,7 @@ export function editorRoutes(held: SessionHolder = holderOf()): Handlers {
     // any deployed page does, so nothing about the delivered side knows it is
     // being previewed. What runs, not how each node was written.
     async holdGraph(asked) {
-      const session = await held.hold(withoutAuthoring(parseGraph(asked.graph)), { path: asked.path, anew: asked.anew });
+      const session = await held.hold(withoutAuthoring(parseGraph(asked.graph)), { path: asked.path, session: asked.session });
       return { session: session.id, dropped: session.dropped };
     },
 

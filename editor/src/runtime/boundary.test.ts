@@ -16,7 +16,10 @@ import { describe, it, expect } from 'vitest';
  * file of `runtime/`, not only the entry point: one that nothing imports yet is
  * held to the same rule before it is wired in. It follows imports through
  * every area, which the editor's layer rule (`layers.test.ts`) cannot: that one
- * sees a single import at a time, and `runtime` ranks above the store.
+ * sees a single import at a time, and `runtime` ranks above the store. And it
+ * follows them into the engine, where the page is held to load nothing that
+ * runs a graph. An import of types only is erased and ships nothing, so it is
+ * not followed.
  *
  * The sources are read through `import.meta.glob` rather than `node:fs`, so the
  * test needs no Node types and runs under the same config as everything else.
@@ -25,11 +28,30 @@ import { describe, it, expect } from 'vitest';
 // Rooted at /src, not relative: a relative pattern from inside src/runtime
 // silently omits src/runtime itself, and the walker then starts nowhere.
 const SOURCES = import.meta.glob('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+// The engine, beside the editor rather than inside it.
+const ENGINE_SOURCES = import.meta.glob('../../../engine/src/**/*.ts', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
-/** Glob keys come back as /src/…; make them relative to `src`. */
-const BY_PATH = new Map(
-  Object.entries(SOURCES).map(([key, source]) => [key.replace(/^\/src\//, ''), source]),
-);
+/** Every source by its path: the editor's relative to `src`, the engine's as `@engine/<path>`, as it is imported. */
+const BY_PATH = new Map([
+  ...Object.entries(SOURCES).map(([key, source]) => [key.replace(/^\/src\//, ''), source] as const),
+  ...Object.entries(ENGINE_SOURCES).map(([key, source]) => [key.replace(/^(\.\.\/)+engine\/src\//, '@engine/'), source] as const),
+]);
+
+/**
+ * The modules *source* loads code from: the editor's (`.` and `@/`) and the
+ * engine's (`@engine/`) -- a package cannot reach back into these trees, so it
+ * cannot drag a module of them in. An import of types only ships nothing.
+ */
+function loads(source: string): string[] {
+  const specs: string[] = [];
+  for (const [, clause, spec] of source.matchAll(/(?:^|\n)\s*(?:import|export)\s+([^;]*?)\s*from\s+'((?:\.|@\/|@engine\/)[^']+)'/g)) {
+    const names = /^\{([^}]*)\}$/.exec(clause.trim())?.[1];
+    const typesOnly = /^type\b/.test(clause.trim())
+      || (names !== undefined && names.split(',').map((name) => name.trim()).filter(Boolean).every((name) => name.startsWith('type ')));
+    if (!typesOnly) specs.push(spec);
+  }
+  return specs;
+}
 
 /**
  * The editor's areas a tool has no part of at all: it holds no graph (the
@@ -81,11 +103,10 @@ function runtimeImports(): Map<string, string | null> {
 
     const source = BY_PATH.get(path);
     if (!source) continue;
-    // Relative and `@/` specifiers: a package from node_modules cannot reach
-    // back into this source tree, so it cannot drag an editor module in with it.
-    for (const match of source.matchAll(/from\s+'((?:\.|@\/)[^']+)'/g)) {
-      const spec = match[1];
-      const resolved = spec.startsWith('@/') ? resolveSpec('', spec.slice(2)) : resolveSpec(path, spec);
+    for (const spec of loads(source)) {
+      const resolved = spec.startsWith('@/') ? resolveSpec('', spec.slice(2))
+        : spec.startsWith('@engine/') ? resolveSpec('', spec)
+          : resolveSpec(path, spec);
       if (resolved) queue.push([resolved, path]);
     }
   }
@@ -151,6 +172,22 @@ describe('deployment boundary', () => {
 
   it('never loads a GuiBuilder class, even one imported without the registry', () => {
     expect([...reachable].filter((path) => /GuiBuilder\.ts$/.test(path)).map(chain)).toEqual([]);
+  });
+
+  /**
+   * The engine, as far as a tool's page loads it: the contract
+   * (`host/api.ts`), and the shapes of a few values its views read -- a
+   * chat's conversation, a dropdown's choice, a slider's range. Which blocks
+   * start a round and which are given a value are the graph's events and
+   * values, which the runtime API tells the page by name. It used to ask the
+   * engine's element registry, and so loaded every runner, the executor and
+   * the authoring code with it: fifty modules of the engine, for two answers.
+   */
+  it('loads of the engine only the contract and the shapes of the values its views read', () => {
+    const engine = [...reachable].filter((path) => path.startsWith('@engine/'));
+    expect(engine).toContain('@engine/host/api.ts');
+    const more = engine.filter((path) => !/^@engine\/(host\/api\.ts|elements\/widgets\/[a-z_]+\/[a-z][A-Za-z]*\.ts)$/.test(path));
+    expect(more.map(chain)).toEqual([]);
   });
 
   it('draws the page it is handed, and runs it through the session, from the halves that are delivered', () => {

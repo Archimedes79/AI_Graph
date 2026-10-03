@@ -100,22 +100,15 @@ export interface NodeResult {
   held?: boolean;
 }
 
-/** One value a memory node kept from a run: which node, arriving on which port. */
-export interface MemoryWrite {
-  node_id: string;
-  port_id: string;
-  value: unknown;
-}
-
+/**
+ * What a run produced. What memory nodes kept is not in it: the run settled
+ * that into the copy of the graph it ran on, which is what a session keeps
+ * (`host/session.ts`).
+ */
 export interface ExecutionResult {
   status: 'success' | 'error' | 'partial' | 'cancelled';
   node_results: NodeResult[];
   outputs: Record<string, unknown>;
-  /**
-   * Everything memory nodes kept, in order, as the run settled it into the copy
-   * of the graph it ran on -- the copy a session keeps (`host/session.ts`).
-   */
-  memory?: MemoryWrite[];
   error?: string | null;
 }
 

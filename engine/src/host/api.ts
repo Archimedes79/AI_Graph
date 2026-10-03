@@ -74,6 +74,8 @@ export interface SessionView {
   round: RoundSnapshot | null;
   /** What opening the session, or handing it a graph, dropped of what it kept: said once, in words. */
   dropped: string[];
+  /** Which design this is, counted from 0: a page drawn from the design is drawn again when it changes. */
+  design_revision: number;
   /** The graph's own clock (its trigger nodes), which the server keeps while the application runs. */
   clock: ClockView;
 }
@@ -99,6 +101,8 @@ export interface ClockView {
  */
 export interface PageView {
   session: string;
+  /** Which design of the session this page is: see SessionView.design_revision. */
+  design_revision: number;
   name: string;
   description: string;
   scheme: string;
@@ -141,8 +145,8 @@ export interface HeldGraph {
   graph: Graph;
   /** Where it is kept, if anywhere: its session keeps its state beside it. */
   path?: string | null;
-  /** Another document than the one handed over before: a session of its own. */
-  anew?: boolean;
+  /** The session the editor holds for it, as the hand-over before answered; none for a document not handed over yet. */
+  session?: string | null;
 }
 
 /**

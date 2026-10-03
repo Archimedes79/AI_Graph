@@ -1,10 +1,9 @@
 import type { WidgetViewProps } from '../WidgetView';
 import { FIELD } from '@/ui/theme';
-import { widgetFiresRun } from '@/document/guiWidgets';
 import { selectChoice, selectOptions } from '@engine/elements/widgets/select/choice.ts';
 
 /** Runtime select widget: a dropdown over the block's own option list, standing where a run reads it. */
-export default function SelectWidgetView({ widget, value, onChange, onTrigger, busy }: WidgetViewProps) {
+export default function SelectWidgetView({ widget, value, onChange, onTrigger, fires, busy }: WidgetViewProps) {
   const options = selectOptions(widget.options);
   const current = selectChoice(options, value);
 
@@ -15,7 +14,7 @@ export default function SelectWidgetView({ widget, value, onChange, onTrigger, b
       value={current}
       // A choice that starts the graph waits for the round in flight, as a
       // button does: one made meanwhile was kept, and started nothing.
-      disabled={busy === true && widgetFiresRun(widget)}
+      disabled={busy === true && fires === true}
       // A choice is made in one gesture, so the change is also the event.
       onChange={(e) => { onChange(e.target.value); onTrigger?.(e.target.value); }}
     >

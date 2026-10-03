@@ -31,6 +31,18 @@ after(() => {
   rmSync(work, { recursive: true, force: true });
 });
 
+/**
+ * Unzip *zip* into *into* with the tools a person has: Info-ZIP's unzip on
+ * Linux, and on Windows 10 and later its own tar.exe -- bsdtar, which reads a
+ * zip. Named by its place, not looked up: in a Git Bash, PATH finds GNU tar
+ * first, which reads no zip and takes "C:" for a host to connect to.
+ */
+function unzip(zip, into) {
+  return windows
+    ? spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', into], { encoding: 'utf8' })
+    : spawnSync('unzip', ['-q', zip, '-d', into], { encoding: 'utf8' });
+}
+
 /** On Windows the launcher is cmd.exe with node under it; killing cmd.exe alone orphans node. */
 function stopTree(child) {
   if (child.exitCode !== null) return;
@@ -118,10 +130,7 @@ test('the zip holds what a person runs', () => {
   });
   assert.equal(packed.status, 0, packed.stderr);
 
-  // The tools a person has: Info-ZIP's unzip on Linux, bsdtar (tar.exe) on Windows 10 and later.
-  const unpacked = windows
-    ? spawnSync('tar', ['-xf', zip, '-C', work], { encoding: 'utf8' })
-    : spawnSync('unzip', ['-q', zip, '-d', work], { encoding: 'utf8' });
+  const unpacked = unzip(zip, work);
   assert.equal(unpacked.status, 0, unpacked.stderr);
 
   for (const file of ['run.sh', 'run.cmd', 'README.md', 'VERSION', 'LICENSE', 'engine/src/main.ts', 'editor/dist/index.html', 'editor/dist/licenses.txt']) {
@@ -192,9 +201,7 @@ test('the download for one system carries its own Node, and needs none on the co
     cwd: root, encoding: 'utf8', env: { ...process.env, AI_GRAPH_VERSION: 'test' },
   });
   assert.equal(packed.status, 0, packed.stderr);
-  const unpacked = windows
-    ? spawnSync('tar', ['-xf', zip, '-C', work], { encoding: 'utf8' })
-    : spawnSync('unzip', ['-q', zip, '-d', work], { encoding: 'utf8' });
+  const unpacked = unzip(zip, work);
   assert.equal(unpacked.status, 0, unpacked.stderr);
   const system = join(work, 'ai-graph-system');
   assert.ok(existsSync(join(system, 'node', 'LICENSE')), "Node's licence travels with it");

@@ -6,7 +6,6 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, DANGER_TEXT, DIM, MUTED, TEXT } from '@/ui/theme';
-import { widgetFiresRun, widgetTakesValue } from '@/document/guiWidgets';
 import RunResult, { type ShownOutput } from './RunResult';
 
 /**
@@ -43,6 +42,10 @@ export interface PageModel {
   valueOf: (block: GuiWidget) => unknown;
   /** What a block shows of what the rounds handed it, by its name; undefined for nothing yet. */
   shownOn: (block: GuiWidget) => unknown;
+  /** Using the block starts a round: it is one of the graph's events. */
+  fires: (block: GuiWidget) => boolean;
+  /** A round is given what the block holds, by its name: it is one of the graph's values. */
+  takes: (block: GuiWidget) => boolean;
   /** A round is going: a block that starts one waits. */
   busy: boolean;
   /** Why the last round failed, in its own words; empty when it did not. */
@@ -120,7 +123,7 @@ export function PageGrid({
  * none, and none of that code is in its bundle.
  */
 export function GuiBlock({
-  placement, value, incoming, onChange, onTrigger, busy, style, onMouseDown, blockRef, labelInset, children, content,
+  placement, value, incoming, onChange, onTrigger, fires, busy, style, onMouseDown, blockRef, labelInset, children, content,
 }: {
   placement: WidgetPlacement;
   value: unknown;
@@ -128,6 +131,8 @@ export function GuiBlock({
   onChange: (next: unknown) => void;
   /** Absent in the designer: a page being laid out must not start runs. */
   onTrigger?: (value?: unknown) => void;
+  /** Using it starts a round: see `WidgetViewProps.fires`. */
+  fires?: boolean;
   busy?: boolean;
   style?: React.CSSProperties;
   onMouseDown?: (event: React.MouseEvent) => void;
@@ -172,7 +177,7 @@ export function GuiBlock({
 
       <div className="flex-1 min-h-0">
         {content ?? (View ? (
-          <View widget={widget} value={value} incoming={incoming} onChange={onChange} onTrigger={onTrigger} busy={busy} />
+          <View widget={widget} value={value} incoming={incoming} onChange={onChange} onTrigger={onTrigger} fires={fires} busy={busy} />
         ) : (
           <span className="text-xs" style={{ color: DANGER }}>Unknown kind of block: {widget.kind}</span>
         ))}
@@ -248,14 +253,14 @@ export function GuiSurfacePage({ page, onValue, onEvent }: {
 }) {
   if (page.blocks.length === 0) return <><RunError error={page.error} /><WithoutPage page={page} /></>;
   const keep = (block: GuiWidget, value: unknown) => {
-    if (value !== undefined && widgetTakesValue(block)) onValue(block, value);
+    if (value !== undefined && page.takes(block)) onValue(block, value);
   };
   // A block used: what it holds now is kept first -- the value and the event
   // that follows it arrive in the same tick -- and only a block the engine
   // calls an event starts a round, and not while one is going.
   const fire = (block: GuiWidget, value?: unknown) => {
     keep(block, value);
-    if (widgetFiresRun(block) && !page.busy) onEvent(block);
+    if (page.fires(block) && !page.busy) onEvent(block);
   };
   return (
     <>
@@ -273,6 +278,7 @@ export function GuiSurfacePage({ page, onValue, onEvent }: {
                 value={blockValue(widget, page.valueOf(widget), incoming)}
                 onChange={(next) => keep(widget, next)}
                 onTrigger={(next) => fire(widget, next)}
+                fires={page.fires(widget)}
                 busy={page.busy}
               />
             );

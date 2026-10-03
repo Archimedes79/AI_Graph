@@ -244,9 +244,10 @@ export interface GraphStore {
    * Hand the server's session the document: what every round runs, whoever
    * starts it -- the App tab, the Page tab, the clock, the tool opened in a
    * window of its own. What runs, not how each node was written: a node's
-   * history is up to half a megabyte, and a round reads none of it. Another
-   * document than the one handed over before is a session of its own, and the
-   * session's stream is listened to anew.
+   * history is up to half a megabyte, and a round reads none of it. It is
+   * handed over as the document of the session it was given before: another
+   * document -- or one whose session another editor took meanwhile -- is
+   * given a session of its own, and that session's stream is listened to.
    */
   holdDocument: () => Promise<void>;
   /**
@@ -936,8 +937,9 @@ export const useGraphStore = create<GraphStore>()(
 
     holdDocument: async () => {
       const { opened, currentFilePath, rootGraph } = get();
-      const anew = heldOpened !== opened;
-      const { session } = await call('holdGraph', { graph: withoutAuthoring(rootGraph()), path: currentFilePath, anew });
+      // Another document: none of the sessions held for the one before is its.
+      if (heldOpened !== opened) heldSession = null;
+      const { session } = await call('holdGraph', { graph: withoutAuthoring(rootGraph()), path: currentFilePath, session: heldSession });
       heldOpened = opened;
       if (session !== heldSession) {
         heldSession = session;

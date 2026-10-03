@@ -91,6 +91,18 @@ describe('the graph prompt', () => {
     expect(registry.node('input')!.graphAuthorNote()).toContain('hold the path as text and wire it into that node\'s input typed "file_path"');
   });
 
+  /**
+   * Asked for a CSV explainer, a small model typed the code node's input
+   * "csv_text" as text -- the file's text, it meant -- and the node was handed
+   * the path. With the rule said this way round, twelve designs in twelve
+   * typed it file_path (gemini-flash-lite, 2026-10-03).
+   */
+  it('types the input a file picker is wired into file_path whatever it is called; text only to keep the path', () => {
+    expect(GRAPH_SYSTEM).toContain('an input wired from a file picker');
+    expect(GRAPH_SYSTEM).toContain('also when it is called csv_text or content');
+    expect(GRAPH_SYSTEM).toMatch(/needs the file's name or location itself[^.]*types that port "text"/);
+  });
+
   it('lists every block kind the registry knows, each with what it says of itself', () => {
     // The kinds used to be a hand-kept list, which never learnt of the spacer.
     for (const kind of registry.widgetKinds()) {

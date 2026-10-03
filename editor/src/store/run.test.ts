@@ -3,14 +3,15 @@ import type { ExecutionResult } from '@/graph';
 import type { RoundSnapshot } from '@/api/client';
 
 // The server, as far as a document's session goes: what it was handed, and
-// which session that is -- another document is another one.
+// which session that is -- it goes on with the one a document is handed over
+// as, and any other is a new one.
 const server = vi.hoisted(() => ({ held: [] as unknown[], sessions: 0 }));
 vi.mock('@/api/client', async (actual) => ({
   ...(await actual<typeof import('@/api/client')>()),
-  call: vi.fn(async (route: string, body?: { anew?: boolean }) => {
+  call: vi.fn(async (route: string, body?: { session?: string | null }) => {
     if (route === 'holdGraph') {
       server.held.push(body);
-      if (body?.anew || !server.sessions) server.sessions += 1;
+      if (!body?.session || body.session !== `s${server.sessions}`) server.sessions += 1;
       return { session: `s${server.sessions}`, dropped: [] };
     }
     throw new Error(`not expected here: ${route}`);
@@ -35,6 +36,7 @@ const made = (node_id: string, outputs: Record<string, unknown>): ExecutionResul
 
 beforeEach(() => {
   server.held.length = 0;
+  server.sessions = 0;
   store().newGraph();
 });
 
@@ -53,7 +55,7 @@ describe('what the server\'s session is handed', () => {
     await store().holdDocument();
     store().newGraph();
     await store().holdDocument();
-    expect(server.held.map((asked) => (asked as { anew: boolean }).anew)).toEqual([true, false, true]);
+    expect(server.held.map((asked) => (asked as { session: string | null }).session)).toEqual([null, 's1', null]);
   });
 });
 

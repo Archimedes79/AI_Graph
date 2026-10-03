@@ -44,11 +44,10 @@ export default function ApplicationView() {
   // Whether using the page starts the graph -- or only shows what its trigger
   // nodes, or its one run at start, made.
   const starts = pageStarts(graph, engineRegistry);
-  // What a page without blocks shows: the graph's outputs, under their labels.
-  const outputs = useMemo(
-    () => interfaceOf(graph, engineRegistry).outputs.map(({ name, label }) => ({ name, label })),
-    [graph],
-  );
+  // The graph's names, as the runtime API tells a delivered tool them: which
+  // blocks start a round, which a round is given, and what a page without
+  // blocks shows -- the outputs, under their labels.
+  const offered = useMemo(() => interfaceOf(graph, engineRegistry), [graph]);
   const session = useSession();
   const round = useRound(holdDocument);
   const [opening, setOpening] = useState('');
@@ -77,7 +76,9 @@ export default function ApplicationView() {
     description: metadata.description,
     scheme: metadata.gui_scheme,
     blocks: widgets,
-    outputs,
+    events: offered.events.map(({ name }) => name),
+    values: offered.values.map(({ name }) => name),
+    outputs: offered.outputs.map(({ name, label }) => ({ name, label })),
     empty: nodes.length === 0,
   };
 

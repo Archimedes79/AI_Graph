@@ -21,7 +21,7 @@
 //
 // Everything else — what a node *does* — belongs to its element.
 
-import type { Graph, GraphEdge, GraphNode, ExecutionResult, MemoryWrite, NodeResult } from '../graph.ts';
+import type { Graph, GraphEdge, GraphNode, ExecutionResult, NodeResult } from '../graph.ts';
 import { resultKeys, type NodeRunner, type Runners } from '../elements/NodeRunner.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { atMost, batchItems, mergeBatchOutputs, reconcileOutputs } from './batching.ts';
@@ -465,7 +465,7 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
   // What stood still is not news: a reply held from the last round must not be
   // added to the conversation a second time, nor handed back as this round's result.
   for (const nodeId of held) outputs.delete(nodeId);
-  const memory = settleMemory(graph, feedback, outputs, results, registry);
+  settleMemory(graph, feedback, outputs, results, registry);
   // What finished before a Stop is drawn as it is: showing asks no model and
   // runs no body, so there is nothing in it for Stop to end.
   await showDisplays(graph, results, registry, runtime, held);
@@ -480,7 +480,6 @@ export async function executeGraph(graph: Graph, options: RunOptions): Promise<E
     status,
     node_results: results,
     outputs: finalOutputs(nodes, outputs, registry),
-    memory,
     error: failed.size ? failureSummary(results, byId) : null,
   };
 }
@@ -908,7 +907,7 @@ async function runNode(
 }
 
 /**
- * What memory nodes keep from this round, done once and written down.
+ * What memory nodes keep from this round, settled into the graph the round ran on.
  *
  * Two ways a value is kept. A feedback edge's value is handed to the node that
  * remembers it -- for the next round, and into this round's own result, so a
@@ -916,9 +915,8 @@ async function runNode(
  * a node that settles on arrival (a data node) keeps whatever an ordinary edge
  * delivered, because "remember this" does not depend on being in a loop.
  *
- * The list returned is the whole of it. Whoever holds the long-lived copy of
- * the graph -- the editor, a served page, the scheduler -- replays the list
- * into it instead of working the same thing out a second time.
+ * That copy is the whole of it: a session keeps it (`host/session.ts`), and
+ * nobody works the same thing out a second time.
  *
  * Per port, as the round delivers: a port fed by several wires keeps the list
  * of what arrived on them, not whichever wire came last.
@@ -929,9 +927,8 @@ function settleMemory(
   outputs: Map<string, Record<string, unknown>>,
   results: NodeResult[],
   registry: Runners,
-): MemoryWrite[] {
+): void {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const written: MemoryWrite[] = [];
 
   const ports = new Map<string, { target: GraphNode; element: NodeRunner; port: string; wires: GraphEdge[]; loops: boolean }>();
   for (const edge of graph.edges) {
@@ -953,7 +950,6 @@ function settleMemory(
     const values = delivered.map((edge) => outputs.get(edge.source_node_id)![edge.source_port_id]);
     const value = wires.length > 1 ? values : values[0];
     element.settleMemory(target, port, value);
-    written.push({ node_id: target.id, port_id: port, value });
 
     if (!loops) continue;
     // Said as having arrived, because it did -- only after the round rather
@@ -965,7 +961,6 @@ function settleMemory(
     }
     result.inputs = { ...result.inputs, [port]: value };
   }
-  return written;
 }
 
 /**
@@ -1013,7 +1008,7 @@ async function showDisplays(
  * "First" in the graph, whether or not it produced anything this run: a round
  * started by a page event, or one where the first stood still, would
  * otherwise hand another's value on under its key -- and whoever lays rounds
- * over each other (a schedule) would lose one of them once more.
+ * over each other (a session) would lose one of them once more.
  */
 function finalOutputs(
   nodes: GraphNode[],

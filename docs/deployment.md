@@ -162,7 +162,7 @@ API, by name, never by node or port:
 | Route | What it is for |
 |---|---|
 | `GET /api/runtime/interface` | What the graph offers: its events, the values it takes and the outputs it hands back, by name -- a block on its page by the block's id, an input, output or trigger node by its own -- and the session's id |
-| `GET /api/runtime/page` | The page as it was designed, for a frontend that draws its blocks: name, description, colour scheme, blocks |
+| `GET /api/runtime/page` | The page as it was designed, for a frontend that draws its blocks: name, description, colour scheme, blocks, and which design it is (`design_revision`, which the stream's `session` says again when it changes) |
 | `GET /api/runtime/stream` | Server-sent events: `session` (values, outputs, rounds) on connect and after every change, `round` as each round starts, goes and ends -- this page's, the clock's, another tab's |
 | `POST /api/runtime/requirements` | `{ event, values }`: what that round would still ask before it runs -- a file nobody chose, a place to write -- each under the name of the value that answers it |
 | `POST /api/runtime/rounds` | `{ event, values }`: start a round; watch it on the stream, or at `GET /api/runtime/rounds/:id`; stop it at `POST /api/runtime/rounds/:id/stop` |

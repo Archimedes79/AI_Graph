@@ -203,11 +203,13 @@ function toolRoutes(
 
     session: (asked) => sessionAsked(asked).view(),
 
+    // The session held now, and from then on whichever the server holds:
+    // the editor handing it another document is a new session on the stream.
     stream(asked) {
       const session = sessionAsked(asked);
       return new EventStream((send) => {
         send('session', session.view());
-        return session.watch((event) => send(event.type, event.type === 'round' ? event.round : event.session));
+        return held.watch((event) => send(event.type, event.type === 'round' ? event.round : event.session));
       });
     },
 
@@ -264,6 +266,7 @@ function toolRoutes(
       const page = graph.nodes.find((node) => registry.node(node.node_type)?.hasInterface);
       return {
         session: session.id,
+        design_revision: session.designRevision,
         name: graph.metadata.name,
         description: graph.metadata.description ?? '',
         scheme: String(graph.metadata.gui_scheme ?? ''),

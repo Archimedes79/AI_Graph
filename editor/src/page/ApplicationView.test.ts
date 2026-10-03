@@ -35,7 +35,7 @@ vi.mock('@/api/session', async (actual) => ({
 
 const session = (outputs: Record<string, unknown>) => {
   said.view = {
-    session: 's1', values: {}, outputs, rounds: 1, finished_at: 1, round: null, dropped: [],
+    session: 's1', values: {}, outputs, rounds: 1, finished_at: 1, round: null, dropped: [], design_revision: 0,
     clock: { running: false, runs_by_itself: false, ticks: false, next_at: null, problem: null },
   };
 };

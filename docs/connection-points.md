@@ -100,8 +100,8 @@ deployed tool alike -- and a deployed tool answers nothing else (`host/serve.tes
 | Route | What it is for |
 |---|---|
 | `GET /api/runtime/interface` | The names (②), the graph's name and description, and the session's id |
-| `GET /api/runtime/page` | The page as it was designed -- name, description, colour scheme, blocks -- and whether opening it runs the graph whole once (`starts_whole`) |
-| `GET /api/runtime/session` | What using the graph left: each value, each output, how many rounds ran, the round going or last, the clock |
+| `GET /api/runtime/page` | The page as it was designed -- name, description, colour scheme, blocks -- whether opening it runs the graph whole once (`starts_whole`), and which design it is (`design_revision`) |
+| `GET /api/runtime/session` | What using the graph left: each value, each output, how many rounds ran, the round going or last, the clock -- and which design the server holds (`design_revision`), so a page drawn from it is drawn again when it changes |
 | `GET /api/runtime/stream` | Server-sent events: `session` on connect and after every change, `round` as each round starts, goes and ends |
 | `POST /api/runtime/requirements` | `{ event, values }`: what that round would still ask before it runs -- a file nobody chose, a place to write -- each under the value name that answers it |
 | `POST /api/runtime/rounds` | `{ event, values }`: start a round, answered at once with its id; watch it on the stream or at `GET /api/runtime/rounds/:id` |
