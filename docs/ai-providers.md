@@ -6,22 +6,28 @@ Which model answers a graph and writes its code, and where the credentials live.
 tier; add a paid provider only where you want the extra quality. The provider picker
 says which is which, so the choice is visible rather than something to look up.
 
-| Provider | Cost | Model | Credential |
+| Provider (id) | Cost | Model when none is named | Credential |
 |---|---|---|---|
-| **Ollama** (default) | free, local | llama3, mistral, … | `OLLAMA_BASE_URL` (default: localhost) |
-| LM Studio | free, local | any locally loaded model | `LMSTUDIO_BASE_URL` (default: `http://localhost:1234/v1`) |
-| Google Gemini | free tier | gemini-flash-lite-latest (fast), gemini-flash-latest, … — prefer the `-latest` aliases: dated names are retired | `GOOGLE_API_KEY` — get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| GitHub Models | free tier | many | `GITHUB_TOKEN` with the `models:read` scope |
-| OpenAI | paid | gpt-4o, … | `OPENAI_API_KEY` |
-| Anthropic | paid | claude-sonnet-4-5, … | `ANTHROPIC_API_KEY` |
-| OpenAI-compatible endpoint | depends | any compatible model | `OPENAI_COMPATIBLE_BASE_URL`, optional `OPENAI_COMPATIBLE_API_KEY` |
+| **Ollama** (`ollama`) | free, local | the first model it serves, else `llama3` | `OLLAMA_BASE_URL` (default `http://localhost:11434`) |
+| LM Studio (`lmstudio`) | free, local | the first model it serves | `LMSTUDIO_BASE_URL` (default `http://localhost:1234/v1`) |
+| Google Gemini (`google`) | free tier | `gemini-flash-lite-latest` -- prefer the `-latest` aliases: dated names are retired | `GOOGLE_API_KEY` -- get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| GitHub Models (`github_copilot`) | free tier | `gpt-4o-mini` | `GITHUB_TOKEN` with the `models:read` scope |
+| OpenAI (`openai`) | paid | `gpt-4o-mini` | `OPENAI_API_KEY` |
+| Anthropic (`anthropic`) | paid | `claude-opus-5` | `ANTHROPIC_API_KEY` |
+| OpenAI-compatible endpoint (`openai_compatible`) | depends | none: name one | `OPENAI_COMPATIBLE_BASE_URL`, optional `OPENAI_COMPATIBLE_API_KEY` |
+
+The ids are what `AI_GRAPH_AI_PROVIDER` and the settings file take. The defaults are
+`DEFAULT_MODELS` in `engine/src/ai/settings.ts` and `DEFAULT_SETTINGS` in
+`engine/src/ai/providers.ts`. Google's and GitHub Models' addresses can also be moved with
+`GOOGLE_BASE_URL` and `GITHUB_MODELS_BASE_URL`; an `endpoints` entry in the settings file
+does the same for any provider.
 
 **Mixing free and paid is already how the graph works**, and is worth knowing: set the
 one AI setting to a free provider, then pin the one node that needs more to a paid one —
 an AI node left on *"Use the setting in ⚙ Settings"* follows the free one, and a node
 that names a provider and model keeps them.
 
-Set environment variables in a `.env` file or pass them to Docker Compose.
+Environment variables are read as the process has them. `docker-compose.yml` passes on the ones it lists -- `OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_API_KEY` -- from the shell or a `.env` beside it.
 
 ## Choosing the AI once, not per node
 
@@ -46,7 +52,7 @@ run asks.
 
 **⚙ Settings → Keys and addresses** takes the API key and the server address for every
 provider, and shows which ones already have one. Keys are write-only: they are saved to
-the settings file below and never read back into the browser. You can also write that
+the settings file (below) and never read back into the browser. You can also write that
 file by hand:
 
 ```json
@@ -58,10 +64,19 @@ file by hand:
 ```
 
 `ai` is the one AI setting. A provider without a model takes that provider's own
-default; with no `ai` at all it is whichever local provider is running, else Ollama. The
-file is looked up in the working directory, beside the engine's folder (a bundle's `run.sh`),
-and finally `~/.ai-graph/settings.json` -- or only where `$AI_GRAPH_SETTINGS` says, when it
-says. An environment variable of the same name always wins over what is stored there.
+default (the table); with no `ai` at all it is whichever local provider is running, else
+Ollama. `ai-settings.example.json` beside the README shows the shape.
+
+**Which file.** The first of these that exists: `ai-settings.json` in the working directory,
+in the folder that holds `engine/` (the checkout, the download, a bundle -- beside its
+`run.sh`), and `~/.ai-graph/settings.json`; where none does, a save creates the first. When
+`AI_GRAPH_SETTINGS` is set, that one file is the only one, even before it exists
+(`engine/src/ai/settings.test.ts`; `cli/bundle.test.ts`: "looks for its AI settings beside
+run.sh"). The file is never committed (`.gitignore`) and is never opened by an MCP tool.
+
+**Which wins.** An environment variable of the same name wins over the file: `AI_GRAPH_AI_PROVIDER`
+and `AI_GRAPH_AI_MODEL` each on its own (one naming only the model leaves the file's provider
+standing), and every key and address variable in the table.
 
 Two provider names are worth spelling out:
 
@@ -78,17 +93,13 @@ Two provider names are worth spelling out:
 Anything else that speaks the OpenAI protocol — a proxy, a gateway, a self-hosted
 server — goes in as **OpenAI-compatible endpoint** with its own base URL and key.
 
-On a machine without the editor — a deployed tool, a server, a CI job — the same setting
-is set without the dialog: `AI_GRAPH_AI_PROVIDER` / `AI_GRAPH_AI_MODEL`, or the `ai`
-section of an `ai-settings.json` (in the working directory, next to the executable, or
-`~/.ai-graph/settings.json`; or only the one file `AI_GRAPH_SETTINGS` names — it also
-holds endpoints and API keys, so a double-clicked tool needs no environment variables at
-all). The variables are the same setting, not another layer: where both are there, the
-variables win, as they do for every key. The command line has no flag for this: a
-variable set on one command does the same job. The deployed page's **⚙ AI settings**
-shows what the setting resolves to — what a run of the tool calls — and where the file
-goes; it does not write one, because a page that stored credentials would put a key in a
-file nobody asked for.
+On a machine without the editor -- a deployed tool, a server, a CI job -- the same setting
+is set without the dialog: the two variables, or the `ai` section of the file, which also
+holds endpoints and keys, so a double-clicked tool needs no environment variables at all. The
+command line has no flag for it: a variable set on one command does the same job. The
+deployed page's **⚙ AI settings** shows what the setting resolves to -- what a run of the
+tool calls -- and where the file goes; it does not write one, because a page that stored
+credentials would put a key in a file nobody asked for.
 
 ## Local models: LM Studio and Ollama
 

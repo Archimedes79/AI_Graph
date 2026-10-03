@@ -1,7 +1,7 @@
 # Connection points
 
-Where something else meets AI-Graph: another page, a script, a model over MCP, a second
-engine. There are four. Each section says what crosses the point, which code holds it,
+Where something else meets AI-Graph: another page, a script, a model over MCP, a body
+in a process of its own. There are four. Each section says what crosses the point, which code holds it,
 and which test holds each claim. How AI-Graph works inside is
 [architecture.md](architecture.md).
 
@@ -16,7 +16,7 @@ and which test holds each claim. How AI-Graph works inside is
 
 | | What crosses it | Who is on the other side | Held by |
 |---|---|---|---|
-| ① The folder | the design, at rest | the editor, the CLI, MCP, a text editor, another engine | `project/folder.test.ts`, `project/interfaceFile.test.ts`, `examples.test.ts` |
+| ① The folder | the design, at rest | the editor, the CLI, MCP, a text editor | `project/folder.test.ts`, `project/interfaceFile.test.ts`, `examples.test.ts` |
 | ② The graph's names | what a graph offers: events, values, outputs | every caller | `execution/graphInterface.test.ts` |
 | ③ The runtime API | a graph in use: rounds, the session, the stream | a page in a browser, a script | `host/runtimeApi.test.ts`, `host/frontend.test.ts`, `host/serve.test.ts` |
 | ④ The body protocol | one call of a node's code | a body in a process of its own | `host/node.test.ts`, `host/sandbox.test.ts` |
@@ -129,12 +129,13 @@ deployed tool alike -- and a deployed tool answers nothing else (`host/serve.tes
 - A request's body is JSON, sent as `application/json`, from the server's own origin, to a
   loopback name unless the server was bound wider (`foreignRequest` in `host/http.ts`;
   `host/serve.test.ts`: "a web page elsewhere in the same browser").
+- One session per server; its id travels in every route ([State](architecture.md#state)).
 - A project's `frontend/index.html` is served at `/` in place of the built page, and a
   bundle carries it. The example one calls nothing else (`host/frontend.test.ts`: "in the
   example, calls nothing but the runtime API any frontend may call", "runs the example by
   name: the paragraph in, the report out"). The built-in page is a frontend like any
   other: it holds no graph (`editor/src/runtime/boundary.test.ts`: "reaches nothing in
-  store/").
+  store/"), and the browser draws a block from the page as designed (`GET /api/runtime/page`).
 
 ## The body protocol
 
@@ -168,52 +169,3 @@ How a node's code is run: `elements/body.ts` (`runBody`) decides when, `host/nod
 - What one call is handed and returns is written down beside the body, each with an
   example: `input.js` and `output.js`. Every run is held to `output.js`
   (`execution/interface.test.ts`: "a run held to its output.js").
-
-## What another language would bring
-
-Every body is JavaScript today, run by the Node that runs the engine, for one reason:
-whoever can run the engine can run every body in it, with no interpreter to find and no
-package to install (`host/node.ts`). A language per graph or subgraph is decided later
-(below). What it would take is written down here, so that the four points stay where
-another language could plug in.
-
-Never duplicated, whatever the language: the editor; the page and its blocks, drawn by the
-browser from the page as designed (③'s `page`); the folder (①); the names (②) and the
-runtime API (③), which the editor, frontends, the CLI and MCP speak; what a node is as
-written -- its text, its `input.js` and `output.js` examples, its history.
-
-Per language, by how much of a graph it runs:
-
-| Level | What runs in the other language | What it brings | Where it meets AI-Graph |
-|---|---|---|---|
-| 1. A body | one node's code: a `code.py` beside the node | a wrapper that speaks ④ over stdin and stdout, a sandbox for its interpreter, and ✨ prompts that write the language | ④ |
-| 2. A graph inside a node | a subgraph, as one call: values in by its input nodes, outputs out by its output nodes | an executor with the same meaning -- order, ◆ gates, once per item, files read on the way in, memory around loops -- the run-time half of each node kind it allows, model calls, and a reader of ① | ①, ②, and ④ for its own bodies |
-| 3. A whole graph | a served tool | level 2, the session (slots, a commit when a round ran to its end, `state.json`, what a design change drops), the clock, the page's blocks at run time, and a server for ③ that keeps its rules | ①, ②, ③ |
-
-The tests a second engine would have to pass are TypeScript calling TypeScript, except
-the ones that already cross a connection point: `host/runtimeApi.test.ts` and
-`host/frontend.test.ts` over HTTP, `cli/cli.test.ts` through a process, `host/node.test.ts`
-through ④'s lines, and the examples, folder in and outputs out. Those check what crosses,
-not how it is done; pointing them at another engine changes where they connect, not what
-they check. Making them one shared suite, by level, is part of the decision below.
-
-## Decided later
-
-- **A language per graph or subgraph, with its own engine** -- C++ for speed, Python for
-  its libraries, WebAssembly to run anywhere. Per graph or subgraph rather than per node:
-  the smallest case is a graph of one node. It would come with the levels above and a
-  shared test suite each engine passes at its level. Nothing of it is built; nothing in
-  the four points stands in its way.
-- **Widgets stay HTML and JavaScript.** A block is drawn by the browser, by the element's
-  view, whatever runs the graph: an engine in another language serves the page, and never
-  draws it.
-- **"An event runs only what depends on it."** Today a round an event starts runs what its
-  port is wired to, what follows from that, and what those need upstream
-  (`execution/triggers.ts`; `execution/gates.test.ts`). Narrowing it waits for the mockup of
-  the interface card, with the names that brings.
-- **A session per visitor.** One session per server for now. Its id travels in every
-  runtime route already, so a session per visitor changes no route
-  ([State](architecture.md#state), rule 6).
-- **The interface card** -- names a person chooses rather than ids, a page file binding
-  blocks to names, a chat as a block and a conversation node in one drop -- is the mockup
-  that follows this.

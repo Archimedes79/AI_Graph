@@ -95,14 +95,15 @@ Nothing leaves the machine unless the graph itself sends it there.
   the round it started; wired into a node's ◆ it decides whether the node runs, and a
   code node that returns booleans is the filter and the router. What a node made last
   stands until it runs again.
-- **The flow in one file** — `flow.json`: which nodes there are, and every wire as one
-  line, `"page.file_out -> chart.csv"`. Nothing else is in it.
+- **The flow in one file** — `flow.json`: the tool's name and description, which nodes
+  there are, and every wire as one line, `"page.file_out -> chart.csv"`. Nothing about
+  any one node is in it; where nodes sit on the canvas is `layout.json`.
 - **A node is its text; ✨ writes the rest** — say what a node should do, and ✨ writes
   its files from that: `input.js` (what one call is handed, with an example), `output.js`
   (what it returns — its keys are the node's outputs) and the body, `code.js` or an AI
   node's `prompt.md`. Each is a file you can open, read and change; one press writes
   what is missing, and new code is tried on the example and repaired before you see it.
-- **Graph DSL** — versioned JSON with typed ports (`data_type`, `multi`, `required`), so a
+- **Graph DSL** — plain JSON with typed ports (`data_type`, `multi`, `required`), so a
   node's inputs and outputs are never ambiguous.
 - **Execution engine** — topological order with per-node status, batch items run
   concurrently, a failed item is reported as `partial` while the rest continue, transient
@@ -113,7 +114,7 @@ Nothing leaves the machine unless the graph itself sends it there.
 - **A project is a folder** — `flow.json` plus one folder per node under `nodes/`: code
   and prompts live there in `.js`/`.md` files, so a language server and `git diff` both
   work on them. The page is a folder of its own beside them, `page/`, its blocks in
-  `page.json`.
+  `page.json`. A single `.json` graph with everything inline opens too.
 - **A page** — built like a document, on the Page tab under the tool's name and
   description: type headings in place, press `/` to
   insert a chat, a file picker, a dropdown, a chart or a table, and deploy it together
@@ -185,12 +186,14 @@ built *is* the example, and runs it.
 | [word_nach_latex](examples/word_nach_latex/) | Choose a Word document, get a LaTeX document that compiles: headings, lists, emphasis and tables kept, special characters escaped, saved as `.tex` | yes |
 | [portfolio_review](examples/portfolio_review/) | A team of AI analysts reviews a portfolio export in any format: a data reader, the hard numbers in code, nine specialists -- macro, risk, quant, valuation, optimisation, tax, diversification, psychology and a counter-thesis -- wired in the order their findings depend on each other, and a lead advisor; the page shows the allocation, the master action list and the report, saved as Markdown | yes |
 
-**Every example is held to the same three things by the test suite**
-(`engine/src/examples.test.ts`), and an example added to the folder is held to them
-without anyone listing it: it runs whole on nothing but its own
-defaults; its page events run what they are wired to; and it can be **deployed** — written
-as a bundle into an empty folder and run from there, with the files it starts on carried
-along.
+**Every example is held to the same things by the test suite**, and an example added to the
+folder is held to them without anyone listing it. `engine/src/examples.test.ts` checks that
+it can be ordered, that it runs whole on nothing but its own defaults, and that it can be
+**deployed** — written as a bundle into an empty folder and run from there, with the files
+it starts on carried along. CI also runs `check` on every example, and `test --offline`,
+which runs each code node on its `input.js` example and holds it to its `output.js`
+(`.github/workflows/ci.yml`). What a page's events run is held, in the same test file, for
+chat, file_summarizer, folder_summaries and population_plotter.
 
 Each is a project folder: `flow.json` for the wiring, the page in `page/page.json`, and
 every node's settings, ports, code and prompts as files of their own under `nodes/` — open
@@ -237,9 +240,10 @@ with live reload. Details in [docs/install.md](docs/install.md).
 **Running a graph needs no editor at all:**
 
 ```bash
-node engine/src/main.ts examples/population_plotter  # once
-node engine/src/main.ts my.json --serve                   # with its page
-node engine/src/main.ts my.json --bundle ./out            # to hand to someone
+node engine/src/main.ts examples/population_plotter   # once
+node engine/src/main.ts my_project --serve             # with its page
+node engine/src/main.ts my_project --bundle ./out      # to hand to someone
+node engine/src/main.ts check examples/population_plotter   # what is wrong, without running
 ```
 
 ## Documentation
@@ -247,14 +251,14 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 | Document | What is in it |
 |---|---|
 | [docs/user-guide.md](docs/user-guide.md) | A first tool in 30 minutes, by mouse: install, model, page, node, run, hand on -- and where the time goes |
-| [docs/install.md](docs/install.md) | Running the editor, working on it, containers, tests and CI |
+| [docs/install.md](docs/install.md) | Running the editor from a download or a checkout, working on it, containers, tests and CI |
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, the page and its blocks |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the one AI setting and a node's own, where the API key goes |
 | [docs/deployment.md](docs/deployment.md) | Deploy bundles, containers, the Graph Runner CLI |
 | [docs/mcp-server.md](docs/mcp-server.md) | Letting an AI assistant (any MCP client) generate, check, save and run graphs |
 | [docs/licenses.md](docs/licenses.md) | The licence check: AI-Graph's own terms, every package it is built from, and how each copy carries them |
 | [docs/architecture.md](docs/architecture.md) | How the pieces fit, the decisions that hold them together and why, and what is left out for now; diagrams mapped to files in [arch/](arch/overview.md) |
-| [docs/connection-points.md](docs/connection-points.md) | Where something else meets AI-Graph -- the folder, the graph's names, the runtime API, a body's protocol -- and what another language would bring |
+| [docs/connection-points.md](docs/connection-points.md) | Where something else meets AI-Graph -- the folder, the graph's names, the runtime API, a body's protocol |
 
 ## Project structure
 
@@ -268,12 +272,13 @@ AI-Graph/
 ├── editor/src/             # The page in the browser, built on the engine
 │   ├── elements/           #   the same folders: <Kind>NodeGuiBuilder.ts, <Kind>WidgetView.tsx, <Kind>…Panel.tsx
 │   ├── authoring/          #   a node's text and a row per ✨, ▶ Try, the live transcript
-│   └── app/  canvas/  page/  store/  api/  runtime/  ui/
+│   └── app/  canvas/  page/  store/  api/  runtime/  dialogs/  document/  ui/
 ├── examples/               # Example projects, one folder each: flow.json + nodes/
 ├── docs/                   # The documents linked above
 ├── arch/                   # Architecture diagrams, every box mapped to its files
-├── scripts/dev.mjs         # npm run dev: engine and page dev server in one terminal
-└── Dockerfile              # docker compose up: the editor beside a local model server
+├── scripts/                # launchers behind start/stop, npm run dev, the download zips, the licence check
+├── start.cmd  start.ps1  start.sh   (and stop.*)   # start or stop the editor from a checkout
+└── Dockerfile  docker-compose.yml   # docker compose up: the editor beside a local model server
 ```
 
 ---

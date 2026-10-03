@@ -178,7 +178,7 @@ export default function App() {
     // it, which a browser does not hand over.
     if (file.name === 'flow.json') {
       setSaveStatus('❌ This is a project\'s flow.json: its nodes are folders beside it, which a browser '
-        + 'does not hand over. Drop the project folder, or open it with 📂 Open.');
+        + 'does not hand over. Drop the project folder, or open it with File → Open….');
       return;
     }
     let graph: Graph;

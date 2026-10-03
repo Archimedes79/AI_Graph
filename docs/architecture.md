@@ -1,18 +1,18 @@
 # Architecture
 
-How AI-Graph is put together, which rules hold it together, and what is knowingly left
-untidy. Read this before changing anything structural; the code comments explain the
+How AI-Graph (0.5.0) is put together, which rules hold it together, and what is knowingly
+left untidy. Read this before changing anything structural; the code comments explain the
 *why* of each file, this explains how the files relate. Diagrams with every box mapped to
 its files are in [`arch/overview.md`](../arch/overview.md).
 
 ## The shape
 
 ```
-engine/    runs a graph. TypeScript that Node executes by stripping types: no build, no dependencies.
+engine/    runs a graph. TypeScript that Node executes by stripping types: no build, no runtime dependencies.
 editor/    the page: React + ReactFlow. Built on the engine, never the other way round.
-examples/  project folders that are run, event-driven, deployed and checked by the test suite.
-scripts/   dev server and packaging.
-arch/      the architecture diagrams, one file.
+examples/  project folders that the test suite runs, event-driven and deployed (examples.test.ts, masterExamples.test.ts).
+scripts/   dev server, the launchers' start and stop, the download's packaging (with its own Node), the licence check.
+docs/      the prose, one file per subject; arch/ the architecture diagrams, one file.
 ```
 
 One process serves everything: `node engine/src/main.ts --editor editor/dist`. The same
@@ -21,7 +21,8 @@ server serves a deployed tool, with the editor's routes simply not loaded.
 ## Elements first
 
 Everything the tool can do is an **element**: a node type (input, ai, code, data, output,
-gui, subgraph, trigger) or a widget kind on a page (text, picker, dropdown, chart, chat, …). The design is
+gui, subgraph, trigger) or a widget kind on a page (text, divider, spacer, input_picker,
+text_io, select, slider, button, chat, plot_window, table, image_view). The design is
 organised around them, and each element is one folder, at the **same relative path on
 both sides**:
 
@@ -31,15 +32,16 @@ engine/src/elements/                            editor/src/elements/
   NodeRunner.ts                                   NodeGuiBuilder.ts
   WidgetRunner.ts                                 WidgetGuiBuilder.ts
   registry.ts                                     registry.ts
-  Runtime.ts  port.ts  folderListing.ts           fields/  (settings several panels share)
-  images.ts
+  Runtime.ts  port.ts  body.ts                    resultPreview.ts
+  folderListing.ts  images.ts  documents.ts       fields/  (settings several panels share)
   nodes/                                          nodes/
     ai/     AiNodeRunner.ts  prompt.ts  ask.ts      ai/   AiNodeGuiBuilder.ts  AiNodePanel.tsx
                                                           AiNodeAdvancedPanel.tsx
     code/   CodeNodeRunner.ts                       code/ CodeNodeGuiBuilder.ts  CodeNodePanel.tsx …
     data/ gui/ input/ output/                       data/ gui/ input/ output/
+    subgraph/ trigger/                              subgraph/ trigger/
   widgets/                                        widgets/
-    roster.ts                                       roster.ts
+    roster.ts                                       roster.ts  WidgetView.ts  download.ts
     StaticWidgetRunner.ts                           StaticWidgetGuiBuilder.ts
     DisplayWidgetRunner.ts                          DisplayWidgetGuiBuilder.ts
                                                     DisplayWidgetPanel.tsx
@@ -49,7 +51,7 @@ engine/src/elements/                            editor/src/elements/
     plot_window/ PlotWindowWidgetRunner.ts          plot_window/ PlotWindowWidgetGuiBuilder.ts
                                                                 PlotWindowWidgetView.tsx
                                                                 PlotChart.tsx
-    …                                               …  WidgetView.ts
+    …                                               …
 ```
 
 **Names follow the file format, mechanically, and pair across the wire.** Every element
@@ -108,7 +110,7 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
 │   ├── DataNodeRunner    OutputNodeRunner   SubgraphNodeRunner
 │   ├── TriggerNodeRunner        an event with nobody there: the tool starting, a clock
 │   └── GuiNodeRunner            a composite: holds widgets, its ports are theirs
-└── WidgetRunner<C>              a widget: ports · execute · firesRun · settle · displayValue · runtimeRequirements · applyRuntimeValue ┊ receives · graphAuthorNote · referencedPaths
+└── WidgetRunner<C>              a widget: ports · execute · firesRun · takesValue · settle · displayValue · runtimeRequirements ┊ receives · graphAuthorNote · referencedPaths · valueIsDesign
     ├── InputPickerWidgetRunner   TextIoWidgetRunner   SelectWidgetRunner
     ├── SliderWidgetRunner        ButtonWidgetRunner   ChatWidgetRunner
     ├── StaticWidgetRunner       no ports: part of the page, not the graph
@@ -118,12 +120,12 @@ ElementRunner<Subject, Config>          config() · catchesErrors()
 
 ElementGuiBuilder<PanelProps>                    Panel
 ├── NodeGuiBuilder                        label · icon · color · hint · paletteGroup · AdvancedPanel · describeOutput/canvasSummary · resultPreviews   (builder only)
-│                                         + definesItself · ownsDescription · portEditing/portHint · wantsOn · restingValue
+│                                         + definesItself · ownsDescription · portEditing/portHint · wantsOn · restingValue · missingExample
 │                                           dropPort/withDropped (what a file dropped on the node gives it)
 │   ├── InputNodeGuiBuilder   AiNodeGuiBuilder   CodeNodeGuiBuilder
 │   ├── DataNodeGuiBuilder    OutputNodeGuiBuilder   SubgraphNodeGuiBuilder   TriggerNodeGuiBuilder
 │   └── GuiNodeGuiBuilder
-└── WidgetGuiBuilder                      create(id, label, mode) · label · paletteEntries · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview   (builder only)
+└── WidgetGuiBuilder                      create(id, label, mode) · label · paletteEntries · called · defaultSpan · defaultTone · runOnChangeHint · InlineEditor · preview · missingExample   (builder only)
     ├── InputPickerWidgetGuiBuilder   TextIoWidgetGuiBuilder   SelectWidgetGuiBuilder
     ├── SliderWidgetGuiBuilder        ButtonWidgetGuiBuilder   ChatWidgetGuiBuilder
     ├── StaticWidgetGuiBuilder            starts unnamed: page furniture has no ports to name
@@ -142,7 +144,7 @@ line, a count and the first row, a sketch, a thumbnail); `NodeGuiBuilder.resultP
 which port, and where the element reads a value its own way it says so — a page shows what
 each block shows, and a chart block reads a list of points as a chart
 (`WidgetGuiBuilder.preview`). An element is handed its services (`Runtime.ts`: `files`,
-`code`, `ai`, `tools`) rather than reaching for them.
+`code`, `ai`, `tools`, `subgraph`) rather than reaching for them.
 
 ### Build time and run time, in one class
 
@@ -152,11 +154,10 @@ answer). A tool needs the last two. What it does not need, it must never *call* 
 is the line that is kept, not "never carry".
 
 An element is one class per kind, and it holds both what a run asks of it and what only
-building asks. Two classes per kind (or four, with the browser half) were considered and
-turned down: the knowledge is small, it belongs to the kind, and one file per kind is what
+building asks: the knowledge is small, it belongs to the kind, and one file per kind is what
 makes a kind easy to add. So on the **engine** side build-time members travel into a
-bundle with their class, and are kept apart *inside* it instead. (On the browser side it
-turned out there was nothing to keep apart — see below.)
+bundle with their class, and are kept apart *inside* it. On the browser side there is
+nothing to keep apart — see below.
 
 - Every base class (`ElementRunner`, `NodeRunner`, `WidgetRunner`; `NodeGuiBuilder`, `WidgetGuiBuilder`) is
   laid out under three bars — **What it is · Run time · Build time** — and every kind keeps
@@ -167,63 +168,56 @@ turned out there was nothing to keep apart — see below.)
 |---|---|---|---|
 | **asked by** | anything that reads a graph | the executor, a served tool | the editor, `check`, `test`, a bundle being made, a project being saved |
 | `ElementRunner` | `config` | `catchesErrors` | — |
-| `NodeRunner` | `nodeType` · `texts` · `logic` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `definitions` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `isMemory` · `settleMemory` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `applyRuntimeValue` | `generation` · `deployNeeds` · `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
-| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `settle` · `displayValue` · `runtimeRequirements` · `applyRuntimeValue` | `receives` · `graphAuthorNote` · `referencedPaths` |
+| `NodeRunner` | `nodeType` · `texts` · `logic` · `derivedPorts` · `nestedGraph` · `blocks` · `isResult` · `resultLabel` · `boundaryRole` · `valuePorts` · `definitions` · `outputInterface` | `execute` · `display` · `eventPorts` · `keepsTime` · `hasInterface` · `isMemory` · `settlesOnArrival` · `settleMemory` · `state` · `setState` · `clearDelivered` · `fansOut` · `batchMode` · `readsFileInputs` · `needsInput` · `runtimeRequirements` · `offers` · `value` · `setValue` · `shows` | `generation` · `deployNeeds` · `whatRuns` · `problems` · `graphAuthorNote` · `asksModel` · `referencedPaths` |
+| `WidgetRunner` | `widgetKind` · `ports` | `execute` · `firesRun` · `keepsState` · `settle` · `clearsValueAfterRun` · `displayValue` · `runtimeRequirements` · `takesValue` · `setValue` | `receives` · `graphAuthorNote` · `referencedPaths` · `valueIsDesign` |
 | `NodeGuiBuilder` | `nodeType` | — | **everything**: the palette, panels, what ✨ is told |
 | `WidgetGuiBuilder` | `widgetKind` | — | **everything**: the palette, its panel |
 
 ### …and a third role, which is neither
 
-The two `GuiBuilder` rows have no run-time members left, and that is the point: **a `GuiBuilder` is the
-builder, whole, and a delivered tool never loads it.**
+The two `GuiBuilder` rows have no run-time members, and that is the point: **a `GuiBuilder` is the
+builder, whole, and a delivered tool never loads it.** What a tool does need of an element
+that is not the engine's run lives elsewhere:
 
-What used to sit on their run-time side was never really the builder's — it was a third
-role that had nowhere to live:
-
-| Was | Is now | Because |
+| What | Where | Because |
 |---|---|---|
-| `WidgetGuiBuilder.View`, `ownsValue` | [`page/blocks.ts`](../editor/src/page/blocks.ts) | what the **page draws** — the one part of a widget a recipient operates |
-| `NodeGuiBuilder.create`, `settings`, `saved` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) | what a node **is** — filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
-| `NodeGuiBuilder.showsResultWindow` | — | gone with the output node's window: a run's result is what its output nodes hand back, under their labels |
-| `WidgetGuiBuilder.clearValueAfterRun` | `WidgetRunner.clearsValueAfterRun` | what a **run** means for a block, the same family as `settle` |
+| what the **page draws** for a block: its view, whether it owns its value | [`page/blocks.ts`](../editor/src/page/blocks.ts) (`BLOCKS`) | the one part of a widget a recipient operates |
+| what a node **is** when it is made, loaded and saved: `create`, `placedAmong`, `savedNode` | [`document/nodeKinds.ts`](../editor/src/document/nodeKinds.ts) (`NODE_KINDS`) | filled in on every load, stripped on every save, which a delivered tool does as much as the editor |
+| what a **run** means for a block: `clearsValueAfterRun` | `WidgetRunner` | the same family as `settle` |
 
 A node's middle role is empty by nature: the canvas is never delivered. A widget's is not,
-because the page is. `nodeKinds.ts` belongs in the engine beside `NodeRunner.config`; what
-keeps it in the editor for now is `NodeConfig`, the one spelled-out settings shape, and
-moving that is a step of its own.
+because the page is. `nodeKinds.ts` is in the editor because it builds `NodeConfig`
+([`editor/src/graph.ts`](../editor/src/graph.ts)), the one spelled-out settings shape.
 
 This is why the editor's `times.test.ts` can hold that a `GuiBuilder`'s run-time bar is
 **empty**, and why [`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) can
-hold, with no exception for the shared store, that no `GuiBuilder` class and neither element
-registry is even *reachable* from the tool's entry point. Before
-that, the store was the one module both hosts share and the one allowed to reach into the
-builder, so the builder was in every bundle. Measured on the import graph: what
-`runtime/main.tsx` reaches fell from 80 modules to 45 -- and from 51 to 41 when the page
-stopped holding a graph of its own and the store left the bundle.
+hold that no `GuiBuilder` class and neither editor registry (`elements/registry.ts`,
+`elements/widgets/roster.ts`) is even *reachable* from the tool's entry point, nor
+anything in `store/`, `canvas/`, `authoring/` or `app/`, nor a panel or the fields one is made of.
 
 The **engine** is out of reach as well, but for the contract and a few value shapes. Which
 blocks start a round and which a round is given are the graph's events and values, which
 the runtime API tells the page by name (`/api/runtime/interface`), so the page asks the
-engine's element tree nothing. Of the engine it loads `host/api.ts` and six small modules a
-view reads a value by -- a chat's conversation, a slider's range -- where it loaded fifty,
-the executor among them, while it asked the registry two questions
+engine's element tree nothing. Of the engine it loads `host/api.ts` and the small modules a
+view reads a value by — a chat's conversation (`widgets/chat/value.ts`), a slider's range
+(`widgets/slider/range.ts`) — and nothing else
 ([`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts): "loads of the engine
-only the contract and the shapes of the values its views read"). Counted on what loads
-code, the tool's page is 46 modules, 7 of them the engine's, where it was 90 and 50.
+only the contract and the shapes of the values its views read").
 
 What the tests hold: every member stands under a bar; the build-time list is spelled out,
 so moving a member across is a decision and not a bar that slipped; **no file a run goes
-through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `session.ts`, `rounds.ts`,
-`node.ts`) **mentions a build-time member**; and nothing a tool's page can reach asks a
-`GuiBuilder` for anything at all. What is *not* carried at all stays as it was:
-`host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
+through** (all of `execution/`, `elements/body.ts`, `folderListing.ts`, `images.ts`,
+`authoring/logic.ts`, `host/serve.ts`, `session.ts`, `rounds.ts`, `node.ts`) **mentions a
+build-time member**; and nothing a tool's page can reach asks a `GuiBuilder` for anything
+at all. What is *not* carried at all: `host/editor/` never enters a bundle, and a panel is a
+lazy chunk a tool never fetches.
 
 **What runs.** `NodeRunner.whatRuns(node)` answers the question a node's folder could not:
 which code runs when this node runs. Either a body in the folder (`code.js`), run
 sandboxed — or this kind's `execute`, named by file, with one sentence
 saying what it does. The same answer is shown at the foot of its panel and listed in
-[graphs.md](graphs.md#what-runs-and-where); a test
-checks that the file and the method it names exist.
+[graphs.md](graphs.md#what-runs-and-where); `elements/times.test.ts` ("what runs") checks
+that the file and the method it names exist.
 
 ## Two processes, one contract
 
@@ -255,52 +249,79 @@ built from that table, and mirror each other:
   editor's handlers are loaded, and with 404 otherwise.
 - **The page calls the table by name.** `call('round', { id })` — path, method and shapes come
   from the table, so the compiler checks both ends against the same types. A failure is an
-  `ApiError` whose message is the server's own `detail`.
+  `ApiError` whose message is the server's own `detail`. Two answers are not JSON: `stream`
+  is server-sent events (`EventStream`), and `bundle` is a file (`Download`).
 - **The graph document is the engine's.** [`engine/src/graph.ts`](../engine/src/graph.ts)
   defines ports, edges, node types, widget kinds and a run's result;
   [`editor/src/graph.ts`](../editor/src/graph.ts) imports them and adds one narrowing — each
   element's settings spelled out in `NodeConfig` — for its panels.
 
+The rows, by audience (`for` in the table):
+
+| `for` | Routes (names in the table) | What they are |
+|---|---|---|
+| `tool` | `interface` `session` `stream` `requirements` `startRound` `round` `stopRound` `runRound` `reset` | the runtime API: a graph used by name, by any frontend — what it offers, what using it left behind, rounds started, watched and stopped |
+| `tool` | `page` `toolAiSettings` `browse` | what the built-in page reads besides: its blocks, which model the tool calls (read-only), a file picker |
+| `editor` | `runNode` `nodeInputs` `testNode` | one node: on given inputs, what would arrive at it, ▶ Try |
+| `editor` | `openGraph` `saveGraph` `findProjects` `findFile` `projectChanges` `openExternal` | a project folder or graph file, finding what a drop names, what changed on disk, a node's file in the person's own editor |
+| `editor` | `generate` `generationProgress` `generateGraph` | ✨ and ✨ AI Graph, and the transcript of one in flight |
+| `editor` | `holdGraph` `startApplication` `stopApplication` | the editor hands the server's session the graph being edited, and ▶ Run / ■ Stop |
+| `editor` | `bundle` `aiSettings` `saveAiSettings` `providers` | Deploy's zip, the one AI setting and what is reachable |
+
 What crosses to the outside -- the folder, the graph's names, the `tool` rows as the runtime
 API, and the lines a body speaks -- is [connection-points.md](connection-points.md), with
-the test behind each claim and what another language would bring.
+the test behind each claim.
 
 ## Modules, by side
 
 ```
-engine/src                               editor/src
-  main.ts            the entry point       main.tsx  App.tsx   the editor's entry and shell
-  graph.ts           the document          graph.ts            the document, as the editor holds it
-  errors.ts          NotFound · NotAGraph  document/           what a graph is to the editor: nodeKinds,
-                                             guiWidgets (a page's ports), layout (the grid),
-                                             wires (a canvas wire as the saved edge)
-  elements/          see above             elements/           see above
-  authoring/         what ✨ writes, and   authoring/          a node's text and what ✨ writes from it:
-    definition.ts    how it is read          NodeDefinition      its rows, ▶ Try, the live transcript,
-    prompts.ts  history.ts  generation.ts    generation.ts …     the request, the page-wide sweep
-    examples.ts      its example, tried
-  execution/         running a graph       canvas/             the graph on screen: GraphCanvas,
-    executor.ts      order · run · settle    GraphNodeView       GraphNodeView, NodeEditor, ResultPreview
-    triggers.ts      what starts a run     page/               the graph's one page: GuiPage (drawn by
-    clock.ts         when a trigger is due
-    batching.ts  fileInputs.ts               GuiPage             the editor and the tool alike), the
-    runtimeValues.ts  wiring.ts              DesignerTab …       Page tab, the running app, layout, schemes
-    reuse.ts  latch.ts  interface.ts
+engine/src
+  main.ts            the entry point: cli/cli.ts
+  graph.ts           the document: ports, edges, node types, a run's result
+  errors.ts          NotFound · NotAGraph
+  elements/          see above
+  authoring/         what ✨ writes, and how it is read
+    definition.ts    input.js / output.js: a typedef and one example, read without running anything
+    prompts.ts  generation.ts  history.ts  logic.ts  handedOn.ts
+    examples.ts      a node's example, tried (▶ Try, `test`)
+  execution/         running a graph
+    executor.ts      order · run · settle · one node alone (callNode, executeNode, inputsFor)
+    triggers.ts      what starts a run              clock.ts   when a trigger is due
+    latch.ts  reuse.ts  batching.ts  fileInputs.ts
+    graphInterface.ts   what the graph offers by name     runtimeValues.ts  what a round asks first
+    interface.ts     what one node hands on         wiring.ts  whether the wiring holds together
   project/           a graph on disk
-    folder.ts        read · write · watch
-    flow.ts          flow.json: nodes and wires
-    interfaceFile.ts a node's ports
+    folder.ts        read · write · watch           flow.ts  flow.json: nodes and wires
+    interfaceFile.ts a node's ports                 names.ts  changes.ts
     check.ts         what is wrong: no disk, the page asks it too
     folderCheck.ts   what a folder gets wrong
-  host/              Node and HTTP         api/                the contract's client, and the session a page follows
-    api.ts           the contract          app/                header, palette, the bar, dialogs, results
-    serve.ts  http.ts  session.ts          store/              the open graph, undo, what a round shows on it
-    rounds.ts  node.ts                     runtime/            the deployed tool's page
+  host/              Node and HTTP
+    api.ts           the contract
+    serve.ts  http.ts  browse.ts       the server, its plumbing, the file picker's listing
+    session.ts  rounds.ts              what using a graph leaves behind; the rounds in it
+    node.ts          the Runtime a served graph is handed: files, sandboxed code, models, tools
     lifecycle.ts     what is stopped, in order
-    editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal, SidePanel
-                                           dialogs/            FileBrowserDialog, PathField, RequirementsDialog
-  ai/                providers · MCP · settings
-  cli/               cli.ts  bundle.ts
+    editor/          never bundled: routes · generate · brief · graphPrompt · skeleton · settings · files · zip · mcpServer
+  ai/                providers.ts · mcp.ts (the client) · settings.ts
+  cli/               cli.ts · bundle.ts · launchers.ts
+
+editor/src
+  main.tsx  App.tsx  the editor's entry and shell
+  graph.ts           the document, as the editor holds it (NodeConfig)
+  ui/                look: theme, tone, colour scheme, Modal, SidePanel
+  document/          what a graph is to the editor: nodeKinds, guiWidgets (a page's ports),
+                     layout (the grid), wires (a canvas wire as the saved edge)
+  api/               client.ts (the contract's client) · session.ts (the session a page follows)
+  store/             graphStore: the open graph, undo, what a round shows on it
+  dialogs/           FileBrowserDialog, PathField, RequirementsDialog
+  elements/          see above
+  authoring/         a node's text and what ✨ writes from it: NodeDefinition, ▶ Try, the live
+                     transcript, the request (generation.ts), the page-wide sweep
+  page/              the graph's one page: GuiPage (drawn by the editor and the tool alike),
+                     the Page tab (designer), ApplicationView (the running app)
+  canvas/            the graph on screen: GraphCanvas, GraphNodeView, NodeEditor, ResultPreview
+  app/               header, palette, the bar, dialogs, results, ▶ Run (application.ts)
+  runtime/           the deployed tool's page: main.tsx → RuntimeApp.tsx
 ```
 
 Within `editor/src` an import inside one area (`canvas/`, `page/`, …) is relative; one that
@@ -318,6 +339,14 @@ editor asks the registry what a node is. Panels are lazy chunks, so there is no 
 draws no canvas and writes no node. That is a rule on what is reached, not on one import, so
 [`runtime/boundary.test.ts`](../editor/src/runtime/boundary.test.ts) holds it, walking the
 imports from every file of `runtime/` and naming the chain that broke it.
+
+The editor also runs engine code in the browser: the element registry (ports, previews),
+`execution/triggers.ts` and `wiring.ts`, the ordering functions of `executor.ts`,
+`project/flow.ts` and `check.ts`, `authoring/definition.ts`. What touches a disk is
+`project/folder.ts`, `folderCheck.ts` and `host/` (but `host/api.ts`), and no source of the
+editor imports them (its tests do). Measured on the static value imports (2026-10-03), there
+is no import cycle in either package and none from the engine into the editor; no test holds
+that count.
 
 ## The surface
 
@@ -342,8 +371,8 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   its neighbours; ReactFlow measures a card's handles again when its port ids change, or a
   renamed port's wire is not drawn. The card that is selected wears the accent, and so do its wires
   (`canvas/wireLook.ts`); the others are soft grey.
-- **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`), in place of
-  the modal dialog it was (`canvas/NodeEditor.tsx`): at its top the node's kind and id, as on
+- **Selecting a node opens its panel** docked on the right (`ui/SidePanel.tsx`,
+  `canvas/NodeEditor.tsx`): at its top the node's kind and id, as on
   its card (`canvas/NodeKind.tsx`), and its heading below them (`authoring/HeadingField.tsx`,
   never empty); then the element's own `Panel` -- for a code, AI or data node
   `authoring/NodeDefinition.tsx`: its text, a row per ✨, ▶ Try and history.md -- and
@@ -399,8 +428,9 @@ argue it: a rule changes when its reason no longer holds.
 **1. An element owns everything about its kind.** Its settings (`config()`), its ports,
 what it does (`execute`), what it shows (`display`), how an AI writes its body
 (`generation()`) — in its own class. Adding a kind adds one folder on each side and one
-line in each registry (`elements/registry.ts` and `widgets/roster.ts` in the engine,
-`elements/registry.ts` in the editor), and nothing else changes.
+line in each registry (`elements/registry.ts` for a node, `elements/widgets/roster.ts` for a
+widget, in the engine and in the editor alike), and nothing else changes.
+(`editor/src/elements/symmetry.test.ts` fails when the two sides disagree about a kind.)
 
 **2. The executor owns everything about a run.** Ordering, fan-out over lists, reading
 the file on each input that says so, catching failures, stopping, idle-skipping, settling memory, and asking for
@@ -412,8 +442,10 @@ declares (`fansOut` and `batchMode`, `readsFileInputs`, `catchesErrors`, `needsI
 is handed. That is why the same element runs on the server, in the editor's browser tab
 (for ports and previews) and in a test with fakes.
 
-**4. The import graph is the deployment boundary.** A bundle is a *copy* of `engine/src`
-minus `host/editor/` and every test, plus the chunks `runtime.html` references. The
+**4. The import graph is the deployment boundary.** A bundle (`cli/bundle.ts`) is the project
+folder and a *copy* of `engine/src` -- minus `host/editor/` and every test -- with the page
+files `runtime.html` references (`web/`), the project's own `frontend/` if it has one, the
+files the graph starts on, and the launchers `run.cmd` and `run.sh`. The
 engine contains no React at all. On the page side, a deployed tool draws widgets with
 their views and never loads a panel: panels are registered with `lazy(() => import(…))`,
 so each is a chunk of its own that only the editor fetches. Tests hold all of it:
@@ -459,7 +491,9 @@ other knows, it imports it or replays its result:
    input came up empty → read the file on each input typed `file_path` (a code or AI node's
    "Read the file at this path"; never guessed from the wire) → run once, or once per item → record.
    A failure marks the node and skips its dependents; with `catch_errors` it becomes an
-   `error` output instead.
+   `error` output instead. A node that holds a graph (`SubgraphNodeRunner`) runs it with the
+   same `executeGraph`, its input nodes answered from the ports (`given`), at most
+   `NESTING_LIMIT` (5) graphs deep.
 4. **After the round.** `settleMemory` hands loop values to the nodes that keep them, in
    the copy of the graph the round ran on -- the copy a session keeps. Then each page node
    is asked what it shows, *with* those values.
@@ -553,8 +587,7 @@ text back restated and, where the change needs other outputs than output.js desc
 new output.js in a second block (`GenerateResponse.output_definition`): the body is held to
 that one, and the panel writes body, output.js (and so the outputs) and text as one step
 (`writtenInto`). **A change keeps its word:** without an output.js of its own it is held to
-running and to returning every output, never repaired toward the output.js from before it
--- which turned a chart's new figure back into the old config under the restated text --
+running and to returning every output, never repaired toward the output.js from before it,
 so the attempt that holds the change is kept, and what does not fit is said. ✨ Fix where
 output.js cannot be read asks for it corrected the same way. Every model call is recorded
 (`AICall`) and can be watched while it runs.
@@ -611,9 +644,9 @@ several (`nodes/ai/prompt.ts`).
 
 A graph is a folder, and **each fact is in one place**:
 
-- `flow.json` — which nodes there are (`id → type`) and every wire, one line each:
-  `"page.file_out -> chart.csv"` ([`project/flow.ts`](../engine/src/project/flow.ts)). Nothing
-  about any node.
+- `flow.json` — the graph's name and description, which nodes there are (`id → type`) and
+  every wire, one line each: `"page.file_out -> chart.csv"`
+  ([`project/flow.ts`](../engine/src/project/flow.ts)). Nothing about any node.
 - `nodes/<id>/node.json` — the node's heading, text and settings. `nodes/<id>/interface.json`
   — its ports ([`project/interfaceFile.ts`](../engine/src/project/interfaceFile.ts)).
   Nothing about its neighbours: a node that needs to know what arrives follows the wire and
@@ -645,7 +678,10 @@ A graph is a folder, and **each fact is in one place**:
   written. `history.md` has no stub: it comes with the first exchange. What follows a body
   in its file only on disk -- code.js's lines that run it by itself -- is `TextFile.footer`,
   written after the body and taken off on the way in.
-- `layout.json` — positions only.
+- `layout.json` — positions and sizes only.
+- A node that holds a graph (`subgraph`) keeps it in its own folder, which is a project folder
+  like any other (`flow.json` and `nodes/` beside its `node.json`; `nestedGraphs`): reading,
+  writing, tidying and `check` recurse into it.
 - `frontend/` — a page of the project's own, written by hand against the runtime API, by
   name: served at `/` in place of the built page, and carried by a bundle
   ([deployment.md](deployment.md#a-page-of-your-own); `host/frontend.test.ts`).
@@ -653,13 +689,13 @@ A graph is a folder, and **each fact is in one place**:
 
 [`project/folder.ts`](../engine/src/project/folder.ts) reads and writes a folder for everyone —
 editor, CLI, a served tool, the MCP server — and never learns what a code node is. The graph
-in memory is the same document it always was; only the folder is laid out this way.
+in memory is one document, whichever way it is stored; only the folder is laid out this way.
 `graphFrom` puts it together from the files' contents without touching a disk, so a test
 or a page that has them can do the same.
 
 - **The file wins over the inline value.** A text is read from its file when there is one.
-  That is why a download (one `.json` carrying everything inline) and a plain
-  `.json` file open the same way. A folder is a project only when it has a `flow.json`.
+  That is why a graph pasted as JSON or kept as one `.json` file (everything inline) and a
+  project folder open the same way. A folder is a project only when it has a `flow.json`.
 - **Structure and writing never share a file**, and keys are sorted, so an unchanged
   save changes nothing and a moved node changes only `layout.json`.
 - **Two editors, one folder.** Every file read or written is remembered by signature; a
@@ -690,10 +726,10 @@ or a page that has them can do the same.
 
 **The design is the document. What using it leaves behind is state.** A graph is designed in
 the editor and saved as a folder; it is *used* by a page, a clock, a command line, a model
-over MCP. This section says what using a graph leaves behind, where it is kept today, and
-the rules it is kept by from here on.
+over MCP. This section says what using a graph leaves behind, where it is kept, and the
+rules it is kept by.
 
-### Where it lives today
+### Where it lives
 
 | State | Lives in | Written by |
 |---|---|---|
@@ -719,8 +755,8 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
    behind. A value typed into the page, what a round settled, a message emptied after it was
    delivered: the session's, never the document's. Nothing of it marks the editor's document
    unsaved, Save writes none of it, Deploy ships none of it. (`store/graphStore.test.ts`:
-   "shows what a round made, and keeps none of it in the document"; the chat in
-   `masterExamples.test.ts` remembers its turn in the session.)
+   "shows what a round made, and keeps none of it in the document"; `masterExamples.test.ts`:
+   the chat "remembers the turn for the next one -- in the session, not in the document".)
 2. **What state is.** For each node, its *slots*: what it keeps between rounds -- a page's
    blocks by id (a value set, a conversation, what a loop fed back), a data node's
    `data_value`, an input or output node's `value`. Which slots a node has is its element's
@@ -748,16 +784,16 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
    changed since, are dropped and said -- never guessed. A renamed node is one that is gone
    and one that is new. The latch needs no rule of its own: its keys are the nodes as written.
    ("a design that changed")
-6. **One session per server**, for now. Its id travels in every runtime route, so a session
-   per visitor needs no change to the contract; it is kept in `state.json`, so a restarted
+6. **One session per server.** Its id travels in every runtime route, so a session
+   per visitor would need no change to the contract; it is kept in `state.json`, so a restarted
    tool goes on with the same session. The editor hands its document over as the document
    of the session it holds; any other handover -- another document, or a second editor that
    took the server meanwhile -- is a session of its own, from its own file, so neither writes
    into the other's state. A page's stream follows the session the server holds.
    (`host/runtimeApi.test.ts`: "answers for its own session only"; `host/session.test.ts`: "the
    document the editor hands over")
-7. **Calling a graph keeps nothing.** `ai-graph run` and the MCP server's `run_graph` start
-   from the design with what they are given and return what it hands back: a function call.
+7. **Calling a graph keeps nothing.** `node engine/src/main.ts <graph>` and the MCP server's
+   `run_graph` start from the design with what they are given and return what it hands back: a function call.
    Rounds of one `--every` share their memory while the process lives. (`cli/cli.test.ts`:
    "runs what --event starts, on the values --value gives by name")
 
@@ -774,8 +810,8 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
 - Everything binds to loopback. Nothing asks who is calling: bound wider -- a container's
   `0.0.0.0` -- every route of the table is open to whoever reaches the port, which is why
   the container is published on the host's loopback only (`docker-compose.yml`). File
-  browsing and a file chip's opening of a node's file in the person's own editor switch off
-  on such a bind.
+  browsing, finding a dropped folder or file, and a file chip's opening of a node's file in
+  the person's own editor switch off on such a bind (`loopback` in `serve.ts`, `editor/routes.ts`).
 - The server answers its own page, not every page in the browser: a request must name
   127.0.0.1, localhost or [::1] (no DNS rebinding) -- with the server's port on loopback;
   bound wider, with any port, or the address it was bound to, or a name
@@ -802,19 +838,20 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
 
 ## Keeping it clean
 
+- CI (`.github/workflows/ci.yml`) runs `npm run licenses`, `typecheck`, `lint`, `build` and
+  `test`, then `check` and `test --offline` on every example folder.
 - Both packages compile with `noUnusedLocals` and `noUnusedParameters`: an unused import,
   variable or parameter is a build error, not a lint warning.
 - Panels are typed (`NodePanelProps`, `WidgetPanelProps`), not `any`: a shell that stops
   handing a panel what it reads fails to compile.
-- Things that were settable and did nothing are removed rather than documented.
 - Build time and run time are kept apart inside each element class, and the tests read the
   bars that say which is which ([`times.test.ts`](../engine/src/elements/times.test.ts),
   [its mirror](../editor/src/elements/times.test.ts)).
-- No code outside `elements/` compares a node type or a widget kind with a name, in the editor
-  ([`shells.test.ts`](../editor/src/elements/shells.test.ts)) or in the engine
+- No code outside `elements/` compares a node type with a literal, in the editor (and a widget
+  kind: [`shells.test.ts`](../editor/src/elements/shells.test.ts)) or in the engine
   ([`shells.test.ts`](../engine/src/shells.test.ts); `execution/triggers.ts` alone reads the document
   without asking). What such a comparison would decide is a member of the element's class —
-  `NodeRunner.hasInterface`, `missingExample`, `NodeRunner.isResult` and `resultLabel`,
+  `NodeRunner.hasInterface`, `NodeGuiBuilder.missingExample`, `NodeRunner.isResult` and `resultLabel`,
   `NodeRunner.problems`, `WidgetRunner.receives`, `blocks`, `graphAuthorNote` — so a new
   kind answers for itself. The prompt that designs a whole graph is assembled from the kinds' own
   `graphAuthorNote` -- an input node says the ports each mode derives from its own `derivedPorts`,
@@ -826,31 +863,31 @@ Each names the tests that hold it; `host/session.test.ts` holds them one by one.
 
 ## Settled debt, and what is deliberately not there
 
-A review on 2026-09-20 measured the rules above against the source and fixed what it found: the
-engine's own half of "no shell names a kind" (`check.ts`, `executor.finalOutputs`,
-`project/folder.ts`), the hand-written list of node types in `graphPrompt.ts`, and the editor's
-layer order, now held by `layers.test.ts`. What it left, still true:
+Measured on 2026-10-03, against 0.5.0. A number here is a measurement, not a limit: a test
+that reads the source is named where there is one.
 
-- **A few functions and files carry too much at once.** `graphStore.ts` (~1000 lines: the
-  document, its normalisation, the ReactFlow adapter, what a round shows and undo), `App.tsx` (~600
-  lines), `Toolbar.tsx` (~460 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
-  `executeGraph`. Nothing in the tests catches a mistake made splitting one of them, which is
-  exactly why none has been split yet. Parts of the shell already moved out of `App.tsx` into
-  `app/{Sidebar,Toolbar,FileMenu,ChangeBar,ResultsPanel,SettingsDialog,ViewTabs,AICredentialsSection,SubgraphTrail}.tsx`,
-  so this can be done piece by piece.
-- **The engine has no typed `NodeConfig`.** `config: Record<string, unknown>` is read through an
-  `as` cast at each use (~630 of them); each element's own `config()` is meant to be the one
-  reader that pays that price, but nothing holds other callers to asking it first.
-  `mcpServer.ts` still validates `config.gui_widgets` entries by name, on a document that has
-  not been parsed yet.
-- **Editor tests are thin outside the structural ones.** `app/`, `canvas/` and `page/` have
-  tests only for the rules pulled out of their components (`nodeDraft`, `portIds`, `pageWrite`,
-  `typedValues`, `DesignerPalette`, …); a component is mostly drawn once with
-  `renderToStaticMarkup` (`NodePanels.test.ts`). Two files draw a node's panel in a page
-  (happy-dom) and type into it: `typedAsTyped.test.ts`, `askedChange.test.ts`.
-
-There are no import cycles through values, and none between the engine and the editor.
-
+- **A few functions and files carry too much at once.** `editor/src/store/graphStore.ts` (985
+  lines: the document, its normalisation, the ReactFlow adapter, what a round shows and undo),
+  `App.tsx` (650), `app/Toolbar.tsx` (478), `host/editor/mcpServer.ts`'s `createGraphTools`
+  (375 lines of 958), `host/editor/generate.ts` (956) and `executor.ts`'s `executeGraph` (242
+  lines of 1024). Each but `App.tsx` has tests of its own (`store/*.test.ts`,
+  `host/editor/mcpServer.test.ts`, `host/editor/generate.test.ts`, `execution/executor.test.ts`
+  with `run.test.ts` and `gates.test.ts`, `app/Toolbar.test.ts`); no test draws `App.tsx`.
+- **The engine has no typed `NodeConfig`.** `GraphNode.config` is `RawConfig`
+  (`Record<string, unknown>`); each element's `config()` types it field by field with no cast
+  (`AiNodeRunner.config`), and is the one reader meant to. Outside the element folders 13 places
+  still read a raw field (the base classes' defaults among them; `mcpServer.ts` validates
+  `config.gui_widgets` entries by name on a document not yet parsed), and the engine has 141
+  type assertions (`as T`, not `as const`), 9 of them on a config. Nothing holds other
+  callers to asking `config()` first.
+- **Editor components are tested, unevenly.** 34 test files draw a component with
+  `renderToStaticMarkup` (the panels, the page, the bar, the header) and 9 drive one in happy-dom
+  and type into it (`typedAsTyped.test.ts`, `askedChange.test.ts`, `canvas/NodeEditor.test.ts`,
+  `canvas/GraphCanvas.test.ts`, …). No test mentions by name `App.tsx`, `app/SettingsDialog`,
+  `app/ResultsPanel`, `dialogs/FileBrowserDialog`, `canvas/PageCardPanel` or a few small panels
+  (trigger, text, text_io, slider, select).
+- **There are no import cycles through values**, in either package, and none from the engine
+  into the editor; no test holds the count.
 - **A saved node carries only what differs from the default.** In memory every node has the
   full `NodeConfig`, so a panel can read any field with a type. `document/baseNodeConfig.ts`
   is each key's one default -- what the engine reads a missing key as. Loading fills a missing
@@ -858,16 +895,21 @@ There are no import cycles through values, and none between the engine and the e
   [`savedConfig.test.ts`](../editor/src/elements/savedConfig.test.ts) asks the engine's element
   the questions a run asks, for every node type and mode, and holds the lean node to the full
   one's answers.
-- **A run lands only in the graph it started on.** The store counts documents: every load and
-  every step into or out of a node's graph is a new one. A run or a ✨ sweep notes the count it
-  started with and drops what comes back for another; New, Open and Reload wait while either
-  is going. The page is edited only through `page/pageWrite.ts`, which reads the page from the
-  store when an edit lands.
+- **A run lands only in the graph it started on.** The store counts documents (`document`):
+  every load and every step into or out of a node's graph is a new one. A run or a ✨ sweep notes
+  the count it started with and drops what comes back for another; New, Open and Reload wait
+  while either is going. The page is edited only through `page/pageWrite.ts`, which reads the
+  page from the store when an edit lands.
 - **A page event reuses what it only needs.** What the event is *for* — the nodes it is
   wired to and everything after them — runs fresh; a node upstream of that, run only as
-  context, hands back its last outputs when its definition and every input (files already
-  read) are unchanged ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)). A node with
-  nothing wired in reads the outside world and always runs; a whole-graph Run reuses nothing.
+  context, hands back its last outputs when its definition, every input (files already
+  read) and the one AI setting are unchanged ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)).
+  A node with nothing wired in reads the outside world and always runs; a whole-graph Run
+  reuses nothing.
 - **A tool that runs by itself remembers what its rounds showed across restarts**, in its
   session's `state.json` ([State](#state)). It is still a clock around a run: no history
   and no ingest endpoint, because a monitoring system is a different product.
+- **Not there, and said where it matters:** a check of who calls the server (see
+  [Security boundaries](#security-boundaries)); a closed network for a code body (Node has no
+  flag for it); more of MCP than tools in the client (`ai/mcp.ts`); a session per visitor
+  (rule 6 of [State](#state)).

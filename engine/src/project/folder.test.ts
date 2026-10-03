@@ -405,10 +405,9 @@ describe('a project folder', () => {
     expect(read.nodes.find((node) => node.id === 'say')!.config.prompt).toBe('Line one.\nLine two.');
   });
 
-  it('opens a deploy bundle by its graph.json, one file with everything inline, and keeps it one', async () => {
+  it('opens a single graph file with everything inline, and keeps it one file', async () => {
     const graph = sample();
     await writeFile(join(dir, 'graph.json'), JSON.stringify(graph));
-    await writeFile(join(dir, 'run.sh'), 'exec node engine/main.ts graph.json --serve "$@"\n');
     expect(isProjectFolder(dir)).toBe(false);
     const read = await loadGraph(join(dir, 'graph.json'));
     expect(read.nodes[1].config.code).toContain('inputs.files.length');

@@ -53,8 +53,8 @@ Three ways to start it, all from the GUI, all starting the editor empty:
   `execute()` is hit while a graph runs.
 - **Terminal -> Run Task** lists the same npm scripts by name.
 
-The other launch configurations run one graph without a browser anywhere, and run the
-test file the cursor is in. Open the `AI_Graph` folder itself, not a folder above it:
+The other launch configurations start the editor after building its page, run one graph
+without a browser anywhere, and run the test file the cursor is in. Open the `AI_Graph` folder itself, not a folder above it:
 VS Code reads `.vscode/` from the folder you opened.
 
 ## Working on the editor
@@ -110,7 +110,7 @@ Builds the editor, runs it on :8000 beside an Ollama container, and keeps
 `./data` (the files your graphs read and write) outside the image. Pull a model once:
 
 ```bash
-docker exec -it ai_graph-ollama-1 ollama pull llama3
+docker compose exec ollama ollama pull llama3
 ```
 
 The container binds `--host 0.0.0.0` because its loopback is its own, and Compose
@@ -146,7 +146,7 @@ It runs in its own process, started with Node's permission system on: files stay
 readable and writable, because that is most of what a body is for, while starting
 other programs, loading native addons, spawning workers and opening a debugger port
 are refused. The network is not covered — Node has no flag for it — so a body can
-still reach out. Its environment leaves out every variable named like a key, a token or
+still reach out. Its environment leaves out every variable named like a key, a token, a secret or
 a password, so an `OPENAI_API_KEY` set for the engine is not a body's to read; a file
 is, though, `ai-settings.json` included. `engine/src/host/sandbox.test.ts` asserts the
 policy.
@@ -156,9 +156,12 @@ policy.
 ```bash
 npm test            # both suites
 npm run typecheck   # both, with the compiler
+npm run lint        # the editor
+npm run licenses    # every installed package against the licences it may come under
 ```
 
 Or one at a time: `npm test --workspace engine`, `npm test --workspace editor`.
+The bundle test asserts that a bundle carries the built page, so run `npm run build` before `npm test` on a fresh checkout (CI does).
 
 Prefer adding to an existing workflow-level test — a real graph run through
 `executeGraph`, a bundle actually written and executed — over a new file per element.
@@ -167,5 +170,15 @@ writes a bundle and runs it from somewhere else entirely.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` installs once at the root, type-checks and tests both
-workspaces, and builds the editor's page, on every push and pull request.
+`.github/workflows/ci.yml` runs three jobs on every push and pull request:
+
+- `test` installs once at the root, then runs the licence check, the type check, the
+  lint, the build of the editor's page and both test suites, and finally `check` and
+  `test --offline` on every folder in `examples/`.
+- `launcher` runs `scripts/launcher.test.mjs` on a checkout with nothing installed: start,
+  restart and stop.
+- `package-test` runs `scripts/package.test.mjs` on Linux and Windows.
+
+Beyond those, on a push only: a `vX.Y.Z` tag builds the Windows and Linux zips with Node and
+publishes them as a release (`package`), a green push to `main` rebuilds the `latest`
+pre-release zip (`latest`), and either one pushes the container image (`publish`).

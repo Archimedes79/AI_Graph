@@ -14,7 +14,7 @@ of them the way this guide does (a node dropped, blocks added, a wire dragged) a
 
 | Step | Time | What decides it |
 |---|---|---|
-| Download, unzip, start | 3–5 min | A 35 MB (Windows) or 44 MB (Linux) zip; Node.js is inside. |
+| Download, unzip, start | 3–5 min | A zip of about 37 MB (Windows) or 47 MB (Linux) in 0.5.0; Node.js is inside. |
 | Give it a model | 5 min hosted · 10–60 min local | Hosted: an account and an API key. Local: installing a runtime and downloading a model of several GB. |
 | Build the page | 1–2 min | Two blocks for the plotter. |
 | Add a node and wire it | 1–2 min | Two drags. |
@@ -58,8 +58,8 @@ Use the `-latest` names: dated Gemini names are retired. A small, fast model is 
 choice for ✨: in the run this guide comes from, each file was written in seconds. A larger
 one writes better code and takes longer; a model on your own machine (Ollama, LM Studio —
 [ai-providers.md](ai-providers.md)) costs nothing per call but can take minutes per answer,
-more with a model that "thinks". With nothing set, the editor tries a local Ollama, and ✨
-fails until one is running.
+more with a model that "thinks". With nothing set, the editor takes a local model that is running (Ollama or LM Studio),
+else Ollama, and ✨ fails until one is running.
 
 ## 3. Build the tool (about 10 min)
 
@@ -100,8 +100,8 @@ You do not have to write any of them; you can change any of them. A node's name 
 text. To change one thing later, say it in the bar under the canvas — *Say what to change*,
 scoped to the open node or to the whole graph — rather than editing by hand.
 
-**Shortcut:** the wand in the toolbar (*Write every empty node, in the order the graph runs*)
-writes the files of every node that has none yet, so a graph of several nodes with their texts
+**Shortcut:** **Generate** in the toolbar (the wand: *Write every empty node, in the order the
+graph runs*) writes the files of every node that has none yet, so a graph of several nodes with their texts
 is one click.
 
 ## 4. Run it (2 min)
@@ -116,11 +116,12 @@ There is a sample at [`examples/data/three_countries.csv`](../examples/data/thre
 ## 5. Save it and hand it on (2 min)
 
 **File → Save as…** and a name without `.json` makes a **project folder**:
-`flow.json` (the nodes and a line per wire), `page/` (the blocks), and one folder per node
-under `nodes/` with its `input.js`, `output.js` and `code.js`. They are plain text, so
-`git diff` reads them and your own editor can open them.
+`flow.json` (the nodes and a line per wire), `layout.json` (where the nodes sit), `page/` (the
+blocks), and one folder per node under `nodes/` with its `input.js`, `output.js` and `code.js`,
+its settings in `node.json` and its ports in `interface.json`. They are plain text, so `git diff`
+reads them and your own editor can open them.
 
-**🚀** downloads the tool as a zip: the engine, the graph and its page. Whoever receives it
+**🚀 Deploy** downloads the tool as a zip: the engine, the graph and its page. Whoever receives it
 unzips it and starts `run.cmd` or `run.sh`; the page is there, with no editor.
 
 ## 6. A tool with a model in it: summarize a folder (about 10 min)

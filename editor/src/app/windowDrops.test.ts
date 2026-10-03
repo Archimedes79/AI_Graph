@@ -17,12 +17,12 @@ describe('a folder dropped onto the window', () => {
   it('is said with where it was looked for, when there is none: "under the folder" was said of a search three folders deep', async () => {
     await expect(droppedProject('chat', found())).rejects.toThrow(
       'A browser does not say where a dropped folder is, and no project called "chat" is in D:\\work and 3 levels of folders below it, '
-      + 'leaving out node_modules, dist, build and every name that begins with a dot. Open it with 📂 Open.',
+      + 'leaving out node_modules, dist, build and every name that begins with a dot. Open it with File → Open….',
     );
   });
 
   it('is said when several have its name, with the way that always works', async () => {
-    await expect(droppedProject('chat', found('a', 'b'))).rejects.toThrow('2 projects are called "chat". Open the one you mean with 📂 Open.');
+    await expect(droppedProject('chat', found('a', 'b'))).rejects.toThrow('2 projects are called "chat". Open the one you mean with File → Open….');
   });
 });
 

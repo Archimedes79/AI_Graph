@@ -36,6 +36,6 @@ export async function droppedProject(name: string, find: FindProjects = findProj
   const { paths, searched } = await find(name);
   if (paths.length === 1) return paths[0];
   throw new Error(paths.length
-    ? `${paths.length} projects are called "${name}". Open the one you mean with 📂 Open.`
-    : `A browser does not say where a dropped folder is, and no project called "${name}" is in ${searched}. Open it with 📂 Open.`);
+    ? `${paths.length} projects are called "${name}". Open the one you mean with File → Open….`
+    : `A browser does not say where a dropped folder is, and no project called "${name}" is in ${searched}. Open it with File → Open….`);
 }

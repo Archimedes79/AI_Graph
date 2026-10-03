@@ -62,11 +62,11 @@ npx @modelcontextprotocol/inspector --cli --config servers.json --server ai-grap
 | `generate_graph` | `description`, `path?`, `save_as?` | Has the model configured on this machine design a graph -- or, with `path`, change that saved graph as described, its ids and what the change does not touch kept, each node's history too. Returns the graph (without any node's history: that stays in the project), the explanation and any problems; with `save_as`, writes it if there are none. Says so plainly when no model is configured. |
 | `validate_graph` | `graph` *or* `path` | Lists what is wrong, each with where and how to fix it. Empty list = valid. |
 | `save_graph` | `path`, `graph` | Validates, then writes pretty JSON. Refuses a graph with problems and returns them. |
-| `run_graph` | `path`, `values?`, `event?` | Runs once. Reports overall status, each node's status and error, each node's outputs, and the graph's outputs by name, every value cut to about 600 characters. |
+| `run_graph` | `path`, `values?`, `event?` | Runs once. Reports overall status, each node's status and error, each node's outputs, and the graph's outputs by name, every value cut to about 600 characters; what the graph asked and got no value for is listed as `unanswered`. |
 | `describe_graph` | `path` | What the graph offers by name -- its events, the values it takes, the outputs it hands back -- and what it asks before it runs. The names `run_graph` takes. |
 | `run_node` | `path`, `node_id`, `inputs?` | Runs one node by itself: on the inputs given, or on what the nodes feeding it produce. For writing one node at a time. |
 | `test_graph` | `path`, `node_id?`, `offline?` | Runs each code and AI node once on the example in its `input.js` and holds what comes out to its `output.js` -- also inside the graphs nodes hold, named with the way down (`part ▸ work`) -- and reports each as pass, fail (with what does not fit), error or skipped. |
-| `list_graphs` | — | The graphs under the root: path, name, description, node count. Four folders deep, 200 at most. |
+| `list_graphs` | — | The graphs under the root: path, name, description, node count. A project is listed once, by its `flow.json`. Four folders deep, 200 at most. |
 
 A project folder is reached through its `flow.json` (`examples/chat/flow.json`): reading
 it puts the graph together from the node folders under `nodes/`, and `save_graph` to it
@@ -79,7 +79,7 @@ inline.
 is not there, or to a port the node does not have — checked against the ports the
 engine *derives* for `input` and `gui` nodes, not the ones the document claims, with
 `__run` accepted everywhere; a cycle that does not pass through a node that
-remembers; a code node with no `config.code`; and a graph with no `output` node
+remembers; a code node with no `config.code`; two nodes that offer the same name to a caller; and a graph with no `output` node
 and no `gui` node with a block on it, which computes its answer and shows nobody.
 
 A graph is used by name, as a page or any frontend uses it (`execution/graphInterface.ts`):
@@ -93,13 +93,13 @@ calls the configured model (or a node's own) and runs its code for real.
 ## What it is confined to
 
 The caller is a model acting on text it read somewhere, so every argument is treated
-as if a stranger wrote it.
+as if a stranger wrote it. Each rule below has a test (`host/editor/mcpServer.test.ts`, `confinement`).
 
 - **One folder.** Every path is resolved against the root and must stay inside it:
   `..`, an absolute path elsewhere and another drive are refused alike. Checked as
   written and again after following links, so a symlink or junction inside the root is
   not a way out.
-- **Only a `.json` path,** and never under a dot-folder, `node_modules` or `dist`. A
+- **Only a `.json` path,** with no character a file name cannot be trusted with, and never under a dot-folder, `node_modules` or `dist`. A
   project is named by its `flow.json`; saving it writes its nodes' files (`code.js`,
   `prompt.md`, …) in its folder, inside the root, as the editor does.
 - **A file that exists is replaced only if it is already a graph.** `save_graph`
