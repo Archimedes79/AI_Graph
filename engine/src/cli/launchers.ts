@@ -128,5 +128,5 @@ export function runCmd({ command, portFromEnv = false }: LauncherOptions): strin
  * well be running on Windows, which has no executable bit to read.
  */
 export function zipMode(path: string): number | undefined {
-  return /\.(sh|command)$/.test(path) || path.endsWith(BUNDLED_NODE.unix) ? 0o755 : undefined;
+  return path.endsWith('.sh') || path.endsWith(BUNDLED_NODE.unix) ? 0o755 : undefined;
 }

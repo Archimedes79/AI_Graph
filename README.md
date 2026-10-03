@@ -10,11 +10,10 @@ pipelines, multi-agent workflows and small local apps. Say in plain words what e
 should do, and AI writes its code or its prompt; give the graph a page — a file picker, a
 chat, a chart — and 🚀 Deploy packs it into a folder someone else can run.
 
-### ⬇ [Windows](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows-x64.zip) · [macOS (Apple silicon)](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-arm64.zip) · [macOS (Intel)](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-x64.zip) · [Linux](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux-x64.zip)
+### ⬇ [Windows](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows.zip) · [Linux](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux.zip)
 
-Unzip and double-click `run.cmd` (Windows) or `run.command` (macOS) — the editor opens in your browser.<br>
-Nothing to install: each download carries the Node.js it runs on. No Docker, no account.<br>
-ARM Windows and Linux, and any other system: [every download](#quick-start).
+Unzip, start `run.cmd` (Windows) or `./run.sh` (Linux); the editor opens in your browser.<br>
+Node.js is included in the zip.
 
 [Quick start](#quick-start) · [Examples](#the-examples) · [Documentation](#documentation) · [Licence](#licence)
 
@@ -209,30 +208,19 @@ node engine/src/main.ts examples/population_plotter
 
 ## Quick start
 
-**Download, unzip, double-click.** Each download holds everything it needs, Node.js
-included — nothing is installed, before or while it runs:
-
 | System | Download | Start it with |
 |---|---|---|
-| Windows | [ai-graph-windows-x64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows-x64.zip) | `run.cmd` |
-| Windows on ARM (Snapdragon) | [ai-graph-windows-arm64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows-arm64.zip) | `run.cmd` |
-| macOS, Apple silicon (M1 and later) | [ai-graph-macos-arm64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-arm64.zip) | `run.command` |
-| macOS, Intel | [ai-graph-macos-x64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-x64.zip) | `run.command` |
-| Linux | [ai-graph-linux-x64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux-x64.zip) | `./run.sh` |
-| Linux on ARM (Raspberry Pi 4/5, ARM servers) | [ai-graph-linux-arm64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux-arm64.zip) | `./run.sh` |
-| Any, with Node 24 of your own | [ai-graph-node-required.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-node-required.zip) (1 MB) | any of them |
+| Windows (x64) | [ai-graph-windows.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows.zip) | `run.cmd` |
+| Linux (x64) | [ai-graph-linux.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux.zip) | `./run.sh` |
 
-The editor opens in your browser at <http://127.0.0.1:8000>, or the next free port.
-macOS asks once about a script from the internet: *System Settings ▸ Privacy & Security
-▸ Open Anyway*. Older versions, and `ai-graph-latest.zip` with what `main` is today,
-are on the [releases page](https://github.com/Archimedes79/AI_Graph/releases).
+Each zip includes Node.js. The editor opens in your browser at <http://127.0.0.1:8000>,
+or the next free port. Older versions are on the
+[releases page](https://github.com/Archimedes79/AI_Graph/releases).
 
-**Why no Docker?** AI-Graph is JavaScript from end to end: the engine is TypeScript that
-Node runs as it is, with no dependencies, and the page is built once. A container adds
-nothing a person trying it needs. The [image](docs/install.md#in-a-container) is there
-for a server — beside a model server, or on a machine nobody sits at.
+No Docker needed: the engine is TypeScript that Node runs directly, with no
+dependencies. The [container image](docs/install.md#in-a-container) is for servers.
 
-**From the source**, to work on it:
+**From the source**, on any system with Node 24 or newer:
 
 ```bash
 git clone https://github.com/Archimedes79/AI_Graph.git

@@ -77,17 +77,15 @@ hold the engine's source, the editor's built page and the examples:
 
 | Release | Zip | What it is |
 |---|---|---|
-| `vX.Y.Z` | `ai-graph-windows-x64.zip`, `ai-graph-windows-arm64.zip`, `ai-graph-macos-arm64.zip`, `ai-graph-macos-x64.zip`, `ai-graph-linux-x64.zip`, `ai-graph-linux-arm64.zip` | A version for one system, with the Node.js it runs on in `node/`: nothing to install. Published when the tag is pushed, and never changed afterwards. `releases/latest/download/<name>` is always the newest. |
-| `vX.Y.Z` | `ai-graph-node-required.zip` | The same for any system, without Node: 1 MB, for a computer that has Node 24 or newer. |
-| `latest` (pre-release) | `ai-graph-latest.zip` | Whatever `main` is, without Node. Rebuilt on every green push to `main`, at an address that stays the same. |
+| `vX.Y.Z` | `ai-graph-windows.zip`, `ai-graph-linux.zip` | A version for Windows or Linux on x64, with the Node.js it runs on in `node/`. Published when the tag is pushed, and never changed afterwards. `releases/latest/download/<name>` is always the newest. |
+| `latest` (pre-release) | `ai-graph-latest.zip` | Whatever `main` is, without Node: for any computer with Node 24 or newer. Rebuilt on every green push to `main`, at an address that stays the same. |
 
 The *Source code (zip)* GitHub adds to every release is the bare repository — no built
 page and no `run.cmd` — and needs the checkout route above.
 
 The engine has no runtime dependencies and Node runs its TypeScript unbuilt, so there is
-nothing to install and nothing to build: unzip, then double-click `run.cmd` (Windows) or
-`run.command` (macOS), or run `./run.sh` in a terminal. macOS asks once about a script
-from the internet: *System Settings ▸ Privacy & Security ▸ Open Anyway*.
+nothing to install and nothing to build: unzip, then start `run.cmd` (Windows) or
+`./run.sh` (Linux).
 
 The launchers use the Node in `node/` where the folder has one, and otherwise the
 computer's, which must then be 24 or newer: they check before starting, a missing or
@@ -99,8 +97,8 @@ folder says which build it is and which commit it came from.
 `npm run package` builds the zip without Node from a checkout; `node scripts/package.mjs
 out.zip --node <an unpacked Node download>` builds one with it. `node --test
 scripts/package.test.mjs` unzips both and starts them the way a person would — the one
-with Node on a computer whose only Node is too old — which CI does on Linux, macOS and
-Windows before anything is published.
+with Node on a computer whose only Node is too old — which CI does on Linux and Windows
+before anything is published.
 
 ## In a container
 

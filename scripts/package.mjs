@@ -86,10 +86,7 @@ const NEEDS = node
   ? `Nothing. Node.js, which runs it, is in node/ -- with its licence, node/LICENSE --
 and the launchers use it. The engine is TypeScript that Node runs directly, it
 has no dependencies, and the page in editor/dist is already built. Nothing is
-installed, and nothing is installed while a graph runs.
-
-This download is for one system. The one ending in -node-required runs on any,
-with a Node ${NODE_MAJOR} or newer of your own.`
+installed, and nothing is installed while a graph runs.`
   : `Node ${NODE_MAJOR} or newer. That is the whole list: the engine is TypeScript that Node
 runs directly, it has no dependencies, and the page in editor/dist is already
 built. Nothing is installed, and nothing is installed while a graph runs.
@@ -97,18 +94,14 @@ built. Nothing is installed, and nothing is installed while a graph runs.
     node --version
 
 The launchers check this before starting and say so if it is missing or too
-old; on Windows the window stays open until you have read it. The downloads
-named after a system (windows-x64, macos-arm64, ...) carry their own Node and
-need nothing.`;
+old; on Windows the window stays open until you have read it.`;
 
 const README = `# AI-Graph
 
 Unzip, then:
 
     run.cmd           (Windows -- double-click it)
-    run.command       (macOS -- double-click it; if macOS refuses the first time,
-                       System Settings > Privacy & Security > Open Anyway)
-    ./run.sh          (macOS, Linux, in a terminal)
+    ./run.sh          (Linux, macOS)
 
 The editor opens in your browser, on http://127.0.0.1:8000 or, if something is
 already there, the next free port -- the address is printed either way. Set
@@ -122,7 +115,7 @@ ${NEEDS}
 
 ## What is in here
 
-    run.*       start it${node ? '\n    node/       Node.js, which runs it, and its licence' : ''}
+    run.sh, run.cmd   start it${node ? '\n    node/       Node.js, which runs it, and its licence' : ''}
     VERSION     what this was built from
     engine/     the engine and the editor's server, as source
     editor/dist the editor's page, built; its licenses.txt names the
@@ -154,9 +147,6 @@ for (const path of files) {
 }
 const extra = {
   'run.sh': runSh(LAUNCHER),
-  // The same script under the name a Mac's Finder runs on a double-click, in a
-  // Terminal window: run.sh it opens in a text editor.
-  'run.command': runSh(LAUNCHER),
   'run.cmd': runCmd(LAUNCHER),
   'README.md': README,
   'VERSION': version(),
