@@ -6,7 +6,7 @@
 // busy on any machine already running an editor -- and closed its window
 // before the error could be read, while its run.sh came out of the archive
 // without an executable bit. None of that shows without unzipping it and
-// double-clicking, so this does exactly that, on Linux, macOS and Windows.
+// double-clicking, so this does exactly that, on Linux and on Windows.
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -198,10 +198,7 @@ test('the download for one system carries its own Node, and needs none on the co
   assert.equal(unpacked.status, 0, unpacked.stderr);
   const system = join(work, 'ai-graph-system');
   assert.ok(existsSync(join(system, 'node', 'LICENSE')), "Node's licence travels with it");
-  if (!windows) {
-    assert.ok(statSync(join(system, 'node', 'node')).mode & 0o111, 'the Node in it is executable once unzipped');
-    assert.ok(statSync(join(system, 'run.command')).mode & 0o111, 'run.command is executable once unzipped');
-  }
+  if (!windows) assert.ok(statSync(join(system, 'node', 'node')).mode & 0o111, 'the Node in it is executable once unzipped');
 
   // The computer's only Node is too old: the one in the folder is what runs.
   const path = windows ? `${oldNode()};${process.env.SystemRoot ?? 'C:\\Windows'}\\System32` : `${oldNode()}:/usr/bin:/bin`;

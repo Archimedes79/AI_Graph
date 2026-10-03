@@ -80,7 +80,7 @@ jobs:
         run: node --test scripts/launcher.test.mjs
 
   # The download, unzipped and started the way a person starts it -- on
-  # Windows and macOS too, where run.cmd and run.command are the ways in. v0.2.0's zip was intact and
+  # Windows too, where run.cmd is the only way in. v0.2.0's zip was intact and
   # still "did not start": its run.cmd assumed a new enough Node, always asked
   # for port 8000, and closed its window before the error could be read, and
   # its run.sh came out of the archive without an executable bit. Nothing else
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -135,8 +135,8 @@ jobs:
       - name: Build the editor
         run: npm run build
 
-      # One zip per system that carries Node itself, so nothing needs to be
-      # installed first; and one for any system, with a Node 24 of one's own.
+      # Windows and Linux, each with the Node it runs on, so nothing needs to
+      # be installed first -- the two systems CI starts the download on.
       # Named without the version, so the README's links to
       # releases/latest/download/<name> always mean the newest release.
       # Node is the official download of the very version this job ran the
@@ -146,11 +146,10 @@ jobs:
           AI_GRAPH_VERSION: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          node scripts/package.mjs ai-graph-node-required.zip
           v=$(node -p process.version)
           base="https://nodejs.org/dist/$v"
           curl -fsSLO "$base/SHASUMS256.txt"
-          for pair in win-x64:windows-x64 win-arm64:windows-arm64 darwin-arm64:macos-arm64 darwin-x64:macos-x64 linux-x64:linux-x64 linux-arm64:linux-arm64; do
+          for pair in win-x64:windows linux-x64:linux; do
             target=${pair%%:*}; name=${pair##*:}
             case $target in win-*) file="node-$v-$target.zip" ;; *) file="node-$v-$target.tar.gz" ;; esac
             curl -fsSLO "$base/$file"

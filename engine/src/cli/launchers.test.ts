@@ -69,7 +69,6 @@ describe('zipMode', () => {
   it('makes shell scripts executable and leaves everything else alone', () => {
     expect(zipMode('run.sh')).toBe(0o755);
     expect(zipMode('ai-graph-v1/run.sh')).toBe(0o755);
-    expect(zipMode('ai-graph-v1/run.command')).toBe(0o755);
     expect(zipMode('run.cmd')).toBeUndefined();
     expect(zipMode('engine/main.ts')).toBeUndefined();
   });
