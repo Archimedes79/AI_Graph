@@ -122,7 +122,7 @@ describe('the runtime API', () => {
       if (round.done) break;
       await new Promise((wake) => setTimeout(wake, 100));
     }
-    expect(round).toMatchObject({ run_id: id, done: true, outputs: { shown: 'picked b' } });
+    expect(round).toMatchObject({ round_id: id, done: true, outputs: { shown: 'picked b' } });
     expect((await post(`${url}/api/runtime/rounds/${id}/stop`)).body).toEqual({ stopped: true });
     expect((await get(`${url}/api/runtime/rounds/nothing`)).status).toBe(404);
   }, 30_000);

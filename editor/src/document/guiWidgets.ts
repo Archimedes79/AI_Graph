@@ -99,6 +99,22 @@ export function widgetFiresRun(widget: GuiWidget): boolean {
   return element ? element.firesRun(parseWidget(widget)) : false;
 }
 
+/** Whether a person sets what this block hands on, and a round is given it by the block's id -- the engine's answer. */
+export function widgetTakesValue(widget: GuiWidget): boolean {
+  const element = engineRegistry.widget(widget.kind);
+  return element ? element.takesValue(parseWidget(widget)) : false;
+}
+
+/**
+ * Whether what this block holds is part of the page's design, set while the
+ * page is built -- not a conversation, which is only ever the session's -- the
+ * engine's answer (`WidgetRunner.valueIsDesign`).
+ */
+export function widgetValueIsDesign(widget: GuiWidget): boolean {
+  const element = engineRegistry.widget(widget.kind);
+  return element ? element.valueIsDesign(parseWidget(widget)) : true;
+}
+
 /**
  * The page's ports worked out again from its blocks (`config.gui_widgets`),
  * in order; any other node as it is. Called after every edit of the blocks,

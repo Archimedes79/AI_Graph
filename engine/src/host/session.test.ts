@@ -9,6 +9,9 @@ import { RUN_PORT } from '../execution/triggers.ts';
 import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
 import { Session, type SessionEvent, type SessionOptions } from './session.ts';
 import { NotOffered } from '../execution/graphInterface.ts';
+import { loadGraph, saveGraph, STATE_FILE, stateFileOf, writeProject } from '../project/folder.ts';
+import { folderProblems } from '../project/folderCheck.ts';
+import { writeBundle } from '../cli/bundle.ts';
 
 /**
  * A graph in use, and what using it leaves behind: the rules of "State" in
@@ -181,6 +184,18 @@ describe('what a session keeps on disk', () => {
     expect(session.kept()).toEqual({});
     expect(session.dropped).toEqual([expect.stringMatching(/could not be read/)]);
   });
+
+  it('is not the project\'s: a save and a check leave state.json alone, and a bundle never carries it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'session-project-'));
+    await writeProject(dir, counter());
+    const session = await open(await loadGraph(dir), stateFileOf(dir));
+    await session.run(null);
+    await saveGraph(dir, await loadGraph(dir));
+    expect(existsSync(join(dir, STATE_FILE))).toBe(true);
+    expect(await folderProblems(dir)).toEqual([]);
+    const bundle = await mkdtemp(join(tmpdir(), 'session-bundle-'));
+    expect(await writeBundle(await loadGraph(dir), bundle, { dataFrom: dir })).not.toContain(STATE_FILE);
+  });
 });
 
 describe('a design that changed', () => {
@@ -292,6 +307,63 @@ describe('whoever watches a session', () => {
     session.watch((event) => told.push(event));
     await session.reset();
     expect(told).toEqual([{ type: 'session', session: expect.objectContaining({ values: { pick: 'a' }, outputs: {}, rounds: 0 }) }]);
+  });
+});
+
+describe('the application a session runs', () => {
+  /** A counter its trigger node starts: at start, and on its clock when it has an interval. */
+  function clocked(trigger: Record<string, unknown>): Graph {
+    return graphOf(
+      [
+        node('tick', 'trigger', trigger, { out: ['fired'] }),
+        node('count', 'data', { data_format: 'structure', data_value: 0 }, { in: ['input'], out: ['output'] }),
+        node('add', 'code', { code: 'function run(i) { return { next: i.n + 1 }; }' }, { in: ['n'], out: ['next'] }),
+      ],
+      [edge('n', 'count', 'output', 'add', 'n'), edge('next', 'add', 'next', 'count', 'input'), edge('go', 'tick', 'fired', 'add', RUN_PORT)],
+    );
+  }
+
+  it('fires a trigger set to fire at start, and answers once that round has run', async () => {
+    const session = await open(clocked({ trigger_on_start: true }));
+    expect(await session.startApplication()).toEqual({ ticks: false });
+    expect(session.kept()).toEqual({ count: { data_value: 1 } });
+    expect(session.view().clock).toMatchObject({ running: true, ticks: false, next_at: null });
+    await session.stopApplication();
+    expect(session.view().clock.running).toBe(false);
+  });
+
+  it('keeps the clock of a trigger with an interval, until it is stopped', async () => {
+    const session = await open(clocked({ trigger_on_start: false, trigger_every: '0.05' }));
+    expect(await session.startApplication()).toEqual({ ticks: true });
+    expect(session.view().clock.next_at).not.toBeNull();
+    for (let i = 0; i < 100 && ((session.kept().count?.data_value as number | undefined) ?? 0) < 2; i += 1) await wait(20);
+    await session.stopApplication();
+    const counted = session.kept().count.data_value as number;
+    expect(counted).toBeGreaterThanOrEqual(2);
+    await wait(150);
+    expect(session.kept().count.data_value).toBe(counted);
+  });
+
+  it('says an interval nobody can read, rather than run on a guess', async () => {
+    const session = await open(clocked({ trigger_on_start: false, trigger_every: 'every so often' }));
+    expect(await session.startApplication()).toEqual({ ticks: false });
+    expect(session.view().clock.problem).toMatch(/Not an interval/);
+    await session.stopApplication();
+  });
+});
+
+describe('what a round asks before it runs', () => {
+  const asking = () => graphOf([
+    node('topic', 'input', { input_mode: 'text', prompt_at_runtime: true, value: 'cats' }),
+    node('say', 'code', {}, { in: ['t'], out: ['t'] }),
+  ], [edge('t', 'topic', 'output', 'say', 't')]);
+
+  it('is asked with what the session holds now, and not at all once a value answers it', async () => {
+    const session = await open(asking());
+    expect(session.requirements(null)).toEqual([expect.objectContaining({ key: 'topic', current: 'cats' })]);
+    await session.run(null, { topic: 'dogs' });
+    expect(session.requirements(null)).toEqual([expect.objectContaining({ key: 'topic', current: 'dogs' })]);
+    expect(session.requirements(null, { topic: 'birds' })).toEqual([]);
   });
 });
 

@@ -31,13 +31,14 @@ export function isListening(port) {
 
 /**
  * Whether what listens on *port* is an AI-Graph server. Every one -- editor
- * or deployed tool -- answers its schedule route with a `scheduled` flag.
+ * or deployed tool, holding a graph or not yet -- says which model a run
+ * calls, with a `settings_file_exists` flag.
  */
 export async function isAiGraph(port) {
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/api/runtime/last`, { signal: AbortSignal.timeout(1500) });
+    const response = await fetch(`http://127.0.0.1:${port}/api/runtime/ai-settings`, { signal: AbortSignal.timeout(1500) });
     const body = await response.json();
-    return typeof body?.scheduled === 'boolean';
+    return typeof body?.settings_file_exists === 'boolean';
   } catch {
     return false;
   }

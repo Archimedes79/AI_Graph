@@ -24,7 +24,7 @@ const open = vi.hoisted(() => ({
   metadata: { name: 'Plotter', description: '', gui_scheme: 'night' },
   rfNodes: [] as unknown[], rfEdges: [], subgraphStack: [] as unknown[],
   isExecuting: false, executionResult: null,
-  exportGraph: () => ({}), updateNode: () => {}, runGraph: async () => {},
+  exportGraph: () => ({}), updateNode: () => {}, holdDocument: async () => {},
   setEditingNode: () => {}, closeSubgraphsTo: () => {},
 }));
 vi.mock('@/store/graphStore', () => ({

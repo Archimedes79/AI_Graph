@@ -1,98 +1,83 @@
 import { useEffect, useRef, useState } from 'react';
-import { useGraphStore } from '@/store/graphStore';
-import { mergeResults } from '@engine/graph.ts';
+import type { GuiWidget } from '@/graph';
 import { GuiSurfacePage } from '@/page/GuiPage';
-import { useDeliveredRun } from '@/page/useDeliveredRun';
+import { useRound } from '@/page/useRound';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
+import { pageInUse, type PageDesign } from '@/page/pageInUse';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
 import DeliveredHeader from '@/page/DeliveredHeader';
 import RuntimeAISettings from './RuntimeAISettings';
-import { watchSchedule } from './watchSchedule';
-import { call, type ScheduleState } from '@/api/client';
+import { call } from '@/api/client';
+import { setEdit, useSession, watchSession } from '@/api/session';
 import { errorText } from '@/api/errorText';
 import { DANGER_TEXT, DIM, NEUTRAL_BUTTON, SUNKEN } from '@/ui/theme';
-import { startApplication } from '@/app/application';
 
 /**
  * The deployed graph's front-end.
  *
- * This is the *same* application as the editor with the canvas taken away: it
- * loads the bundle's one graph into the ordinary graph store and mounts the
- * ordinary `GuiSurface`, so every widget a graph author placed in the
- * designer renders here through the exact component the editor used --
- * `GuiPage`, each widget's `View`. There is no
- * second implementation of a widget anywhere, which is why a deployed tool
- * cannot look or behave differently from what was designed.
+ * It knows the graph only as the runtime API says it: the page as it was
+ * designed (`page`), what the graph hands back by name (`interface`), and the
+ * session, which the server tells as it changes (`stream`) -- the values each
+ * name holds, what each output showed, the round going or gone. A block used
+ * sets a value by its name; one that starts the graph starts a round by its
+ * name. What using it leaves behind is the server's, so a page reloaded, or
+ * opened in a second window, shows what the first one did.
+ *
+ * Every block is drawn through the component the editor used -- `GuiPage`,
+ * each widget's `View` -- so a deployed tool cannot look or behave
+ * differently from what was designed.
  *
  * Served by the bundle's `engine/host/serve.ts` at `runtime.html`.
  */
 export default function RuntimeApp() {
-  const loadGraph = useGraphStore((s) => s.loadGraph);
-  const metadata = useGraphStore((s) => s.metadata);
-  // A deployed tool looks like the thing that was designed, scheme included.
-  useSchemeOnRoot(metadata.gui_scheme);
-  const setExecutionResult = useGraphStore((s) => s.setExecutionResult);
-
+  const [design, setDesign] = useState<(PageDesign & { startsWhole: boolean }) | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [ready, setReady] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const session = useSession();
+  // A deployed tool looks like the thing that was designed, scheme included.
+  useSchemeOnRoot(design?.scheme);
 
   useEffect(() => {
-    call('graph')
-      .then((graph) => {
-        loadGraph(graph);
-        setReady(true);
-      })
-      .catch((error) => setLoadError(errorText(error, 'Could not load the graph.')));
-  }, [loadGraph]);
+    Promise.all([call('page'), call('interface')])
+      .then(([page, offered]) => setDesign({
+        name: page.name,
+        description: page.description,
+        scheme: page.scheme,
+        blocks: page.blocks as unknown as GuiWidget[],
+        outputs: offered.outputs.map(({ name, label }) => ({ name, label })),
+        startsWhole: page.starts_whole,
+      }))
+      .catch((error) => setLoadError(errorText(error, 'Could not load the tool.')));
+    return watchSession();
+  }, []);
 
   // Anything the graph still needs before it can run (a file to read, a place
   // to write) is asked for in the same window the editor uses -- the deployed
-  // equivalent of the CLI's stdin prompts, but clickable. One path for every
-  // round started here, and the same one the editor's running application
-  // uses: see `useDeliveredRun`.
-  const delivered = useDeliveredRun();
+  // equivalent of the CLI's stdin prompts, but clickable (`useRound`).
+  const round = useRound();
 
-  // Opened, the tool is started, as ▶ Run starts it in the editor
-  // (`app/application.ts`) -- unless its server keeps its time. A bundle's
-  // trigger nodes, when the tool starts and on their clock, run in the server,
-  // not here: a page is a window, and a window is not always open (below).
-  // One the server keeps no time for starts here: a graph nothing on its page
-  // starts runs whole once, and the clock of a tool opened from the editor with
-  // ⧉ Open as a tool -- which no server keeps -- ticks in this window while it
-  // is open. The first answer about the clock decides, once.
+  // Opened, a tool that nothing on its page and no trigger node starts runs
+  // whole once, as ▶ Run starts it in the editor and a program runs when it is
+  // started. Its trigger nodes are the server's: they run on its clock
+  // whether or not a page is open.
   const started = useRef(false);
-  const start = useRef(delivered.run);
-  start.current = delivered.run;
-
-  // The graph's own triggers, where the server keeps them: this only watches.
-  // What the server last produced is shown as soon as the page opens, and each
-  // new round as it lands; what that round remembered is replayed into this
-  // page's copy of the graph like any other run's.
-  const [schedule, setSchedule] = useState<ScheduleState | null>(null);
-  const seenRound = useRef(0);
+  const start = useRef(round.run);
+  start.current = round.run;
   useEffect(() => {
-    if (!ready) return undefined;
-    return watchSchedule(() => call('schedule'), (state) => {
-      if (!started.current) {
-        started.current = true;
-        if (!state.scheduled) void startApplication(useGraphStore.getState().exportGraph(), () => start.current(null));
-      }
-      setSchedule(state);
-      if (state.result && state.runs !== seenRound.current && !useGraphStore.getState().isExecuting) {
-        seenRound.current = state.runs;
-        // Laid over what the page shows, not in place of it: a clock's round
-        // runs what its trigger is wired to, and the summary somebody asked
-        // for a minute ago is not part of that.
-        const shown = useGraphStore.getState().executionResult;
-        setExecutionResult(shown ? mergeResults(shown, state.result) : state.result, state.result);
-      }
-    });
-  }, [ready, setExecutionResult]);
+    if (!design?.startsWhole || started.current) return;
+    started.current = true;
+    void start.current(null);
+  }, [design]);
+
+  const clock = session.view?.clock;
+  const finishedAt = session.view?.finished_at;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: SUNKEN }}>
       <DeliveredHeader
+        name={design?.name ?? ''}
+        description={design?.description ?? ''}
+        round={session.round}
         tools={(
           <button
             onClick={() => setShowSettings(true)}
@@ -103,11 +88,11 @@ export default function RuntimeApp() {
             ⚙ AI Settings
           </button>
         )}
-        note={schedule?.scheduled && (
+        note={clock?.runs_by_itself && (
           <span className="text-xs whitespace-nowrap" style={{ color: DIM }} title="This tool runs by itself; the clock is in the server, so it keeps running with this page closed.">
-            {schedule.running ? '⏱ running…' : schedule.next_at
-              ? `⏱ next ${new Date(schedule.next_at).toLocaleTimeString()}`
-              : schedule.finished_at ? `⏱ ran ${new Date(schedule.finished_at).toLocaleTimeString()}` : '⏱'}
+            {session.round && !session.round.done ? '⏱ running…' : clock.next_at
+              ? `⏱ next ${new Date(clock.next_at).toLocaleTimeString()}`
+              : finishedAt ? `⏱ ran ${new Date(finishedAt).toLocaleTimeString()}` : '⏱'}
           </span>
         )}
       />
@@ -118,17 +103,23 @@ export default function RuntimeApp() {
             {loadError}
           </div>
         )}
-        {!loadError && !ready && (
+        {!loadError && !design && (
           <div className="m-6 text-sm" style={{ color: DIM }}>Loading…</div>
         )}
 
         {/* The page -- or, when it has no blocks, what the tool does and what
             its run hands back: the editor's running application draws the same. */}
-        {ready && <GuiSurfacePage onRun={(trigger) => { void delivered.run(trigger); }} />}
+        {design && (
+          <GuiSurfacePage
+            page={pageInUse(design, session)}
+            onValue={(block, value) => setEdit(block.id, value)}
+            onEvent={(block) => { void round.run(block.id); }}
+          />
+        )}
         <RequirementsDialog
-          requirements={delivered.requirements}
-          onSubmit={delivered.submit}
-          onCancel={delivered.cancel}
+          requirements={round.requirements}
+          onSubmit={round.submit}
+          onCancel={round.cancel}
         />
       </div>
 

@@ -3,9 +3,11 @@ import type { GuiWidget, WidgetKind } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import DesignerSurface from './DesignerSurface';
 import DesignerPalette, { newBlock, type PaletteEntry } from './DesignerPalette';
-import { usePage, usePageEvents } from './GuiPage';
-import { useDeliveredRun } from './useDeliveredRun';
+import { usePage } from './usePage';
+import { useRound } from './useRound';
 import RequirementsDialog from '@/dialogs/RequirementsDialog';
+import { roundGoing, setEdit, useSession } from '@/api/session';
+import { widgetFiresRun, widgetTakesValue, widgetValueIsDesign } from '@/document/guiWidgets';
 import { insertBlock, moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { liveTypedValues } from './typedValues';
 import PageHeading from './PageHeading';
@@ -22,10 +24,16 @@ export default function DesignerTab() {
   const metadata = useGraphStore((s) => s.metadata);
   const setMetadata = useGraphStore((s) => s.setMetadata);
   const { page, widgets } = usePage();
-  // Its blocks are live, and a round they start is the delivered tool's: what
-  // the graph still needs is asked first.
-  const delivered = useDeliveredRun();
-  const events = usePageEvents((trigger) => { void delivered.run(trigger); });
+  // Its blocks are live, and a round they start is the delivered tool's: the
+  // document is handed over, what the graph still needs is asked first, and
+  // the round is given what this page shows -- its design, set here.
+  const round = useRound(
+    () => useGraphStore.getState().holdDocument(),
+    () => Object.fromEntries(widgets
+      .filter((widget) => widgetTakesValue(widget) && widgetValueIsDesign(widget) && widget.value !== undefined)
+      .map((widget) => [widget.id, widget.value])),
+  );
+  const busy = useSession(roundGoing);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // What was typed into a live block, shown in place of what arrived there --
   // for as long as the block still holds it. A run that sent it, or a panel
@@ -152,12 +160,28 @@ export default function DesignerTab() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  /** A live edit in a block: remembered here, and stored as the page stores it (`usePageEvents`). */
+  /**
+   * A live edit in a block. What a block holds by design -- a choice, a text,
+   * a path to start on -- is set here as the page's design, as everything on
+   * this tab is; a conversation is only ever the session's (`valueIsDesign`).
+   */
   const setWidgetValue = (widget: GuiWidget, value: unknown) => {
+    if (!widgetValueIsDesign(widget)) {
+      setEdit(widget.id, value);
+      return;
+    }
     // Only text is remembered as an edit in progress; a block that stores
     // something richer holds it itself and has no half-typed state to protect.
     if (typeof value === 'string') setTyped((prev) => ({ ...prev, [widget.id]: value }));
-    events.setWidgetValue(widget, value);
+    // Through `pageWrite`, as every edit of the page: a value and the event
+    // that follows it arrive in the same tick.
+    patchBlock(widget.id, { value });
+  };
+
+  /** A block was used: its value is kept first, and one that starts the graph starts a round. */
+  const fire = (widget: GuiWidget, value?: unknown) => {
+    if (value !== undefined) setWidgetValue(widget, value);
+    if (widgetFiresRun(widget) && !busy) void round.run(widget.id);
   };
 
   return (
@@ -173,13 +197,9 @@ export default function DesignerTab() {
         >
           <DesignerSurface
             dropIndex={dragEntry ? dropIndex : null}
-            pageId={page?.id}
             widgets={widgets}
             onWidgetValue={setWidgetValue}
-            onWidgetTrigger={(widget, value) => {
-              if (typeof value === 'string') setTyped((prev) => ({ ...prev, [widget.id]: value }));
-              events.fire(widget, value);
-            }}
+            onWidgetTrigger={fire}
             selectedId={selectedId}
             onSelect={setSelectedId}
             overrides={overrides}
@@ -227,7 +247,7 @@ export default function DesignerTab() {
         {page && <div className="mt-5"><WhatRuns node={page} folded /></div>}
       </aside>
 
-      <RequirementsDialog requirements={delivered.requirements} onSubmit={delivered.submit} onCancel={delivered.cancel} />
+      <RequirementsDialog requirements={round.requirements} onSubmit={round.submit} onCancel={round.cancel} />
 
       {/* The element under the cursor while it is being dragged. Without it the
           only feedback was the result, which on a failed drop is no feedback. */}

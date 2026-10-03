@@ -41,33 +41,34 @@ async function serveGraph(graphPath = MINIMAL, pageDir?: string) {
 const asJson = (response: Response) => response.json() as Promise<Record<string, unknown>>;
 
 describe('what a deployed tool serves', () => {
-  it('hands over the graph it ships', async () => {
-    const { url } = await serveGraph();
-    const graph = await asJson(await fetch(`${url}/api/runtime/graph`));
-    expect((graph.metadata as { name: string }).name).toBeTruthy();
-    expect(Array.isArray(graph.nodes)).toBe(true);
+  it('hands over the page it ships, as it was designed -- not the graph', async () => {
+    const { url, graph } = await serveGraph();
+    const page = await asJson(await fetch(`${url}/api/runtime/page`));
+    expect(page.name).toBe(graph.metadata.name);
+    expect(Array.isArray(page.blocks)).toBe(true);
+    expect(page).not.toHaveProperty('nodes');
   });
 
   it('runs it watchably, in the shape the page reads', async () => {
-    const { url, graph } = await serveGraph();
-    const post = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph) };
-    const { run_id: runId, total } = await asJson(await fetch(`${url}/api/execute/start`, post)) as
-      { run_id: string; total: number };
+    const { url } = await serveGraph();
+    const post = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' };
+    const { round_id: roundId, total } = await asJson(await fetch(`${url}/api/runtime/rounds`, post)) as
+      { round_id: string; total: number };
 
-    expect(typeof runId).toBe('string');
+    expect(typeof roundId).toBe('string');
     expect(total).toBeGreaterThan(0);
 
     let snapshot: Record<string, unknown> = {};
     for (let attempt = 0; attempt < 60; attempt += 1) {
-      snapshot = await asJson(await fetch(`${url}/api/execute/runs/${runId}`));
+      snapshot = await asJson(await fetch(`${url}/api/runtime/rounds/${roundId}`));
       if (snapshot.done) break;
       await new Promise((wait) => setTimeout(wait, 100));
     }
 
-    // Every field the page's `RunSnapshot` declares. A missing one is not a
+    // Every field the page's `RoundSnapshot` declares. A missing one is not a
     // cosmetic gap: `done` is how the page knows to stop polling.
     expect(snapshot).toMatchObject({
-      run_id: runId,
+      round_id: roundId,
       done: true,
       cancelled: false,
       total,
@@ -84,7 +85,7 @@ describe('what a deployed tool serves', () => {
     // This request being refused, not the server failing: a 500 has nothing
     // for the caller to act on. The size limit beside it is in `http.test.ts`.
     const { url } = await serveGraph();
-    const refused = await fetch(`${url}/api/execute/requirements`, {
+    const refused = await fetch(`${url}/api/runtime/requirements`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'not json at all',
     });
     expect(refused.status).toBe(400);
@@ -93,7 +94,7 @@ describe('what a deployed tool serves', () => {
 
   it('answers a path with a broken escape as one that names nothing, not as a failure', async () => {
     const { url } = await serveGraph();
-    const response = await fetch(`${url}/api/execute/runs/%E0%A4%A`);
+    const response = await fetch(`${url}/api/runtime/rounds/%E0%A4%A`);
     expect(response.status).toBe(404);
   });
 
@@ -128,39 +129,39 @@ describe('a web page elsewhere in the same browser', () => {
   }
 
   it('answers its own page, by any loopback name', async () => {
-    const { url, graph } = await serveGraph();
+    const { url } = await serveGraph();
     const port = new URL(url).port;
     for (const name of ['127.0.0.1', 'localhost', '[::1]']) {
       const own = { Host: `${name}:${port}`, Origin: `http://${name}:${port}`, 'Content-Type': 'application/json' };
-      expect(await ask(url, '/api/execute/requirements', own, JSON.stringify(graph)), name).toBe(200);
+      expect(await ask(url, '/api/runtime/requirements', own, '{}'), name).toBe(200);
     }
   });
 
   it('refuses a request that names another host or port', async () => {
     const { url } = await serveGraph();
     const port = new URL(url).port;
-    expect(await ask(url, '/api/runtime/graph', { Host: `evil.example:${port}` })).toBe(403);
-    expect(await ask(url, '/api/runtime/graph', { Host: 'localhost:1' })).toBe(403);
+    expect(await ask(url, '/api/runtime/page', { Host: `evil.example:${port}` })).toBe(403);
+    expect(await ask(url, '/api/runtime/page', { Host: 'localhost:1' })).toBe(403);
     expect(await ask(url, '/', { Host: `evil.example:${port}` })).toBe(403);
   });
 
   it('refuses a call from another origin, or one the browser marks cross-site', async () => {
-    const { url, graph } = await serveGraph();
+    const { url } = await serveGraph();
     const host = new URL(url).host;
     const json = { Host: host, 'Content-Type': 'application/json' };
-    const body = JSON.stringify(graph);
-    expect(await ask(url, '/api/execute/requirements', { ...json, Origin: 'https://evil.example' }, body)).toBe(403);
-    expect(await ask(url, '/api/execute/requirements', { ...json, Origin: 'http://localhost:1' }, body)).toBe(403);
-    expect(await ask(url, '/api/execute/requirements', { ...json, Origin: 'null' }, body)).toBe(403);
-    expect(await ask(url, '/api/execute/requirements', { ...json, 'Sec-Fetch-Site': 'cross-site' }, body)).toBe(403);
+    const body = '{}';
+    expect(await ask(url, '/api/runtime/requirements', { ...json, Origin: 'https://evil.example' }, body)).toBe(403);
+    expect(await ask(url, '/api/runtime/requirements', { ...json, Origin: 'http://localhost:1' }, body)).toBe(403);
+    expect(await ask(url, '/api/runtime/requirements', { ...json, Origin: 'null' }, body)).toBe(403);
+    expect(await ask(url, '/api/runtime/requirements', { ...json, 'Sec-Fetch-Site': 'cross-site' }, body)).toBe(403);
   });
 
   it('reads a body only when it says it is JSON', async () => {
     // text/plain is what a page may post anywhere without the browser asking first.
-    const { url, graph } = await serveGraph();
+    const { url } = await serveGraph();
     const host = new URL(url).host;
-    expect(await ask(url, '/api/execute/requirements', { Host: host, 'Content-Type': 'text/plain' }, JSON.stringify(graph))).toBe(415);
-    expect(await ask(url, '/api/execute/requirements', { Host: host }, JSON.stringify(graph))).toBe(415);
+    expect(await ask(url, '/api/runtime/requirements', { Host: host, 'Content-Type': 'text/plain' }, '{}')).toBe(415);
+    expect(await ask(url, '/api/runtime/requirements', { Host: host }, '{}')).toBe(415);
   });
 
   it('served beyond loopback, answers as this machine on any port, and as no name a page chose', async () => {
@@ -171,10 +172,9 @@ describe('a web page elsewhere in the same browser', () => {
     started.push(server);
     // Said as an address a browser opens: 0.0.0.0 is none.
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
     const json = { 'Content-Type': 'application/json' };
-    expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'localhost:8000', Origin: 'http://localhost:8000' }, graph)).toBe(200);
-    expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'evil.example:8000', Origin: 'http://evil.example:8000' }, graph)).toBe(403);
+    expect(await ask(url, '/api/runtime/requirements', { ...json, Host: 'localhost:8000', Origin: 'http://localhost:8000' }, '{}')).toBe(200);
+    expect(await ask(url, '/api/runtime/requirements', { ...json, Host: 'evil.example:8000', Origin: 'http://evil.example:8000' }, '{}')).toBe(403);
     expect(await ask(url, '/', { Host: 'tool.lan' })).toBe(403);
   });
 
@@ -183,10 +183,9 @@ describe('a web page elsewhere in the same browser', () => {
     try {
       const { server, url } = await serve({ graphPath: MINIMAL, port: 0, host: '0.0.0.0' });
       started.push(server);
-      const graph = JSON.stringify(JSON.parse(await readFile(MINIMAL, 'utf8')));
       const json = { 'Content-Type': 'application/json' };
-      expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'tool.lan', Origin: 'http://tool.lan' }, graph)).toBe(200);
-      expect(await ask(url, '/api/execute/requirements', { ...json, Host: 'tool.lan', Origin: 'https://evil.example' }, graph)).toBe(403);
+      expect(await ask(url, '/api/runtime/requirements', { ...json, Host: 'tool.lan', Origin: 'http://tool.lan' }, '{}')).toBe(200);
+      expect(await ask(url, '/api/runtime/requirements', { ...json, Host: 'tool.lan', Origin: 'https://evil.example' }, '{}')).toBe(403);
       expect(await ask(url, '/', { Host: 'evil.example' })).toBe(403);
     } finally {
       delete process.env.AI_GRAPH_ALLOWED_HOSTS;
@@ -227,7 +226,7 @@ describe('a server bound to ::1', () => {
     if (!served) return context.skip();
     started.push(served.server);
     expect(served.url).toMatch(/^http:\/\/\[::1\]:\d+$/);
-    expect((await fetch(`${served.url}/api/runtime/graph`)).status).toBe(200);
+    expect((await fetch(`${served.url}/api/runtime/page`)).status).toBe(200);
   });
 });
 
@@ -282,36 +281,50 @@ describe('the engine as the front door of the editor', () => {
   it('answers the routes the editor calls itself', async () => {
     const url = await editor();
     const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
-    const requirements = await (await fetch(`${url}/api/execute/requirements`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
-    })).json();
+    const post = (path: string, body: unknown) => fetch(`${url}${path}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    // Nothing to ask about before a graph is handed over; then the session's.
+    expect((await post('/api/runtime/requirements', {})).status).toBe(404);
+    await post('/api/runtime/hold', { graph });
+    const requirements = await (await post('/api/runtime/requirements', {})).json();
     expect(Array.isArray(requirements)).toBe(true);
     const settings = await asJson(await fetch(`${url}/api/ai/settings`));
     expect(settings.credentials).toBeTruthy();
   });
 
   /**
-   * "Open as tool": the editor hands over the graph it is editing, and the
-   * runtime page then asks for it over the ordinary `graph` route. Before it
-   * is handed over there is nothing to serve, and saying so is what tells the
-   * window it was opened by hand rather than by the button.
+   * "Open as tool": the editor hands its session the graph it is editing, and
+   * the runtime page then asks for its page over the ordinary `page` route.
+   * Before it is handed over there is nothing to serve, and saying so is what
+   * tells the window it was opened by hand rather than by the button.
    */
-  it('serves the graph the editor hands it, as a tool would', async () => {
+  it('serves the page of the graph the editor hands it, as a tool would', async () => {
     const url = await editor();
-    expect((await fetch(`${url}/api/runtime/graph`)).status).toBe(404);
+    expect((await fetch(`${url}/api/runtime/page`)).status).toBe(404);
 
     const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
     graph.metadata.name = 'Handed over';
-    // How a node was written is the project's: the tool's page is handed what runs.
-    graph.nodes[0].config = { ...graph.nodes[0].config, history: '## 2026-09-28 10:00 · ✨ Code\n\nNothing was sent.' };
     const held = await fetch(`${url}/api/runtime/hold`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(graph),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ graph }),
     });
     expect(held.status).toBe(200);
+    const { session } = await asJson(held);
+    expect(typeof session).toBe('string');
 
-    const served = await asJson(await fetch(`${url}/api/runtime/graph`));
-    expect((served.metadata as { name: string }).name).toBe('Handed over');
-    expect((served.nodes as { config: Record<string, unknown> }[])[0].config).not.toHaveProperty('history');
+    const served = await asJson(await fetch(`${url}/api/runtime/page`));
+    expect(served).toMatchObject({ session, name: 'Handed over' });
+  });
+
+  it('begins another session for another document, and goes on with the one there is for the same', async () => {
+    const url = await editor();
+    const graph = JSON.parse(await readFile(MINIMAL, 'utf8'));
+    const hold = async (body: unknown) => (await asJson(await fetch(`${url}/api/runtime/hold`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }))).session;
+    const first = await hold({ graph });
+    expect(await hold({ graph })).toBe(first);
+    expect(await hold({ graph, anew: true })).not.toBe(first);
   });
 
   it('will not let a deployed tool be handed a different graph', async () => {

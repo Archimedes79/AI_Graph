@@ -24,7 +24,7 @@ export interface TriggerConfig {
  * whole graph, which is what a lone button does too, and what the two settings
  * meant.
  *
- * Whoever holds the graph keeps the time (`host/schedule.ts`); this only says
+ * The server's session keeps the time (`host/session.ts`); this only says
  * when. In a run nobody's event started it counts as having fired, like every
  * other event.
  */

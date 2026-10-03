@@ -32,13 +32,17 @@ import { mergeResults, type ExecutionResult, type Graph, type GraphNode } from '
 import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { triggeredNodes, type Trigger } from '../execution/triggers.ts';
 import { applyValues, checkValues, outputsOf, valuesOf } from '../execution/graphInterface.ts';
+import { runtimeRequirements, type RuntimeRequirement } from '../execution/runtimeValues.ts';
+import { startClock, type Clock } from '../execution/clock.ts';
 import { Latch, type Held } from '../execution/latch.ts';
 import { LastOutputs } from '../execution/reuse.ts';
 import { registry } from '../elements/registry.ts';
 import type { ProgressEvent, Runtime } from '../elements/Runtime.ts';
+import { stateFileOf } from '../project/folder.ts';
+import { Refusal } from './http.ts';
 import { nodeRuntime } from './node.ts';
 import { Rounds, type RoundWork } from './rounds.ts';
-import type { RunSnapshot, SessionView } from './api.ts';
+import type { RoundSnapshot, SessionView } from './api.ts';
 
 /** One slot a node keeps: what it holds now, and what its design held when that was kept. */
 interface Slot {
@@ -64,7 +68,7 @@ interface StateFile {
 
 /** What a watcher of a session is told: a round as it starts, goes and ends, or the session after a change. */
 export type SessionEvent =
-  | { type: 'round'; round: RunSnapshot }
+  | { type: 'round'; round: RoundSnapshot }
   | { type: 'session'; session: SessionView };
 
 export interface SessionOptions {
@@ -73,6 +77,9 @@ export interface SessionOptions {
   /** The services a round runs with, told where to say how far it is. A test hands in fakes. */
   runtime?: (report: (event: ProgressEvent) => void) => Runtime;
 }
+
+/** How long a round is remembered to have run whole: as long as `Rounds` keeps it to look at. */
+const FORGET_WHOLE_MS = 300_000;
 
 /** How often a watcher is told how far a round is: a fan-out over 500 items reports 500 times. */
 const PROGRESS_EVERY_MS = 100;
@@ -89,9 +96,13 @@ export class Session {
   private finishedAt: number | null = null;
   private notes: string[] = [];
   private lastRound: string | null = null;
+  /** The clock, while the application runs, and what stops the rounds it started. */
+  private application: { clock: Clock; stop: AbortController } | null = null;
   private readonly file: string | null;
   private readonly runtime: (report: (event: ProgressEvent) => void) => Runtime;
   private readonly watchers = new Set<(event: SessionEvent) => void>();
+  /** The rounds no event started: they ran the whole graph. */
+  private readonly whole = new Set<string>();
   /** When each round's watchers were last told how far it is. */
   private readonly told = new Map<string, number>();
   /** The last write of the file, so the next waits for it: two at once would leave half of each. */
@@ -128,6 +139,11 @@ export class Session {
     return this.design;
   }
 
+  /** Where this session keeps its state; none, for a graph never saved. */
+  get stateFile(): string | null {
+    return this.file;
+  }
+
   /** What the last time the session was opened, or handed a graph, dropped of what it kept -- in words. */
   get dropped(): string[] {
     return this.notes;
@@ -140,6 +156,7 @@ export class Session {
 
   /** The session as whoever uses the graph sees it: by name, never by node. */
   view(): SessionView {
+    const clock = this.application?.clock;
     return {
       session: this.id,
       values: valuesOf(withState(this.design, this.slots).copy, registry),
@@ -148,7 +165,25 @@ export class Session {
       finished_at: this.finishedAt,
       round: this.lastRound ? this.snapshot(this.lastRound) : null,
       dropped: this.notes,
+      clock: {
+        running: !!clock,
+        runs_by_itself: clock?.runsByItself ?? false,
+        ticks: clock?.ticks ?? false,
+        next_at: clock?.nextAt() ?? null,
+        problem: clock?.problem() ?? null,
+      },
     };
+  }
+
+  /**
+   * What the graph asks before a round for *trigger* runs -- of what that
+   * round runs only -- given *values*: what it holds now is each question's
+   * default, and a value given is no question any more.
+   */
+  requirements(trigger: Trigger | null, values: Record<string, unknown> = {}): RuntimeRequirement[] {
+    const { copy } = withState(this.design, this.slots, values);
+    const only = trigger ? triggeredNodes(copy, trigger, memoryFeedbackEdges(copy.nodes, copy.edges, registry)) : null;
+    return runtimeRequirements(copy, registry, only).filter((asked) => !(asked.key in values));
   }
 
   /**
@@ -193,10 +228,10 @@ export class Session {
   }
 
   /** A round as a watcher sees it -- and, once it has ended, what it handed back by name. */
-  snapshot(id: string): RunSnapshot | null {
+  snapshot(id: string): RoundSnapshot | null {
     const snapshot = this.rounds.snapshot(id);
     if (!snapshot) return null;
-    return { ...snapshot, outputs: snapshot.result ? outputsOf(this.design, snapshot.result, registry) : null };
+    return { ...snapshot, outputs: snapshot.result ? outputsOf(this.design, snapshot.result, registry) : null, whole: this.whole.has(id) };
   }
 
   stop(id: string): boolean {
@@ -206,6 +241,38 @@ export class Session {
   /** Stop every round going or waiting, and wait for each to end: see `Rounds.stopAll`. */
   stopAll(): Promise<number> {
     return this.rounds.stopAll();
+  }
+
+  /**
+   * Start what runs by itself: each trigger node set to fire at start fires,
+   * and each with an interval keeps its time (`execution/clock.ts`) -- the one
+   * clock a served tool and the editor's ▶ Run keep alike, in the server, so
+   * it goes on whether or not a page is open. Its rounds are rounds like any
+   * other. Resolves once the rounds starting it have run, with whether a
+   * clock goes on ticking.
+   */
+  async startApplication(): Promise<{ ticks: boolean }> {
+    await this.stopApplication();
+    const stop = new AbortController();
+    const clock = startClock(() => this.design, registry, async (event) => {
+      if (stop.signal.aborted) return;
+      // A round that could not start says so in its own record; the next may be fine.
+      await this.run(event, {}, stop.signal).catch(() => {});
+    });
+    this.application = { clock, stop };
+    this.tell({ type: 'session', session: this.view() });
+    await clock.started;
+    return { ticks: clock.ticks };
+  }
+
+  /** Stop the clock: no round of it starts afterwards, and the one in flight is stopped. */
+  async stopApplication(): Promise<void> {
+    const running = this.application;
+    if (!running) return;
+    this.application = null;
+    running.stop.abort();
+    await running.clock.stop();
+    this.tell({ type: 'session', session: this.view() });
   }
 
   /**
@@ -236,6 +303,11 @@ export class Session {
     const labels = new Map(design.nodes.map((node) => [node.id, node.label || node.id]));
     const { id, outcome } = this.rounds.start(total, (node) => labels.get(node) ?? node, (work) => this.round(trigger, values, work), signal);
     this.lastRound = id;
+    if (!trigger) {
+      this.whole.add(id);
+      const forget = (): void => { setTimeout(() => this.whole.delete(id), FORGET_WHOLE_MS).unref(); };
+      outcome.then(forget, forget);
+    }
     return { id, total, outcome };
   }
 
@@ -327,23 +399,55 @@ export class Session {
   }
 }
 
+/** How a graph is handed over: from which file, and whether it is another document than the one before. */
+export interface Handover {
+  /** Where the graph is kept, if anywhere: its session keeps its state beside it (`stateFileOf`). */
+  path?: string | null;
+  /** Another document than the one handed over before -- opened, or started anew: a session of its own. */
+  anew?: boolean;
+}
+
 /**
  * The session a server holds -- none yet, for the editor, until a graph is
  * handed over -- and the one way a graph is handed over.
  */
 export interface SessionHolder {
   session: Session | null;
-  /** Go on with *graph*: the session there is, handed a changed design, or a new one. */
-  hold(graph: Graph): Promise<Session>;
+  /**
+   * Go on with *graph*: the session there is, handed a changed design -- or,
+   * for another document or another file, a new one, the one before stopped.
+   */
+  hold(graph: Graph, handover?: Handover): Promise<Session>;
+  /**
+   * The session a request asks about: the one held -- unless it names
+   * another, which is not here: a 404 that sends a page back to the interface.
+   */
+  asked(id?: string): Session;
 }
 
 /** A holder of *session*, or of none until a graph is handed to it. */
 export function holderOf(session: Session | null = null): SessionHolder {
   return {
     session,
-    async hold(graph) {
-      if (this.session) this.session.hold(graph);
-      else this.session = await Session.open(graph);
+    asked(id) {
+      if (!this.session) throw new Refusal(404, 'This server holds no graph yet.');
+      if (id && id !== this.session.id) {
+        throw new Refusal(404, `No session "${id}" here: this server's is "${this.session.id}". Ask for its interface again.`);
+      }
+      return this.session;
+    },
+    async hold(graph, { path = null, anew = false } = {}) {
+      const file = path ? stateFileOf(path) : null;
+      const before = this.session;
+      if (before && !anew && before.stateFile === file) {
+        before.hold(graph);
+        return before;
+      }
+      if (before) {
+        await before.stopApplication();
+        await before.stopAll();
+      }
+      this.session = await Session.open(graph, { file });
       return this.session;
     },
   };

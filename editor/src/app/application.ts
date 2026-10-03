@@ -11,36 +11,28 @@
 // use, a clock to tick -- and ends by itself where nothing is: a graph that
 // only computes, like a program that has returned.
 //
-// The clock is the served tool's own (`execution/clock.ts`), so a round comes
-// due here when it would there; and a round a trigger starts asks nobody
-// anything, as nobody is there to ask when a served tool's clock strikes. It is
-// the document that runs, as it is when a round starts, and a round waits while
-// another is going or while the canvas shows a node's graph: its result lands
-// on the graph at the top.
-//
-// A delivered tool whose server keeps no time for it -- one opened from the
-// editor with ⧉ Open as a tool -- runs the same way in its own window
-// (`runtime/RuntimeApp.tsx`).
+// The clock is the server's, as a served tool's is (`host/session.ts`): the
+// document is handed to the server's session, which keeps the time of its
+// trigger nodes from ▶ Run to ■ Stop, so a round comes due in the editor when
+// it would in a bundle, and asks nobody anything. It is the document that
+// runs: while the application runs, what is edited is handed over a moment
+// after, and the next round runs that. And it ends with the editor: closed or
+// reloaded while it runs, the page tells the server to stop the clock, which
+// would otherwise tick on with nobody there.
 
 import { create } from 'zustand';
 import type { Graph } from '@/graph';
-import type { RunTrigger } from '@/api/client';
 import { useGraphStore } from '@/store/graphStore';
 import { pageOf } from '@/document/guiWidgets';
+import { call } from '@/api/client';
+import { stopRound } from '@/api/session';
 import { startEvents } from '@engine/execution/triggers.ts';
-import { startClock, type Clock } from '@engine/execution/clock.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
 export const useApplication = create<{
   /** The application is running: its page waits to be used, its clocks tick. */
   running: boolean;
 }>(() => ({ running: false }));
-
-/**
- * The clock of the application running now. Each start has its own, so a
- * round of one that was stopped cannot come back into the next.
- */
-let clock: Clock | null = null;
 
 /** Whether the graph at the top has a page with blocks: what ▶ Run opens, from whatever level is on screen. */
 export function useTopHasPage(): boolean {
@@ -49,57 +41,62 @@ export function useTopHasPage(): boolean {
     : s.rfNodes.map((node) => node.data.graphNode)).widgets.length > 0);
 }
 
-/** Settles once a round may start: none is going, and the canvas shows the graph at the top. */
-function ready(): Promise<void> {
-  const free = (): boolean => {
-    const { isExecuting, subgraphStack } = useGraphStore.getState();
-    return !isExecuting && subgraphStack.length === 0;
-  };
-  if (free()) return Promise.resolve();
-  return new Promise((resolve) => {
-    const stop = useGraphStore.subscribe(() => {
-      if (!free()) return;
-      stop();
-      resolve();
-    });
+/** How long after an edit, while the application runs, the document is handed over again. */
+const HOLD_AFTER_EDIT_MS = 500;
+
+/** What the running application set up, each undone when it ends. */
+let whileRunning: (() => void)[] = [];
+
+/** While the application runs, hand the server each edit of the document, a moment after it was made. */
+function followEdits(): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stop = useGraphStore.subscribe((state, before) => {
+    if (state.rfNodes === before.rfNodes && state.rfEdges === before.rfEdges && state.metadata === before.metadata) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => { void useGraphStore.getState().holdDocument().catch(() => {}); }, HOLD_AFTER_EDIT_MS);
   });
+  return () => {
+    clearTimeout(timer);
+    stop();
+  };
+}
+
+/** While the application runs, stop the server's clock when the editor is closed or reloaded. */
+function stopWhenLeft(): () => void {
+  const left = (): void => { void call('stopApplication', {}, { keepalive: true }).catch(() => {}); };
+  addEventListener('pagehide', left);
+  return () => removeEventListener('pagehide', left);
 }
 
 /**
  * Start the application *graph* -- stopping one that is running first -- and
- * resolve once what starting it runs has run. *runWhole* runs it whole, for a
- * graph nothing else starts: the delivered tool's steps, which ask first what
- * the graph still needs (`useDeliveredRun`).
+ * resolve once what starting it runs has started. *runWhole* runs it whole,
+ * for a graph nothing else starts: the delivered tool's steps, which ask first
+ * what the graph still needs (`useRound`).
  */
 export async function startApplication(graph: Graph, runWhole: () => Promise<void>): Promise<void> {
-  stopApplication();
-  // What the page showed before is not what this run has done: a delivered tool opens empty.
+  await stopApplication();
+  // What the graph's cards showed before is not what this run has done.
   useGraphStore.getState().setExecutionResult(null);
   useApplication.setState({ running: true });
-  const own: Clock = startClock(() => useGraphStore.getState().rootGraph(), engineRegistry, async (event: RunTrigger) => {
-    await ready();
-    if (clock !== own) return;
-    const store = useGraphStore.getState();
-    await store.runGraph(store.rootGraph(), event);
-  });
-  clock = own;
-
+  await useGraphStore.getState().holdDocument();
+  whileRunning = [followEdits(), stopWhenLeft()];
+  const { ticks } = await call('startApplication', {});
   if (startEvents(graph, engineRegistry).includes(null)) await runWhole();
-  else await own.started;
-  if (clock !== own) return;
   // Nothing left to happen: no page to use, no clock to tick.
-  if (!pageOf(graph.nodes).widgets.length && !own.ticks) end();
+  if (!pageOf(graph.nodes).widgets.length && !ticks) end();
 }
 
-/** The clock stopped and the application no longer running -- its round, if one is going, left to finish. */
+/** No longer running: edits no longer handed over, and the server's clock stopped. */
 function end(): void {
-  void clock?.stop();
-  clock = null;
+  for (const undo of whileRunning) undo();
+  whileRunning = [];
   useApplication.setState({ running: false });
+  void call('stopApplication', {}).catch(() => {});
 }
 
 /** Stop the application -- its clocks -- and the round in flight, whoever started it. */
-export function stopApplication(): void {
+export async function stopApplication(): Promise<void> {
   if (useApplication.getState().running) end();
-  if (useGraphStore.getState().isExecuting) void useGraphStore.getState().stopRun();
+  if (useGraphStore.getState().isExecuting) await stopRound().catch(() => {});
 }

@@ -16,6 +16,7 @@ import { parseGraph } from '../../graph.ts';
 import { executeNode, inputsFor } from '../../execution/executor.ts';
 import { LastOutputs } from '../../execution/reuse.ts';
 import { runExample } from '../../authoring/examples.ts';
+import { withoutAuthoring } from '../../authoring/handedOn.ts';
 import { registry } from '../../elements/registry.ts';
 import { builtPage, writeBundle } from '../../cli/bundle.ts';
 import { zipMode } from '../../cli/launchers.ts';
@@ -172,13 +173,22 @@ export function editorRoutes(held: SessionHolder = holderOf()): Handlers {
       }
     },
 
-    // What "open it as a tool" costs: the graph, handed to the server's
-    // session. The runtime page then asks for it over the `graph` route like
+    // The document, handed to the server's session: what every round runs,
+    // whoever starts it -- and what `runtime.html` opened against it shows, as
     // any deployed page does, so nothing about the delivered side knows it is
-    // being previewed.
+    // being previewed. What runs, not how each node was written.
     async holdGraph(asked) {
-      await held.hold(parseGraph(asked));
-      return { ok: true as const };
+      const session = await held.hold(withoutAuthoring(parseGraph(asked.graph)), { path: asked.path, anew: asked.anew });
+      return { session: session.id, dropped: session.dropped };
+    },
+
+    async startApplication(asked) {
+      return held.asked(asked.session).startApplication();
+    },
+
+    async stopApplication(asked) {
+      await held.asked(asked.session).stopApplication();
+      return { stopped: true };
     },
 
     aiSettings: () => settings.status(),

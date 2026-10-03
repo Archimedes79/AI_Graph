@@ -1,6 +1,16 @@
 import type { ReactNode } from 'react';
-import { useGraphStore } from '@/store/graphStore';
+import type { RoundSnapshot } from '@/api/client';
 import { DANGER_TEXT, DIM, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
+
+/** How a round went, in a word: going, done, or failed -- nothing before the first. */
+export function roundStatus(round: RoundSnapshot | null): { label: string; failed: boolean } {
+  if (!round) return { label: '', failed: false };
+  if (!round.done) return { label: '⏳ Running…', failed: false };
+  const status = round.result?.status;
+  if (status === 'success') return { label: '✅ Done', failed: false };
+  if (status === 'error' || (!round.result && round.error && !round.cancelled)) return { label: '❌ Failed', failed: true };
+  return { label: '', failed: false };
+}
 
 /**
  * The bar above the delivered page: what this tool is -- the graph's name and
@@ -12,41 +22,39 @@ import { DANGER_TEXT, DIM, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
  * they start it. A ▶ Run beside a page's own button was a second button for
  * the same press.
  *
- * Both hosts draw the bar: `runtime/RuntimeApp.tsx` for a tool someone was
+ * Every host draws the bar: `runtime/RuntimeApp.tsx` for a tool someone was
  * handed, and the editor's running application (`ApplicationView`).
  */
-export default function DeliveredHeader({ tools, note }: {
+export default function DeliveredHeader({ name, description, round, tools, note }: {
+  name: string;
+  description: string;
+  /** The round going now, or the last one. */
+  round: RoundSnapshot | null;
   /** Buttons of the host's own -- a deployed tool's ⚙ AI Settings, the editor's pop-out. */
   tools?: ReactNode;
   /** Said after them: a deployed tool's clock. */
   note?: ReactNode;
 }) {
-  const metadata = useGraphStore((s) => s.metadata);
-  const isExecuting = useGraphStore((s) => s.isExecuting);
-  const executionResult = useGraphStore((s) => s.executionResult);
-
-  const status = executionResult?.status;
-  const statusLabel = isExecuting ? '⏳ Running…' : status === 'success' ? '✅ Done' : status === 'error' ? '❌ Failed' : '';
-
+  const status = roundStatus(round);
   return (
     <header
       className="flex items-center gap-3 px-4 py-2 shrink-0"
       style={{ background: SURFACE, borderBottom: `1px solid ${LINE}` }}
     >
       <span className="text-sm font-semibold" style={{ color: TEXT }}>
-        {metadata.name || 'AI-Graph'}
+        {name || 'AI-Graph'}
       </span>
-      {metadata.description && (
-        <span className="text-xs truncate" style={{ color: DIM }}>{metadata.description}</span>
+      {description && (
+        <span className="text-xs truncate" style={{ color: DIM }}>{description}</span>
       )}
 
       <div className="flex-1" />
 
       {tools}
       {note}
-      {statusLabel && (
-        <span className="text-xs font-medium whitespace-nowrap" style={{ color: status === 'error' ? DANGER_TEXT : MUTED }}>
-          {statusLabel}
+      {status.label && (
+        <span className="text-xs font-medium whitespace-nowrap" style={{ color: status.failed ? DANGER_TEXT : MUTED }}>
+          {status.label}
         </span>
       )}
     </header>

@@ -114,13 +114,11 @@ describe('deployment boundary', () => {
    * `GuiBuilder` tomorrow is kept out of a tool whichever bar it lands under
    * (`elements/times.test.ts` holds that the run-time bar is empty).
    *
-   * It used to have one exception, `store/graphStore.ts`, on the grounds that
-   * the store is shared with the editor and a tool has no button for adding a
-   * node or saving. Half of that was true, and the half that was not is the
-   * whole point: `create` runs on every *load* and `saved` on every run, both
-   * of which a delivered tool does -- and reaching into the builder for them
-   * is what put the builder in the bundle. Those facts are `nodeKinds.ts` now,
-   * what a node *is*, and the store asks that instead.
+   * It used to have one exception, `store/graphStore.ts`: a tool loaded its
+   * graph into the editor's store, and loading and running reached into the
+   * builders for what a node *is* (`document/nodeKinds.ts` since). A tool
+   * holds no graph now -- the server does, and hands the page its blocks --
+   * so the store is not in it at all.
    */
   it.each(['elements/registry.ts', 'elements/widgets/roster.ts'])(
     'does not pull the builder registry %s into a deployed bundle',
@@ -133,10 +131,10 @@ describe('deployment boundary', () => {
     expect([...reachable].filter((path) => /GuiBuilder\.ts$/.test(path))).toEqual([]);
   });
 
-  it('draws the page and loads a graph from the halves that are delivered', () => {
-    // The other side of the rule above: absent *because the page gets what it
+  it('draws the page it is handed, and runs it through the session, from the halves that are delivered', () => {
+    // The other side of the rules above: absent *because the page gets what it
     // needs elsewhere*, not because the page stopped working.
     expect(reachable.has('page/blocks.ts')).toBe(true);
-    expect(reachable.has('document/nodeKinds.ts')).toBe(true);
+    expect(reachable.has('api/session.ts')).toBe(true);
   });
 });

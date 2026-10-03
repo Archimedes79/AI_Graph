@@ -81,11 +81,12 @@ editor, a deployed page, the command line.
 A trigger's time is kept by whatever runs the graph, with one clock
 (`engine/src/execution/clock.ts`): a trigger set to fire at start fires first, each one
 with an interval then keeps its own time, rounds never overlap, and a trigger is looked up
-again each time it is due -- deleted since, it fires no more. A deployed tool's **server**
-holds that clock (`engine/src/host/schedule.ts`): it runs with nobody watching, keeps the
-last result, and a page opened later shows that result and when the next run is due. In
-the editor ▶ Run holds it, until ■ Stop; so does a tool opened with ⧉ Open as a tool, in
-its own window, while that is open -- no server keeps its time. A round a trigger starts
+again each time it is due -- deleted since, it fires no more. The **server** holds that
+clock, in the session that holds the graph (`engine/src/host/session.ts`): it runs with
+nobody watching, keeps what its rounds showed, and a page opened later shows that and when
+the next run is due. A deployed tool's server starts it as it starts; in the editor ▶ Run
+starts it, until ■ Stop -- and a tool opened with ⧉ Open as a tool is the same session in a
+window of its own, so it shows the same clock rather than keeping one. A round a trigger starts
 asks nobody anything, as nobody is there when a served tool's clock strikes. On the command
 line the shortest interval applies without a flag, a round is the whole graph, and
 `--every` overrides it. A clock inside a [subgraph](#subgraph-nodes) never ticks, and
@@ -100,8 +101,9 @@ graph once, as a program runs when it is started. While it runs the button is **
 which ends it; a graph that only computes ends by itself, and opening another graph ends it
 too. It is the document that runs: pressed inside a node's graph, ▶ Run takes the canvas up
 to the top first, and a round due while the canvas shows a node's graph waits until it is
-back there. The App tab opens empty, as a delivered tool does -- not on what the last run
-showed -- and says why a round failed. Anything a round started from the page, or the one
+back there. The App tab opens on what using the tool has left -- the values set on it, a
+conversation, what the last rounds showed -- as a delivered tool does, and says why a round
+failed. Anything a round started from the page, or the one
 run at start, still needs — a file nobody chose, a place to write — is asked for first; so
 is a round started by a block on the Page tab, whose blocks are live. A delivered tool
 starts the same way when it is opened, and has no ▶ Run of its own: its page is how it is
@@ -114,14 +116,15 @@ or bars for numbers or a chart's figure, a thumbnail for a picture — and a fai
 first line of its error. A page shows, under each block's port, what that block shows.
 
 The **App** tab is the page exactly as delivered, under the tool's own header: the graph's
-name and description — attached to the document, so what it runs lights up the cards on
-the Graph tab. Its **⧉ Open as a tool** is the same tool *detached*: the
-graph is handed to the server and `runtime.html` opens in a window of its own — the
-delivered page, the delivered entry point, the delivered routes, with no editor around it
-at all. A run there happens in that window's own copy of the graph, so the editor's
-canvas learns nothing from it; use the App tab while building, and the pop-out to see
-what you are about to hand over. Nothing is written to disk, and the window keeps the
-graph it was handed until it is opened again.
+name and description. It is the document that runs, so what it runs lights up the cards on
+the Graph tab -- and what is set on it is the session's, never an edit of the document:
+nothing to undo, nothing to save, and Deploy ships none of it. Its **⧉ Open as a tool** is
+the same tool *detached*: the document is handed to the server and `runtime.html` opens in
+a window of its own — the delivered page, the delivered entry point, the delivered routes,
+with no editor around it at all, and the same session as the App tab, so a round started
+there lights up the canvas too. Use the App tab while building, and the pop-out to see what
+you are about to hand over. The window keeps the page it was opened with until it is opened
+again.
 
 **A node with nothing to do is left alone.** If a port marked *required* is wired and
 brought nothing — or, for an AI node, *every* wired input came up empty — the node is

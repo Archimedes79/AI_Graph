@@ -2,12 +2,13 @@ import React from 'react';
 import type { GuiWidget } from '@/graph';
 import { useGraphStore } from '@/store/graphStore';
 import { WIDGET_BUILDERS } from '@/elements/registry';
-import { blockValue, GuiBlock, PageGrid, shownOn } from './GuiPage';
+import { blockValue, GuiBlock, PageGrid } from './GuiPage';
+import { heldValue, roundGoing, useSession } from '@/api/session';
 import { moveBlock, patchBlock, removeBlock } from './pageWrite';
 import { cellsFromDrag, resolveWidgetLayout, GUI_GRID_COLUMNS, GUI_MAX_CELL } from '@/document/layout';
 import QuickInsert from './QuickInsert';
 import type { PaletteEntry } from './DesignerPalette';
-import { widgetFiresRun } from '@/document/guiWidgets';
+import { widgetFiresRun, widgetValueIsDesign } from '@/document/guiWidgets';
 import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
 
 /**
@@ -34,11 +35,9 @@ import { ACCENT, DIMMER, LINE, MUTED, SURFACE, TEXT } from '@/ui/theme';
  * same page.
  */
 export default function DesignerSurface({
-  pageId, widgets, onWidgetValue, onWidgetTrigger, selectedId, onSelect, overrides, dropIndex,
+  widgets, onWidgetValue, onWidgetTrigger, selectedId, onSelect, overrides, dropIndex,
   insertAt, onInsertAt, onInsert,
 }: {
-  /** The page's node, whose run result the blocks show; none before the first block makes it. */
-  pageId: string | undefined;
   widgets: GuiWidget[];
   onWidgetValue: (widget: GuiWidget, value: unknown) => void;
   /** A block was used: the same event the delivered page gets, because the blocks here are live. */
@@ -53,8 +52,11 @@ export default function DesignerSurface({
   onInsertAt: (index: number | null) => void;
   onInsert: (entry: PaletteEntry, index: number) => void;
 }) {
-  const executionResult = useGraphStore((s) => s.executionResult);
-  const busy = useGraphStore((s) => s.isExecuting);
+  const scheme = useGraphStore((s) => s.metadata.gui_scheme);
+  // What the blocks show is what the rounds of the session handed them, by
+  // name -- whoever started them: this tab, the App tab, the clock.
+  const session = useSession();
+  const busy = roundGoing(session);
   // Reported by the grid below, because only the grid element knows it.
   const [cell, setCell] = React.useState(GUI_MAX_CELL);
   const placements = resolveWidgetLayout(widgets);
@@ -121,10 +123,12 @@ export default function DesignerSurface({
     <div onMouseDown={() => onSelect(null)}>
       {/* An empty page is still a page: without a minimum height the grid is
           zero pixels tall and there is nothing to aim a first element at. */}
-      <PageGrid minRows={4} onCell={setCell}>
+      <PageGrid minRows={4} onCell={setCell} scheme={scheme}>
         {placements.map((placement, index) => {
           const { widget } = placement;
-          const incoming = pageId ? shownOn(executionResult, pageId, widget) : undefined;
+          const incoming = session.view?.outputs[widget.id];
+          // A block's design is what it holds here; a conversation is the session's.
+          const own = widgetValueIsDesign(widget) ? widget.value : heldValue(session, widget.id, widget.value);
           const selected = widget.id === selectedId;
           // A block that is its own words is typed where it stands: the kind says how.
           const InPlace = selected ? WIDGET_BUILDERS[widget.kind]?.InlineEditor : undefined;
@@ -138,7 +142,7 @@ export default function DesignerSurface({
               <GuiBlock
                 placement={placement}
                 incoming={incoming}
-                value={blockValue(widget, incoming, overrides)}
+                value={blockValue(widget, own, incoming, overrides)}
                 onChange={(next) => onWidgetValue(widget, next)}
                 onTrigger={(next) => onWidgetTrigger(widget, next)}
                 busy={busy}

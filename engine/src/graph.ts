@@ -112,29 +112,11 @@ export interface ExecutionResult {
   node_results: NodeResult[];
   outputs: Record<string, unknown>;
   /**
-   * Everything memory nodes kept, in order. The run settled its own copy of the
-   * graph; whoever holds another copy replays this into it (`applyMemory`).
+   * Everything memory nodes kept, in order, as the run settled it into the copy
+   * of the graph it ran on -- the copy a session keeps (`host/session.ts`).
    */
   memory?: MemoryWrite[];
   error?: string | null;
-}
-
-/**
- * Put what a run remembered into another copy of the graph.
- *
- * The one way memory travels: the engine decides what was kept, each element
- * decides where it keeps it, and a holder of the graph -- the editor's store, a
- * served page, the scheduler between rounds -- only replays.
- */
-export function applyMemory(
-  nodes: GraphNode[],
-  memory: MemoryWrite[] | undefined,
-  settle: (node: GraphNode, portId: string, value: unknown) => void,
-): void {
-  for (const write of memory ?? []) {
-    const node = nodes.find((candidate) => candidate.id === write.node_id);
-    if (node) settle(node, write.port_id, write.value);
-  }
 }
 
 /**

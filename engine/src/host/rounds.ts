@@ -7,8 +7,8 @@
 // through replacing. So the rounds of a session queue, in the order they were
 // asked for, whoever asked: the page, the clock, a script.
 //
-// A round is started, reports as it goes, and is looked at by polling; Stop
-// aborts it. That is a small state machine with one owner, so it is one class:
+// A round is started, reports as it goes, and is watched -- told to whoever
+// listens, or looked at by polling; Stop aborts it. That is a small state machine with one owner, so it is one class:
 // the session hands it the work and asks it for snapshots, and nothing outside
 // knows what a round's record holds.
 //
@@ -18,7 +18,7 @@
 
 import type { ExecutionResult } from '../graph.ts';
 import type { ProgressEvent } from '../elements/Runtime.ts';
-import type { RunSnapshot } from './api.ts';
+import type { RoundSnapshot } from './api.ts';
 
 /** How long a finished round can still be looked at. A long session must not accumulate them. */
 const KEEP_MS = 300_000;
@@ -70,9 +70,9 @@ class Round {
     this.stop.abort();
   }
 
-  snapshot(): Omit<RunSnapshot, 'outputs'> {
+  snapshot(): Omit<RoundSnapshot, 'outputs' | 'whole'> {
     return {
-      run_id: this.id,
+      round_id: this.id,
       done: this.finishedAt !== null,
       cancelled: this.cancelled,
       completed: this.completed,
@@ -118,7 +118,7 @@ export class Rounds {
     work: (round: RoundWork) => Promise<ExecutionResult>,
     signal?: AbortSignal,
   ): { id: string; outcome: Promise<ExecutionResult> } {
-    const id = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = `round-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const round = new Round(id, total);
     this.kept.set(id, round);
     const halt = (): void => round.halt();
@@ -159,8 +159,8 @@ export class Rounds {
     return done;
   }
 
-  /** A round as a watcher sees it: what it handed back by name is its owner's to add (`Session.snapshot`). */
-  snapshot(id: string): Omit<RunSnapshot, 'outputs'> | null {
+  /** A round as a watcher sees it: what it handed back by name, and what started it, are its owner's to add (`Session.snapshot`). */
+  snapshot(id: string): Omit<RoundSnapshot, 'outputs' | 'whole'> | null {
     return this.kept.get(id)?.snapshot() ?? null;
   }
 

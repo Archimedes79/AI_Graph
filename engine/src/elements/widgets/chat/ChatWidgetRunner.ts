@@ -95,4 +95,9 @@ export class ChatWidgetRunner extends WidgetRunner<ChatValue> {
       + 'block, and an ai node with inputs "history" and "message" wired from it and its "output" wired back to '
       + '"<id>_in". Do not add data or code nodes to hold the conversation.';
   }
+
+  /** A conversation is what using the page said: the session's, never the design's. */
+  override valueIsDesign(): boolean {
+    return false;
+  }
 }

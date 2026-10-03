@@ -19,8 +19,6 @@
 // and a server without the editor answers it with 404.
 
 import type { ExecutionResult, Graph, GraphNode, NodeResult } from '../graph.ts';
-import type { Trigger } from '../execution/triggers.ts';
-import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
 import type { ExampleRun } from '../authoring/examples.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
@@ -32,18 +30,15 @@ export type { TextChange };
 // What travels
 // ---------------------------------------------------------------------------
 
-/** The page event that asked for a run: the port it fired on. */
-export type RunTrigger = Trigger;
-
 /**
- * A run in flight, as a watching page sees it.
+ * A round in flight, as a watching page sees it.
  *
  * `completed/total` counts nodes, which does not move while one node grinds
  * through a 500-item batch or one long model call; `item_done/item_total` and
  * `idle_seconds` are what move then -- the two cases that look like a hang.
  */
-export interface RunSnapshot {
-  run_id: string;
+export interface RoundSnapshot {
+  round_id: string;
   done: boolean;
   cancelled: boolean;
   completed: number;
@@ -57,6 +52,8 @@ export interface RunSnapshot {
   result: ExecutionResult | null;
   /** What it handed back by name, once it has ended: the graph's outputs (`graphInterface.ts`). */
   outputs: Record<string, unknown> | null;
+  /** It ran the whole graph -- no event started it: what it shows is all there is, not a part laid over the rest. */
+  whole: boolean;
 }
 
 /**
@@ -74,9 +71,39 @@ export interface SessionView {
   rounds: number;
   finished_at: number | null;
   /** The round going now, or the last one. */
-  round: RunSnapshot | null;
+  round: RoundSnapshot | null;
   /** What opening the session, or handing it a graph, dropped of what it kept: said once, in words. */
   dropped: string[];
+  /** The graph's own clock (its trigger nodes), which the server keeps while the application runs. */
+  clock: ClockView;
+}
+
+/** The clock a session keeps: whether it runs, whether it ticks, and when the next round is due. */
+export interface ClockView {
+  running: boolean;
+  /** Something starts it by itself: a trigger fires at start, or keeps time. */
+  runs_by_itself: boolean;
+  /** A trigger keeps time: something is left to happen once the tool has started. */
+  ticks: boolean;
+  next_at: number | null;
+  /** Why an interval could not be read, while one cannot: that trigger keeps no time. */
+  problem: string | null;
+}
+
+/**
+ * The page a tool shows, as the built-in page draws it: the graph's name and
+ * scheme, its blocks as they were designed -- what each holds now is the
+ * session's (`SessionView.values`) -- and whether opening it runs the graph
+ * whole, as a program runs when it is started: nothing on the page or in a
+ * trigger node starts it otherwise (`startEvents`).
+ */
+export interface PageView {
+  session: string;
+  name: string;
+  description: string;
+  scheme: string;
+  blocks: Record<string, unknown>[];
+  starts_whole: boolean;
 }
 
 /** What the graph offers whoever uses it, by name -- and which session that is. */
@@ -107,6 +134,15 @@ export interface RoundOutcome {
 /** A question about the session: this server's, when it names none. */
 interface InSession {
   session?: string;
+}
+
+/** The graph the editor is editing, handed to the server's session (`Handover`). */
+export interface HeldGraph {
+  graph: Graph;
+  /** Where it is kept, if anywhere: its session keeps its state beside it. */
+  path?: string | null;
+  /** Another document than the one handed over before: a session of its own. */
+  anew?: boolean;
 }
 
 /**
@@ -310,29 +346,13 @@ function route<Req, Res>(method: Method, path: string, audience: 'tool' | 'edito
   return { method, path, for: audience };
 }
 
-type RunGraph = Graph & { trigger?: RunTrigger | null };
 type OnNode = Graph & { node_id: string };
 
 export const API = {
-  // -- what a deployed tool serves ------------------------------------------
-  /** The graph this tool ships. */
-  graph: route<void, Graph>('GET', '/api/runtime/graph', 'tool'),
-  /** What the graph's own triggers (on start, on a clock) last produced. */
-  schedule: route<void, ScheduleState>('GET', '/api/runtime/last', 'tool'),
-  /** Which model the tool calls. Read-only: a recipient configures it in a file, not in a page. */
-  toolAiSettings: route<void, ToolAiSettings>('GET', '/api/runtime/ai-settings', 'tool'),
-  requirements: route<RunGraph, Requirement[]>('POST', '/api/execute/requirements', 'tool'),
-  /** Start a run in the background: the graph, and beside it the page event that asked, if one did. */
-  startRun: route<RunGraph, { run_id: string; total: number }>('POST', '/api/execute/start', 'tool'),
-  run: route<{ id: string }, RunSnapshot>('GET', '/api/execute/runs/:id', 'tool'),
-  stopRun: route<{ id: string }, { cancelled: boolean }>('POST', '/api/execute/runs/:id/cancel', 'tool'),
-  /** Loopback only: listing directories is for the person at the keyboard. */
-  browse: route<{ path: string; extensions?: string }, BrowsePage>('POST', '/api/files/browse', 'tool'),
-
   // -- the runtime API: a graph used by name, by any frontend ---------------
   /** What the graph offers -- its events, values and outputs -- by name. */
   interface: route<InSession, InterfaceView>('GET', '/api/runtime/interface', 'tool'),
-  /** The session now: values, what the outputs showed, the round going or gone. */
+  /** The session now: values, what the outputs showed, the round going or gone, the clock. */
   session: route<InSession, SessionView>('GET', '/api/runtime/session', 'tool'),
   /**
    * Server-sent events, not JSON: `session` once on connect and after every
@@ -340,14 +360,24 @@ export const API = {
    * clock's, another tab's. Read with an `EventSource`.
    */
   stream: route<InSession, never>('GET', '/api/runtime/stream', 'tool'),
+  /** What a round for this event still needs before it runs, given these values: the "before running" questions. */
+  requirements: route<RoundRequest, Requirement[]>('POST', '/api/runtime/requirements', 'tool'),
   /** Start a round, and watch it by its id. */
   startRound: route<RoundRequest, { session: string; round_id: string; total: number }>('POST', '/api/runtime/rounds', 'tool'),
-  round: route<InSession & { id: string }, RunSnapshot>('GET', '/api/runtime/rounds/:id', 'tool'),
+  round: route<InSession & { id: string }, RoundSnapshot>('GET', '/api/runtime/rounds/:id', 'tool'),
   stopRound: route<InSession & { id: string }, { stopped: boolean }>('POST', '/api/runtime/rounds/:id/stop', 'tool'),
   /** Run a round and answer once it has ended: a function call. */
   runRound: route<RoundRequest, RoundOutcome>('POST', '/api/runtime/run', 'tool'),
   /** Forget what using the graph left behind: it is as designed again. */
   reset: route<InSession, SessionView>('POST', '/api/runtime/reset', 'tool'),
+
+  // -- what the built-in page reads besides ----------------------------------
+  /** The page as it was designed: what the built-in page draws, by the names its blocks are called. */
+  page: route<InSession, PageView>('GET', '/api/runtime/page', 'tool'),
+  /** Which model the tool calls. Read-only: a recipient configures it in a file, not in a page. */
+  toolAiSettings: route<void, ToolAiSettings>('GET', '/api/runtime/ai-settings', 'tool'),
+  /** Loopback only: listing directories is for the person at the keyboard. */
+  browse: route<{ path: string; extensions?: string }, BrowsePage>('POST', '/api/files/browse', 'tool'),
 
   // -- what only the editor serves ------------------------------------------
   /** One node on the inputs given, as a run runs it: files read, lists fanned out. How the editor reads a file the way a run does. */
@@ -398,13 +428,19 @@ export const API = {
    */
   bundle: route<{ graph: Graph; path?: string | null }, File>('POST', '/api/deploy/bundle', 'editor'),
   /**
-   * Hand this server the graph to serve as a tool, so `runtime.html` can be
-   * opened against it — the deployed page, in its own window, without zipping
-   * anything first. The editor posts its graph with every run; this is the one
-   * case where the server has to keep a copy, because the window that asks for
-   * it is not the editor and has no graph of its own.
+   * Hand the server's session the graph being edited: what its rounds run,
+   * whoever starts them -- the App tab, the Page tab, the clock, `runtime.html`
+   * opened against it as the deployed page in a window of its own. Answers
+   * with the session, and what it dropped of what it kept.
    */
-  holdGraph: route<Graph, { ok: true }>('POST', '/api/runtime/hold', 'editor'),
+  holdGraph: route<HeldGraph, { session: string; dropped: string[] }>('POST', '/api/runtime/hold', 'editor'),
+  /**
+   * ▶ Run: start what runs by itself -- trigger nodes at start, and their
+   * clocks -- once what starting runs has run. `ticks`: a clock goes on.
+   */
+  startApplication: route<InSession, { ticks: boolean }>('POST', '/api/runtime/application/start', 'editor'),
+  /** ■ Stop: the clocks, and the round in flight. */
+  stopApplication: route<InSession, { stopped: boolean }>('POST', '/api/runtime/application/stop', 'editor'),
 
   aiSettings: route<void, SettingsStatus>('GET', '/api/ai/settings', 'editor'),
   saveAiSettings: route<SettingsPatch, SettingsStatus>('POST', '/api/ai/settings', 'editor'),

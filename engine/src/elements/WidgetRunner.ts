@@ -165,4 +165,15 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
   referencedPaths(_widget: Widget): string[] {
     return [];
   }
+
+  /**
+   * Whether what this block holds is part of the page's design -- a choice, a
+   * text, a path to start on, set while the page is built -- rather than only
+   * ever what using it left: a conversation is what was said, never what a
+   * page starts with. The editor's Page tab writes the first kind into the
+   * design as it is set there; the second is the session's wherever it is set.
+   */
+  valueIsDesign(_widget: Widget): boolean {
+    return true;
+  }
 }

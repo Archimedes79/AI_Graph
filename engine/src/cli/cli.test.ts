@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseGraph } from '../graph.ts';
@@ -193,6 +193,9 @@ describe('a round by name, as a page asks for one', () => {
       expect(ran.node_results.find((result) => result.node_id === 'say')?.outputs.out).toBe('picked b');
       // Only what the event starts: the button's node was not asked.
       expect(ran.node_results.map((result) => result.node_id)).not.toContain('idle');
+      // A function call: the graph is as it was, and nothing is kept beside it.
+      expect(JSON.parse(await readFile(graph, 'utf8'))).toEqual(echo());
+      expect(await readdir(dir)).toEqual(['echo.json']);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -316,7 +319,7 @@ describe('--serve and --editor, as they are started', () => {
       await server.up();
       await new Promise((wake) => setTimeout(wake, 500));
       expect(server.child.exitCode, server.said()).toBeNull();
-      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${port}/api/runtime/interface`)).status).toBe(200);
     } finally {
       await server.stop();
     }
@@ -354,7 +357,7 @@ describe('--serve and --editor, as they are started', () => {
       const beside = started(['--editor', dir, '--port', String(port)], undefined, dir);
       try {
         await beside.up();
-        expect((await fetch(`http://127.0.0.1:${port}/api/runtime/graph`)).status).toBe(404);
+        expect((await fetch(`http://127.0.0.1:${port}/api/runtime/interface`)).status).toBe(404);
       } finally {
         await beside.stop();
       }
@@ -362,7 +365,7 @@ describe('--serve and --editor, as they are started', () => {
       const given = started(['graph.json', '--editor', dir, '--port', String(other)], undefined, dir);
       try {
         await given.up();
-        expect((await fetch(`http://127.0.0.1:${other}/api/runtime/graph`)).status).toBe(200);
+        expect((await fetch(`http://127.0.0.1:${other}/api/runtime/interface`)).status).toBe(200);
       } finally {
         await given.stop();
       }

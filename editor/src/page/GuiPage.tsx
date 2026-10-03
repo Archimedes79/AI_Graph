@@ -1,16 +1,13 @@
 import React from 'react';
-import type { ExecutionResult, GraphNode, GuiWidget } from '@/graph';
-import { useGraphStore } from '@/store/graphStore';
+import type { GuiWidget } from '@/graph';
 import { BLOCKS } from './blocks';
 import { useContainerCell } from './useContainerCell';
-import { patchBlock } from './pageWrite';
 import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from '@/document/layout';
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, DANGER_TEXT, DIM, MUTED, TEXT } from '@/ui/theme';
-import { blockPort, blockShows, pageOf, widgetFiresRun } from '@/document/guiWidgets';
-import type { RunTrigger } from '@/api/client';
-import RunResult from './RunResult';
+import { widgetFiresRun } from '@/document/guiWidgets';
+import RunResult, { type ShownOutput } from './RunResult';
 
 /**
  * The page a graph shows: its blocks, in order, on one grid.
@@ -30,47 +27,55 @@ import RunResult from './RunResult';
  * so the boundary has to be a module boundary — and `runtime/boundary.test.ts`
  * asserts that it stays one.
  *
- * A graph is one tool with one page: the first node that carries an interface
- * (the file format calls it `gui`). A second one is a problem `check` names,
- * and nothing draws it.
+ * It knows no graph and no store: whoever draws it hands it the page as
+ * designed and what is in use -- the delivered tool from the runtime API, the
+ * editor from its document and the same API -- and is told what was used.
  */
 
-/**
- * The page -- the node that is the page, none before the first block makes it
- * -- and its blocks, as they were drawn. An edit that lands later reads the
- * page from the store as it is then (`pageWrite.ts`).
- */
-export function usePage(): ReturnType<typeof pageOf> {
-  return pageOf(useGraphStore((s) => s.rfNodes).map((n) => n.data.graphNode as GraphNode));
+/** The page as it is drawn: what was designed, and what is in use. */
+export interface PageModel {
+  name: string;
+  description: string;
+  scheme: string;
+  /** The blocks, as designed. */
+  blocks: GuiWidget[];
+  /** What a block holds now: what was set, what the session keeps, or its design. */
+  valueOf: (block: GuiWidget) => unknown;
+  /** What a block shows of what the rounds handed it, by its name; undefined for nothing yet. */
+  shownOn: (block: GuiWidget) => unknown;
+  /** A round is going: a block that starts one waits. */
+  busy: boolean;
+  /** Why the last round failed, in its own words; empty when it did not. */
+  error: string;
+  /** For a page without blocks: what the graph hands back, each output under its label. */
+  outputs: ShownOutput[];
+  /** The graph has no nodes at all: nothing to run, nothing to show. */
+  empty?: boolean;
 }
 
 /**
  * What a block currently holds.
  *
- * `incoming` is what the last run delivered to its input port; the widget's own
- * value is what it stores, including an edit still being typed. They are kept
+ * `incoming` is what the rounds delivered to its input port; the widget's own
+ * value is what it holds, including an edit still being typed. They are kept
  * apart so that a widget which both shows and accepts text does not overwrite
  * the reply the user is reading -- and so that what it shows as its value is
- * what a run sends from it: its own (`BlockKind.ownsValue`).
+ * what a round sends from it: its own (`BlockKind.ownsValue`).
  */
 export function blockValue(
   widget: GuiWidget,
+  own: unknown,
   incoming: unknown,
   overrides?: Record<string, string>,
 ): unknown {
-  const own = overrides?.[widget.id] ?? widget.value ?? '';
-  if (BLOCKS[widget.kind]?.ownsValue?.(widget)) return own;
-  return incoming !== undefined && overrides?.[widget.id] === undefined ? incoming : own;
-}
-
-/** What a run put on one block of the page node *nodeId* (`blockShows`). */
-export function shownOn(result: ExecutionResult | null, nodeId: string, widget: GuiWidget): unknown {
-  return blockShows(result?.node_results.find((r) => r.node_id === nodeId), widget);
+  const held = overrides?.[widget.id] ?? own ?? '';
+  if (BLOCKS[widget.kind]?.ownsValue?.(widget)) return held;
+  return incoming !== undefined && overrides?.[widget.id] === undefined ? incoming : held;
 }
 
 /** The grid the page flows on: 16 square columns, capped at a readable width. */
 export function PageGrid({
-  children, minRows, onCell,
+  children, minRows, onCell, scheme,
 }: {
   children: React.ReactNode;
   /** Keep this much height when empty, so there is a page to aim at. */
@@ -86,8 +91,9 @@ export function PageGrid({
    * fell behind the pointer.
    */
   onCell?: (cell: number) => void;
+  /** The page's colour scheme. */
+  scheme: string;
 }) {
-  const pageScheme = useGraphStore((s) => s.metadata.gui_scheme);
   const { ref, cell } = useContainerCell();
 
   React.useEffect(() => { onCell?.(cell); }, [cell, onCell]);
@@ -98,7 +104,7 @@ export function PageGrid({
       data-gui-surface
       style={{
         ...gridStyle(cell),
-        ...schemeVars(pageScheme),
+        ...schemeVars(scheme),
         minHeight: minRows ? cell * minRows : undefined,
       }}
     >
@@ -175,89 +181,15 @@ export function GuiBlock({
   );
 }
 
-/** The page itself: what a deployed tool renders, and the editor's running application. */
-function GuiPage({
-  pageId, widgets, onWidgetValue, onWidgetTrigger,
-}: {
-  pageId: string;
-  widgets: GuiWidget[];
-  onWidgetValue: (widget: GuiWidget, value: unknown) => void;
-  onWidgetTrigger?: (widget: GuiWidget, value?: unknown) => void;
-}) {
-  const executionResult = useGraphStore((s) => s.executionResult);
-  const busy = useGraphStore((s) => s.isExecuting);
-  const placements = resolveWidgetLayout(widgets);
-
-  return (
-    <PageGrid>
-      {placements.map((placement) => {
-        const { widget } = placement;
-        const incoming = shownOn(executionResult, pageId, widget);
-        return (
-          <GuiBlock
-            key={widget.id}
-            placement={placement}
-            incoming={incoming}
-            value={blockValue(widget, incoming)}
-            onChange={(next) => onWidgetValue(widget, next)}
-            onTrigger={onWidgetTrigger ? (next) => onWidgetTrigger(widget, next) : undefined}
-            busy={busy}
-          />
-        );
-      })}
-    </PageGrid>
-  );
-}
-
-/**
- * What using a block does: keep its value, and start the graph if it is a
- * block that starts it.
- *
- * One implementation, for the delivered page and for the page being built. The
- * designer used to pass no event at all, on the theory that a page being laid
- * out must not start runs -- so on the Page tab a chat's Send did nothing and a
- * button was a picture of a button, on the very surface whose promise is that
- * its blocks are live.
- *
- * *onRun* starts the round, and every host hands it the delivered tool's
- * steps (`useDeliveredRun`): what the graph still needs is asked first. The
- * Page tab once fell back to a bare run, and a button pressed there beside an
- * empty picker ran on nothing where the delivered tool asked for the file.
- */
-export function usePageEvents(onRun: (trigger: RunTrigger) => void) {
-  // Through `pageWrite`, as every edit of the page: a value and the event that
-  // follows it arrive in the same tick, and the page in hand is the one from
-  // before either.
-  const setWidgetValue = (widget: GuiWidget, value: unknown) => patchBlock(widget.id, { value });
-
-  /**
-   * A block was used. If it is one that starts the graph, start it -- where the
-   * block is wired to, which is the engine's question to answer, not the page's.
-   */
-  const fire = (widget: GuiWidget, value?: unknown) => {
-    if (value !== undefined) setWidgetValue(widget, value);
-    const { page } = pageOf(useGraphStore.getState().rfNodes.map((n) => n.data.graphNode as GraphNode));
-    const port = blockPort(widget, 'out');
-    if (!page || !port || !widgetFiresRun(widget)) return;
-    if (useGraphStore.getState().isExecuting) return;
-    onRun({ node_id: page.id, port_id: port });
-  };
-
-  return { setWidgetValue, fire };
-}
-
 /**
  * What a tool shows when its page has no blocks: what it does, how to start
- * it, and what its run handed back -- each output node's values under its
- * name. A page is its blocks; a page node whose last block was removed has
- * nothing to draw, and drew an empty rectangle where the run's result belongs.
+ * it, and what its run handed back -- each output under its name. A page is
+ * its blocks; a page node whose last block was removed has nothing to draw,
+ * and drew an empty rectangle where the run's result belongs.
  */
-function WithoutPage() {
-  const metadata = useGraphStore((s) => s.metadata);
-  const executionResult = useGraphStore((s) => s.executionResult);
+function WithoutPage({ page }: { page: PageModel }) {
   // A graph of nothing is not ready to run: it said it was, run or not.
-  const empty = useGraphStore((s) => s.rfNodes.length === 0);
-  if (empty) {
+  if (page.empty) {
     return (
       <div className="m-6 max-w-2xl">
         <p className="text-sm mb-2" style={{ color: TEXT }}>This graph has no nodes yet.</p>
@@ -270,25 +202,24 @@ function WithoutPage() {
   return (
     <div className="m-6 max-w-2xl">
       <p className="text-sm mb-2" style={{ color: TEXT }}>
-        {metadata.description || `${metadata.name} is ready to run.`}
+        {page.description || `${page.name} is ready to run.`}
       </p>
       <p className="text-xs" style={{ color: DIM }}>
         It runs when it is started. Anything it still needs — a value to start from, a place to
         write — is asked for first, and what it hands back appears here.
       </p>
-      <RunResult result={executionResult} />
+      <RunResult outputs={page.outputs} />
     </div>
   );
 }
 
 /**
- * Why the last round failed, in the run's own words -- which can be several
+ * Why the last round failed, in the round's own words -- which can be several
  * lines long, and belong above the page rather than squeezed into the header
- * beside its "❌ Failed". Part of what the page shows, so both hosts draw it:
+ * beside its "❌ Failed". Part of what the page shows, so every host draws it:
  * the editor's running application once said only "❌ Failed".
  */
-function RunError() {
-  const error = useGraphStore((s) => (s.executionResult?.status === 'error' ? s.executionResult.error : ''));
+function RunError({ error }: { error: string }) {
   if (!error) return null;
   return (
     <div
@@ -301,27 +232,47 @@ function RunError() {
 }
 
 /**
- * The page wired to the graph: what a deployed tool serves, and what the
- * editor's running application shows -- or, with no blocks, the tool without a
- * page. One component, so what is tried in the editor cannot flatter.
+ * The page in use: what a deployed tool serves, and what the editor's running
+ * application shows -- or, with no blocks, the tool without a page. One
+ * component, so what is tried in the editor cannot flatter.
+ *
+ * A block used is *onValue* -- what it now holds -- and, for a block that
+ * starts the graph, *onEvent* by its name, once its value is in.
  */
-export function GuiSurfacePage({ onRun }: {
-  /**
-   * Start a run for a page event. The host supplies it because the host is who
-   * knows what has to happen first -- asking for a file nobody chose yet, say --
-   * and that must be the same in the editor and in a tool someone was handed.
-   */
-  onRun: (trigger: RunTrigger) => void;
+export function GuiSurfacePage({ page, onValue, onEvent }: {
+  page: PageModel;
+  onValue: (block: GuiWidget, value: unknown) => void;
+  onEvent: (block: GuiWidget) => void;
 }) {
-  const { page, widgets } = usePage();
-  const { setWidgetValue, fire } = usePageEvents(onRun);
-
-  if (!page || widgets.length === 0) return <><RunError /><WithoutPage /></>;
+  if (page.blocks.length === 0) return <><RunError error={page.error} /><WithoutPage page={page} /></>;
+  // A block used: what it holds now is kept first -- the value and the event
+  // that follows it arrive in the same tick -- and only a block the engine
+  // calls an event starts a round, and not while one is going.
+  const fire = (block: GuiWidget, value?: unknown) => {
+    if (value !== undefined) onValue(block, value);
+    if (widgetFiresRun(block) && !page.busy) onEvent(block);
+  };
   return (
     <>
-      <RunError />
+      <RunError error={page.error} />
       <div className="flex-1 overflow-auto px-8 py-6">
-        <GuiPage pageId={page.id} widgets={widgets} onWidgetValue={setWidgetValue} onWidgetTrigger={fire} />
+        <PageGrid scheme={page.scheme}>
+          {resolveWidgetLayout(page.blocks).map((placement) => {
+            const { widget } = placement;
+            const incoming = page.shownOn(widget);
+            return (
+              <GuiBlock
+                key={widget.id}
+                placement={placement}
+                incoming={incoming}
+                value={blockValue(widget, page.valueOf(widget), incoming)}
+                onChange={(next) => onValue(widget, next)}
+                onTrigger={(next) => fire(widget, next)}
+                busy={page.busy}
+              />
+            );
+          })}
+        </PageGrid>
       </div>
     </>
   );

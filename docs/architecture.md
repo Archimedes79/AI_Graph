@@ -198,7 +198,8 @@ hold, with no exception for the shared store, that no `GuiBuilder` class and nei
 registry is even *reachable* from the tool's entry point. Before
 that, the store was the one module both hosts share and the one allowed to reach into the
 builder, so the builder was in every bundle. Measured on the import graph: what
-`runtime/main.tsx` reaches fell from 80 modules to 45.
+`runtime/main.tsx` reaches fell from 80 modules to 45 -- and from 51 to 41 when the page
+stopped holding a graph of its own and the store left the bundle.
 
 Still reachable, and not closed by any of this: the **engine's** element tree, for a
 handful of questions the page asks it — which ports, does this block fire, does this node
@@ -206,7 +207,7 @@ carry the interface. That goes when the graph arrives already resolved over the 
 
 What the tests hold: every member stands under a bar; the build-time list is spelled out,
 so moving a member across is a decision and not a bar that slipped; **no file a run goes
-through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `session.ts`, `rounds.ts`, `schedule.ts`,
+through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `session.ts`, `rounds.ts`,
 `node.ts`) **mentions a build-time member**; and nothing a tool's page can reach asks a
 `GuiBuilder` for anything at all. What is *not* carried at all stays as it was:
 `host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
@@ -233,8 +234,8 @@ built from that table, and mirror each other:
  │        │                         │              │   ├─ toolRoutes()   the `tool` rows    │
  │        ▼                         │              │   └─ editor/routes.ts  the `editor`    │
  │ api/client.ts                    │   HTTP/JSON  │        rows, loaded only for the editor│
- │   call('startRun', graph)  ──────┼──────────────┼──▶ handlers.startRun(request)          │
- │   ◀── ResponseOf<'startRun'>     │              │        │                               │
+ │   call('startRound', {event, …}) ┼──────────────┼──▶ handlers.startRound(request)        │
+ │   ◀── ResponseOf<'startRound'>   │              │        │                               │
  └──────────────┬───────────────────┘              └────────┼──────────────────────────────┘
                 │          ┌────────────────────────────┐   │
                 └─imports─▶│ host/api.ts  API table,     │◀──┘ imports
@@ -246,7 +247,7 @@ built from that table, and mirror each other:
 - **The server serves exactly the table.** `serve.ts` refuses to start if a route has no
   handler. A `tool` route is answered by every server; an `editor` route only when the
   editor's handlers are loaded, and with 404 otherwise.
-- **The page calls the table by name.** `call('run', { id })` — path, method and shapes come
+- **The page calls the table by name.** `call('round', { id })` — path, method and shapes come
   from the table, so the compiler checks both ends against the same types. A failure is an
   `ApiError` whose message is the server's own `detail`.
 - **The graph document is the engine's.** [`engine/src/graph.ts`](../engine/src/graph.ts)
@@ -281,11 +282,10 @@ engine/src                               editor/src
     interfaceFile.ts a node's ports
     check.ts         what is wrong: no disk, the page asks it too
     folderCheck.ts   what a folder gets wrong
-  host/              Node and HTTP         api/client.ts       the contract's client
+  host/              Node and HTTP         api/                the contract's client, and the session a page follows
     api.ts           the contract          app/                header, palette, the bar, dialogs, results
-    serve.ts  http.ts  session.ts          store/              the open graph, runs, undo
-    rounds.ts
-    schedule.ts  node.ts                   runtime/            the deployed tool's page
+    serve.ts  http.ts  session.ts          store/              the open graph, undo, what a round shows on it
+    rounds.ts  node.ts                     runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal, SidePanel
                                            dialogs/            FileBrowserDialog, PathField, RequirementsDialog
@@ -363,13 +363,15 @@ One window, three parts on the Graph tab, and nothing over them but a dialog ask
   graph runs when the page is used; without one, what starts the graph starts it
   (`startEvents`: the trigger nodes set to fire at start, or, with no trigger node and
   nothing on a page to start it, the whole graph once), and each clock keeps its time --
-  the one clock the served tool keeps too (`execution/clock.ts`), so a round comes due in
-  the editor when it would there, and asks nobody anything. It is the document that runs:
-  it is ended by another document opened (`graphStore.opened`), not by a step into a
-  node's graph, and a round waits while the canvas shows one. It is ■ Stop while it runs,
-  and ends by itself where nothing is left to happen. A delivered tool starts the same way
-  when it is opened, and has no ▶ Run of its own; one whose server keeps no time for it --
-  ⧉ Open as a tool -- keeps its clock in its own window. Below 1280 pixels its buttons and the
+  in the server's session, the one clock a served tool keeps too (`execution/clock.ts`,
+  `Session.startApplication`), so a round comes due in the editor when it would there,
+  and asks nobody anything. It is the document that runs: the editor hands it to the
+  session as it is edited (`holdDocument`), it is ended by another document opened
+  (`graphStore.opened`), not by a step into a node's graph, and a round waits while the
+  canvas shows one. It is ■ Stop while it runs, and ends by itself where nothing is left to
+  happen. A delivered tool starts the same way when it is opened, and has no ▶ Run of its
+  own; ⧉ Open as a tool is the same session in a window of its own, so it shows the same
+  clock and the same rounds. Below 1280 pixels its buttons and the
   palette are their icons, and at 1024 nothing scrolls the page sideways. What Generate
   says stands whole in a line under it until dismissed; what it says of saving and
   opening is kept with the document it was said of, and goes when another is opened.
@@ -415,7 +417,7 @@ other knows, it imports it or replays its result:
 | the graph's types | `graph.ts` |
 | a page node's ports | `GuiNodeRunner.derivedPorts` via `document/guiWidgets.ts` |
 | whether a widget starts the graph | `WidgetRunner.firesRun` |
-| what a run remembered | `ExecutionResult.memory`, replayed with `applyMemory` |
+| what using the graph left behind, by name | the session (`SessionView`), told over `/api/runtime/stream` |
 | what a widget shows | `NodeResult.display` |
 | the order to generate a graph in | `topologicalLevels` |
 
@@ -450,17 +452,17 @@ other knows, it imports it or replays its result:
    use and what using it leaves behind (see [State](#state)). Its `Rounds`
    (`host/rounds.ts`) start each round in the background, one at a time in the order asked
    -- the clock's and the page's alike --, turn the executor's progress events into the
-   `RunSnapshot` the page polls, and abort a round on Stop. An `AbortSignal` reaches every
+   `RoundSnapshot` a page is told over the session's stream, and abort a round on Stop. An `AbortSignal` reaches every
    model call and every sandboxed body.
 6. **Shutting down.** A server holds a clock, runs in flight, the children those started,
    and a socket. `serve()` writes each into a `Lifecycle` (`host/lifecycle.ts`) as it starts
    it, and `shutdown()` stops them in that order — what makes work before what carries it:
-   the schedule, the rounds (`Session.stopAll`), then HTTP, which meanwhile still answers a
+   the clock, the rounds (`Session.stopAll`), then HTTP, which meanwhile still answers a
    page watching its run and refuses anything new with 503. Each step gets what is left of
    eight seconds; what would not stop is named. A round of the clock still waiting behind a
-   page's run goes at once (`Rounds.start` is handed its signal). A scheduled round that was
-   cut off is not recorded, so the file the last round is kept in keeps the last one that
-   finished, and it commits nothing to the session either. The CLI maps
+   page's run goes at once (`Rounds.start` is handed its signal). A round of the clock that
+   was cut off commits nothing, so `state.json` keeps what the last round that finished
+   left. The CLI maps
    Ctrl+C, SIGTERM, SIGHUP and Ctrl+Break to it (`untilStopped`); a second signal exits at
    once. `serve()` itself installs no signal handler: it is a library function.
 
@@ -680,60 +682,63 @@ the rules it is kept by from here on.
 
 | State | Lives in | Written by |
 |---|---|---|
-| what a person set on the page: a block's value -- typed text, a choice, a slider, a picked path, a chat's message in hand | the block's `value`, inside the graph (`page.json`) | the page (`page/pageWrite.ts`), the "before running" dialog (`applyRuntimeValues`); in the editor each is a change of the document, with an undo step |
-| what a round settled: a value that came back around a loop into a node that remembers -- a chat's reply, a chart's data, a picker fed back -- and anything delivered to a data node | the element's own config, inside the graph (`NodeRunner.settleMemory`); the server's session keeps it too, as slots (`host/session.ts`) | the executor, into the copy it ran; replayed (`result.memory` → `applyMemory`) by whoever holds the long-lived copy: the editor's document, or the served page's copy, which posts it back with its next round |
-| a message, once delivered | emptied (`WidgetRunner.clearsValueAfterRun`) | the editor's store (`clearSentValues`), and the session for its slots (`NodeRunner.clearDelivered`) |
-| what every node made last, for the rounds its ◆ stays shut | `Latch` ([`execution/latch.ts`](../engine/src/execution/latch.ts)) in the server's session, keyed by the graph's name and shape and what each node is made from as written; what a round leaves in it is committed when the round ends, and written to `state.json` | the executor |
+| what a person set on the page: a block's value -- typed text, a choice, a slider, a picked path, a chat's message in hand | the page, by the block's name, until a round takes it (`api/session.ts`); then the session's slots ([`host/session.ts`](../engine/src/host/session.ts)) | the page (`setEdit`); a round is given it as a value by name, and the "before running" dialog's answers go with it the same way |
+| what a round settled: a value that came back around a loop into a node that remembers -- a chat's reply, a chart's data, a picker fed back -- and anything delivered to a data node | the session's slots, and its `state.json` | the executor, into the working copy it ran (`NodeRunner.settleMemory`); the session keeps what the copy holds once the round ran to its end |
+| a message, once delivered | emptied in the session's slots | the session (`NodeRunner.clearDelivered`) |
+| what every node made last, for the rounds its ◆ stays shut | `Latch` ([`execution/latch.ts`](../engine/src/execution/latch.ts)) in the session, keyed by the graph's name and shape and what each node is made from as written; what a round leaves in it is committed when the round ends, and written to `state.json` | the executor |
 | what a node made from the same inputs | `LastOutputs` ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)), one per session: an optimisation, which changes how long a round takes and nothing else | the executor |
-| the last round | the editor's store and the served page (`mergeResults`); a scheduled tool's in `schedule.ts` and in `flow.last-run.json`; every round's, laid over each other, in the session and its `state.json` | whoever started the round |
+| what the page shows | every round's result laid over each other, in the session and its `state.json`, handed to a page by name (`outputsOf`); the editor's store shows a round on the graph as it goes and keeps none of it (`followRound`) | the session |
 | a round in flight | the session's `Rounds` ([`host/rounds.ts`](../engine/src/host/rounds.ts)) | — |
+| the clock of a tool that runs by itself | the session ([`execution/clock.ts`](../engine/src/execution/clock.ts), `Session.startApplication`) | a served tool starts it as it starts; the editor's ▶ Run starts it and ■ Stop ends it |
 
-So the page holds the document *and* the person's use of it, and posts both with every
-round (`startRun` takes the whole graph, and the session goes on with it as its design);
-the server's session holds what the rounds left. Using a tool in the editor changes the
-document -- a word typed into the running application is an undo step and a reason to save
--- and a saved project carries a conversation, the last data a chart showed and what a
-counter counted to, which Deploy then ships.
+The one place a value set on a page is the document's is the Page tab, where blocks are
+designed: a value typed there is what the block is designed to hold. A chat's is not: a
+conversation is always the session's (`WidgetRunner.valueIsDesign`).
 
 ### The rules
 
-These are being built on `feat/session-api`; until that is merged the table above is what
-holds.
+Each names the tests that hold it; `host/session.test.ts` holds them one by one.
 
 1. **Using a graph does not change its design.** A **session** holds one graph as it was
    handed over -- by the editor, or loaded by a served tool -- and everything using it leaves
    behind. A value typed into the page, what a round settled, a message emptied after it was
    delivered: the session's, never the document's. Nothing of it marks the editor's document
-   unsaved, Save writes none of it, Deploy ships none of it.
+   unsaved, Save writes none of it, Deploy ships none of it. (`store/graphStore.test.ts`:
+   "shows what a round made, and keeps none of it in the document"; the chat in
+   `masterExamples.test.ts` remembers its turn in the session.)
 2. **What state is.** For each node, its *slots*: what it keeps between rounds -- a page's
    blocks by id (a value set, a conversation, what a loop fed back), a data node's
    `data_value`, an input or output node's `value`. Which slots a node has is its element's
    to say (`NodeRunner.state` and `setState`), as where it settles memory is. Beside the
    slots: what each node made last (the latch), what the page shows (the rounds' results
    laid over each other), and how many rounds ran. Not state: the reuse cache, and a round
-   in flight.
+   in flight. ("a session")
 3. **Where.** In the session, and in `state.json` beside the project's `flow.json` --
    `<file>.state.json` beside a single graph file; an unsaved graph's state is held in memory
    only. The file is not part of the project: `check` and a save leave it alone and a bundle
-   never carries it. *Reset* empties the session and deletes the file.
+   never carries it. *Reset* empties the session and deletes the file. ("what a session keeps
+   on disk")
 4. **When.** A round runs on a working copy: the design, the slots over it, the values the
    round was given over those. A round that ran to its end commits -- its slots, what it
    left in the latch, the result it shows, the messages it delivered emptied -- and the file
    is written. A round that was stopped, or could not start, commits nothing: it was not a
-   round, which is what `schedule.ts` already says of one a shutdown cut off. What a failed
-   node did not deliver is not settled, as today: a chat whose model failed keeps its
-   conversation and the message in hand.
+   round, as a clock's round cut off by a shutdown never was one. What a failed node did not
+   deliver is not settled: a chat whose model failed keeps its conversation and the message
+   in hand. ("commits nothing of a round that was stopped"; "a gate, round by round")
 5. **A design that changed wins.** Each slot is kept with the design value it started from.
    When a session loads its file, and whenever the editor hands it a changed graph, the
    slots of a node that is gone, of a block that is gone, and of a slot whose design value
    changed since, are dropped and said -- never guessed. A renamed node is one that is gone
    and one that is new. The latch needs no rule of its own: its keys are the nodes as written.
+   ("a design that changed")
 6. **One session per server**, for now. Its id travels in every runtime route, so a session
    per visitor needs no change to the contract; it is kept in `state.json`, so a restarted
-   tool goes on with the same session.
+   tool goes on with the same session. (`host/runtimeApi.test.ts`: "answers for its own
+   session only")
 7. **Calling a graph keeps nothing.** `ai-graph run` and the MCP server's `run_graph` start
    from the design with what they are given and return what it hands back: a function call.
-   Rounds of one `--every` share their memory while the process lives, as they do today.
+   Rounds of one `--every` share their memory while the process lives. (`cli/cli.test.ts`:
+   "runs what --event starts, on the values --value gives by name")
 
 ### Not state of a graph
 
@@ -806,7 +811,7 @@ engine's own half of "no shell names a kind" (`check.ts`, `executor.finalOutputs
 layer order, now held by `layers.test.ts`. What it left, still true:
 
 - **A few functions and files carry too much at once.** `graphStore.ts` (~1000 lines: the
-  document, its normalisation, the ReactFlow adapter, run polling and undo), `App.tsx` (~600
+  document, its normalisation, the ReactFlow adapter, what a round shows and undo), `App.tsx` (~600
   lines), `Toolbar.tsx` (~460 lines), `mcpServer.ts`'s `createGraphTools`, and `executor.ts`'s
   `executeGraph`. Nothing in the tests catches a mistake made splitting one of them, which is
   exactly why none has been split yet. Parts of the shell already moved out of `App.tsx` into
@@ -842,7 +847,6 @@ There are no import cycles through values, and none between the engine and the e
   context, hands back its last outputs when its definition and every input (files already
   read) are unchanged ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)). A node with
   nothing wired in reads the outside world and always runs; a whole-graph Run reuses nothing.
-- **A scheduled tool remembers its last round across restarts**, in `flow.last-run.json`
-  inside a project folder, or `<file>.last-run.json` beside a graph file -- a bundle's
-  `graph.json.last-run.json`. It is still a clock around a run: no history
+- **A tool that runs by itself remembers what its rounds showed across restarts**, in its
+  session's `state.json` ([State](#state)). It is still a clock around a run: no history
   and no ingest endpoint, because a monitoring system is a different product.

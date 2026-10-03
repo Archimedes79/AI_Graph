@@ -68,10 +68,10 @@ Before any of it: **⧉ Open as a tool**, on the App tab (there while ▶ Run ru
 application), opens the graph you are
 editing as the delivered page, in a window of its own — same entry point (`runtime.html`),
 same routes, no editor around it. It answers "what have I actually built" without packing
-a zip first. It is not a deployment: nothing is written, and the window is served by the
-editor you are sitting in -- which keeps no time for it, so a trigger node's clock ticks in
-that window while it is open, as it would in a bundle's server. (The App tab shows the same page attached to the document,
-so a run there still lights up the graph canvas.)
+a zip first. It is not a deployment: no bundle is written, and the window is served by the
+editor you are sitting in, against the same session as the App tab -- the same values, the
+same rounds, the same clock, which the server keeps as a bundle's server would. A round
+started there lights up the graph canvas too.
 
 From the toolbar, **🚀 Deploy** gives you a zip holding the vendored
 engine, your graph as the project folder it was built as -- `flow.json`, its page in
@@ -179,7 +179,7 @@ or opened in a second tab, shows what the first one did.
 server to stop rather than ending it where it stands: no new round starts, runs in flight
 are cancelled — the model call is aborted, the code node's process ended — and the process
 exits with 0, normally well under a second and after eight at most. A round that was cut
-off is not remembered; the page shows the last one that finished. A second Ctrl+C stops at
+off commits nothing; the page shows what the last one that finished left. A second Ctrl+C stops at
 once. (`stop.cmd` on Windows still ends the process outright: Windows has no SIGTERM to
 send to another process.)
 
