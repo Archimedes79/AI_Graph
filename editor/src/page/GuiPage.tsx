@@ -6,7 +6,7 @@ import { blockStyle, gridStyle, resolveWidgetLayout, type WidgetPlacement } from
 import { toneIsBare, toneStyle, type Tone } from '@/ui/tone';
 import { schemeVars } from '@/ui/scheme';
 import { DANGER, DANGER_TEXT, DIM, MUTED, TEXT } from '@/ui/theme';
-import { widgetFiresRun } from '@/document/guiWidgets';
+import { widgetFiresRun, widgetTakesValue } from '@/document/guiWidgets';
 import RunResult, { type ShownOutput } from './RunResult';
 
 /**
@@ -236,8 +236,10 @@ function RunError({ error }: { error: string }) {
  * application shows -- or, with no blocks, the tool without a page. One
  * component, so what is tried in the editor cannot flatter.
  *
- * A block used is *onValue* -- what it now holds -- and, for a block that
- * starts the graph, *onEvent* by its name, once its value is in.
+ * A block used is *onValue* -- what it now holds, for a block a round is
+ * given a value by -- and, for a block that starts the graph, *onEvent* by its
+ * name, once its value is in. A button is an event and nothing else: it holds
+ * no value a round could be given (`WidgetRunner.takesValue`).
  */
 export function GuiSurfacePage({ page, onValue, onEvent }: {
   page: PageModel;
@@ -245,11 +247,14 @@ export function GuiSurfacePage({ page, onValue, onEvent }: {
   onEvent: (block: GuiWidget) => void;
 }) {
   if (page.blocks.length === 0) return <><RunError error={page.error} /><WithoutPage page={page} /></>;
+  const keep = (block: GuiWidget, value: unknown) => {
+    if (value !== undefined && widgetTakesValue(block)) onValue(block, value);
+  };
   // A block used: what it holds now is kept first -- the value and the event
   // that follows it arrive in the same tick -- and only a block the engine
   // calls an event starts a round, and not while one is going.
   const fire = (block: GuiWidget, value?: unknown) => {
-    if (value !== undefined) onValue(block, value);
+    keep(block, value);
     if (widgetFiresRun(block) && !page.busy) onEvent(block);
   };
   return (
@@ -266,7 +271,7 @@ export function GuiSurfacePage({ page, onValue, onEvent }: {
                 placement={placement}
                 incoming={incoming}
                 value={blockValue(widget, page.valueOf(widget), incoming)}
-                onChange={(next) => onValue(widget, next)}
+                onChange={(next) => keep(widget, next)}
                 onTrigger={(next) => fire(widget, next)}
                 busy={page.busy}
               />

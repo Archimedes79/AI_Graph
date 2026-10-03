@@ -19,10 +19,7 @@ import type { Runtime } from '../../Runtime.ts';
 export class ButtonWidgetRunner extends WidgetRunner<Record<string, never>> {
   readonly widgetKind = 'button' as const;
 
-  /**
-   * Nothing to set: a press is all it is. The count its value holds is the
-   * page's, so that every press is a change it reports; the graph never reads it.
-   */
+  /** Nothing to set: a press is all it is. */
   config(): Record<string, never> {
     return {};
   }

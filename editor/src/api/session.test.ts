@@ -2,12 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RoundSnapshot, SessionView } from './client';
 
 // The server: each round started gets the next id; nothing else is asked.
-const server = vi.hoisted(() => ({ rounds: 0, asked: [] as unknown[] }));
+const server = vi.hoisted(() => ({ rounds: 0, asked: [] as unknown[], refusal: null as string | null }));
 vi.mock('./client', async (actual) => ({
   ...(await actual<typeof import('./client')>()),
   call: vi.fn(async (route: string, body?: unknown) => {
     server.asked.push([route, body]);
     if (route === 'startRound') {
+      if (server.refusal) throw new Error(server.refusal);
       server.rounds += 1;
       return { session: 's1', round_id: `r${server.rounds}`, total: 1 };
     }
@@ -38,6 +39,7 @@ const round = (id: string, over: Partial<RoundSnapshot> = {}): RoundSnapshot => 
 });
 
 beforeEach(() => {
+  server.refusal = null;
   useSession.setState({ view: null, round: null, edits: {}, sent: {} });
   watchSession();
 });
@@ -93,5 +95,16 @@ describe('what was set here', () => {
     setEdit('say', 'hello');
     told('session', view({}, 's2'));
     expect(useSession.getState().edits).toEqual({});
+  });
+});
+
+describe('a round the server turns down', () => {
+  it('is said as one that ended before it began, for the server\'s reason -- and what was set stays in hand', async () => {
+    told('session', view({}));
+    setEdit('say', 'hello');
+    server.refusal = 'No value called "go": this graph takes "say".';
+    await startRound('go', { say: 'hello' });
+    expect(useSession.getState().round).toMatchObject({ done: true, cancelled: false, result: null, error: server.refusal });
+    expect(useSession.getState().edits).toEqual({ say: 'hello' });
   });
 });

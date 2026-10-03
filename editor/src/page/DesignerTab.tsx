@@ -164,8 +164,10 @@ export default function DesignerTab() {
    * A live edit in a block. What a block holds by design -- a choice, a text,
    * a path to start on -- is set here as the page's design, as everything on
    * this tab is; a conversation is only ever the session's (`valueIsDesign`).
+   * A block a round is given no value by -- a button -- keeps nothing.
    */
   const setWidgetValue = (widget: GuiWidget, value: unknown) => {
+    if (!widgetTakesValue(widget)) return;
     if (!widgetValueIsDesign(widget)) {
       setEdit(widget.id, value);
       return;

@@ -15,6 +15,7 @@
 import { create } from 'zustand';
 import { pathFor } from '@engine/host/api.ts';
 import { call, type Requirement, type RoundSnapshot, type SessionView } from './client';
+import { errorText } from './errorText';
 
 export interface PageSession {
   /** The session as the server last told it; none before it has. */
@@ -110,9 +111,32 @@ export function requirementsFor(event: string | null, values: Record<string, unk
   return call('requirements', { event, values });
 }
 
-/** Start a round for *event* -- the whole graph for none -- given *values* by name. */
+/** How many rounds the server turned down here: each said as a round of its own. */
+let refusals = 0;
+
+/** A round the server would not start, as this page saw it: over before it began, for the server's reason. */
+function refused(reason: string): RoundSnapshot {
+  refusals += 1;
+  return {
+    round_id: `refused-${refusals}`, done: true, cancelled: false, completed: 0, total: 0, current_label: '',
+    item_done: 0, item_total: 0, idle_seconds: null, error: reason, result: null, outputs: null, whole: false,
+  };
+}
+
+/**
+ * Start a round for *event* -- the whole graph for none -- given *values* by
+ * name. One the server turns down -- a name the graph does not offer, another
+ * session's id -- is said where every failed round is, and what was set here
+ * stays in hand.
+ */
 export async function startRound(event: string | null, values: Record<string, unknown>): Promise<void> {
-  const { round_id: id } = await call('startRound', { event, values });
+  let id: string;
+  try {
+    ({ round_id: id } = await call('startRound', { event, values }));
+  } catch (error) {
+    useSession.setState({ round: refused(errorText(error, 'The round could not start.')) });
+    return;
+  }
   const early = endedEarly.get(id);
   endedEarly.delete(id);
   useSession.setState((state) => (early === undefined
