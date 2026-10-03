@@ -206,7 +206,7 @@ carry the interface. That goes when the graph arrives already resolved over the 
 
 What the tests hold: every member stands under a bar; the build-time list is spelled out,
 so moving a member across is a decision and not a bar that slipped; **no file a run goes
-through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `runs.ts`, `schedule.ts`,
+through** (`execution/`, `elements/body.ts`, `host/serve.ts`, `session.ts`, `rounds.ts`, `schedule.ts`,
 `node.ts`) **mentions a build-time member**; and nothing a tool's page can reach asks a
 `GuiBuilder` for anything at all. What is *not* carried at all stays as it was:
 `host/editor/` never enters a bundle, and a panel is a lazy chunk a tool never fetches.
@@ -283,7 +283,8 @@ engine/src                               editor/src
     folderCheck.ts   what a folder gets wrong
   host/              Node and HTTP         api/client.ts       the contract's client
     api.ts           the contract          app/                header, palette, the bar, dialogs, results
-    serve.ts  http.ts  runs.ts             store/              the open graph, runs, undo
+    serve.ts  http.ts  session.ts          store/              the open graph, runs, undo
+    rounds.ts
     schedule.ts  node.ts                   runtime/            the deployed tool's page
     lifecycle.ts     what is stopped, in order
     editor/          never bundled         ui/                 look: theme, tone, colour scheme, Modal, SidePanel
@@ -445,19 +446,21 @@ other knows, it imports it or replays its result:
 4. **After the round.** `settleMemory` hands loop values to the nodes that keep them and
    lists every write in `result.memory`. Then each page node is asked what it shows,
    *with* those values.
-5. **Watching and stopping.** `RunBoard` (`host/runs.ts`) starts a run in the background,
-   turns the executor's progress events into the `RunSnapshot` the page polls, and aborts
-   it on Stop. An `AbortSignal` reaches every model call and every sandboxed body.
-   Rounds of one graph queue (`host/rounds.ts`), the clock's and the page's alike.
+5. **Watching and stopping.** A server holds one `Session` (`host/session.ts`): the graph in
+   use and what using it leaves behind (see [State](#state)). Its `Rounds`
+   (`host/rounds.ts`) start each round in the background, one at a time in the order asked
+   -- the clock's and the page's alike --, turn the executor's progress events into the
+   `RunSnapshot` the page polls, and abort a round on Stop. An `AbortSignal` reaches every
+   model call and every sandboxed body.
 6. **Shutting down.** A server holds a clock, runs in flight, the children those started,
    and a socket. `serve()` writes each into a `Lifecycle` (`host/lifecycle.ts`) as it starts
    it, and `shutdown()` stops them in that order — what makes work before what carries it:
-   the schedule, the runs (`RunBoard.stopAll`), then HTTP, which meanwhile still answers a
+   the schedule, the rounds (`Session.stopAll`), then HTTP, which meanwhile still answers a
    page watching its run and refuses anything new with 503. Each step gets what is left of
    eight seconds; what would not stop is named. A round of the clock still waiting behind a
-   page's run goes at once (`Rounds.turn` is handed its signal). A scheduled round that was
+   page's run goes at once (`Rounds.start` is handed its signal). A scheduled round that was
    cut off is not recorded, so the file the last round is kept in keeps the last one that
-   finished. The CLI maps
+   finished, and it commits nothing to the session either. The CLI maps
    Ctrl+C, SIGTERM, SIGHUP and Ctrl+Break to it (`untilStopped`); a second signal exits at
    once. `serve()` itself installs no signal handler: it is a library function.
 
@@ -674,19 +677,19 @@ the rules it is kept by from here on.
 | State | Lives in | Written by |
 |---|---|---|
 | what a person set on the page: a block's value -- typed text, a choice, a slider, a picked path, a chat's message in hand | the block's `value`, inside the graph (`page.json`) | the page (`page/pageWrite.ts`), the "before running" dialog (`applyRuntimeValues`); in the editor each is a change of the document, with an undo step |
-| what a round settled: a value that came back around a loop into a node that remembers -- a chat's reply, a chart's data, a picker fed back -- and anything delivered to a data node | the element's own config, inside the graph (`NodeRunner.settleMemory`) | the executor, into the copy it ran; replayed (`result.memory` → `applyMemory`) by whoever holds the long-lived copy: the editor's document, or the served page's copy, which posts it back with its next round |
-| a message, once delivered | emptied (`WidgetRunner.clearsValueAfterRun`) | the editor's store (`clearSentValues`) |
-| what every node made last, for the rounds its ◆ stays shut | `Latch` ([`execution/latch.ts`](../engine/src/execution/latch.ts)), one per server, keyed by the graph's name and shape because a graph has no identity; gone at restart | the executor |
-| what a node made from the same inputs | `LastOutputs` ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)), one per `RunBoard`: an optimisation, which changes how long a round takes and nothing else | the executor |
-| the last round | the editor's store and the served page (`mergeResults`); a scheduled tool's in `schedule.ts` and in `flow.last-run.json` | whoever started the round |
-| a round in flight | `RunBoard` ([`host/runs.ts`](../engine/src/host/runs.ts)) | — |
+| what a round settled: a value that came back around a loop into a node that remembers -- a chat's reply, a chart's data, a picker fed back -- and anything delivered to a data node | the element's own config, inside the graph (`NodeRunner.settleMemory`); the server's session keeps it too, as slots (`host/session.ts`) | the executor, into the copy it ran; replayed (`result.memory` → `applyMemory`) by whoever holds the long-lived copy: the editor's document, or the served page's copy, which posts it back with its next round |
+| a message, once delivered | emptied (`WidgetRunner.clearsValueAfterRun`) | the editor's store (`clearSentValues`), and the session for its slots (`NodeRunner.clearDelivered`) |
+| what every node made last, for the rounds its ◆ stays shut | `Latch` ([`execution/latch.ts`](../engine/src/execution/latch.ts)) in the server's session, keyed by the graph's name and shape and what each node is made from as written; what a round leaves in it is committed when the round ends, and written to `state.json` | the executor |
+| what a node made from the same inputs | `LastOutputs` ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)), one per session: an optimisation, which changes how long a round takes and nothing else | the executor |
+| the last round | the editor's store and the served page (`mergeResults`); a scheduled tool's in `schedule.ts` and in `flow.last-run.json`; every round's, laid over each other, in the session and its `state.json` | whoever started the round |
+| a round in flight | the session's `Rounds` ([`host/rounds.ts`](../engine/src/host/rounds.ts)) | — |
 
 So the page holds the document *and* the person's use of it, and posts both with every
-round (`startRun` takes the whole graph); the server holds what it ran last and tells one
-graph from another by its name and shape. Using a tool in the editor changes the document
--- a word typed into the running application is an undo step and a reason to save -- and a
-saved project carries a conversation, the last data a chart showed and what a counter
-counted to, which Deploy then ships.
+round (`startRun` takes the whole graph, and the session goes on with it as its design);
+the server's session holds what the rounds left. Using a tool in the editor changes the
+document -- a word typed into the running application is an undo step and a reason to save
+-- and a saved project carries a conversation, the last data a chart showed and what a
+counter counted to, which Deploy then ships.
 
 ### The rules
 

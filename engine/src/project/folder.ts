@@ -96,6 +96,19 @@ export function projectFolderOf(path: string): string | null {
   return null;
 }
 
+/** What a session of a project keeps beside its `flow.json`: never read or written as part of the project. */
+export const STATE_FILE = 'state.json';
+
+/**
+ * Where a session of the graph at *path* keeps what using it leaves behind
+ * (`host/session.ts`): `state.json` in a project folder, `<file>.state.json`
+ * beside a single graph file.
+ */
+export function stateFileOf(path: string): string {
+  const folder = projectFolderOf(path);
+  return folder ? join(folder, STATE_FILE) : `${resolve(path)}.state.json`;
+}
+
 /**
  * Where each of *nodes* keeps its files, relative to the project folder: the
  * page in `page/`, every other node in `nodes/<id>/`. A second page -- a

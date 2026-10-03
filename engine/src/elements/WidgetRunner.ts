@@ -74,6 +74,16 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
   ): Promise<Record<string, unknown>>;
 
   /**
+   * Whether this block keeps something between rounds: what a person sets on
+   * it, or what a loop brings back to it. A block with a port does; a heading,
+   * a divider, a spacer are their design and nothing else.
+   */
+  keepsState(widget: Widget): boolean {
+    const own = this.ports(widget);
+    return own.inputs.length > 0 || own.outputs.length > 0;
+  }
+
+  /**
    * Keep a value that came back around a loop, for the next run.
    *
    * `stored` is the block as the graph file holds it. Most blocks simply

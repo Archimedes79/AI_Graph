@@ -103,6 +103,17 @@ export class InputNodeRunner extends NodeRunner<InputConfig> {
     node.config.value = value;
   }
 
+  /** What it was given when the graph was used: its text, or its folder. */
+  override state(node: GraphNode): Record<string, unknown> {
+    return { value: node.config.value ?? null };
+  }
+
+  override setState(node: GraphNode, slots: Record<string, unknown>): void {
+    if (!('value' in slots)) return;
+    if (slots.value === null) delete node.config.value;
+    else node.config.value = slots.value;
+  }
+
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime) {
     const settings = this.config(node);
 

@@ -138,6 +138,28 @@ export function applyMemory(
 }
 
 /**
+ * A round laid over what the rounds before it showed.
+ *
+ * The nodes that ran replace their old results; the ones that were not asked
+ * keep theirs. A page is the one node that is *partly* re-run -- one of its
+ * displays got a new value, the others did not -- so what it received and what
+ * it shows are merged block by block rather than replaced. What a session shows
+ * is this over every round, and so is the editor's view of a page in use.
+ */
+export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult): ExecutionResult {
+  const ran = new Map(fresh.node_results.map((r) => [r.node_id, r]));
+  const kept = previous.node_results
+    .filter((r) => !ran.has(r.node_id));
+  const merged = fresh.node_results.map((r) => {
+    const before = previous.node_results.find((old) => old.node_id === r.node_id);
+    return before
+      ? { ...r, inputs: { ...before.inputs, ...r.inputs }, display: { ...before.display, ...r.display } }
+      : r;
+  });
+  return { ...fresh, node_results: [...kept, ...merged], outputs: { ...previous.outputs, ...fresh.outputs } };
+}
+
+/**
  * A graph's settings when nothing says otherwise: a new graph's, and what a
  * file that leaves one out means. The one statement of them -- the
  * editor starts a new graph from it, and `flow.json` leaves out what equals

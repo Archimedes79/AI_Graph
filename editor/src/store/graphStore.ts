@@ -11,7 +11,7 @@ import { delivered } from './executionStatus';
 import { NODE_KINDS, savedNode } from '@/document/nodeKinds';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { RUN_PORT } from '@engine/execution/triggers.ts';
-import { applyMemory, defaultMetadata as engineDefaults } from '@engine/graph.ts';
+import { applyMemory, defaultMetadata as engineDefaults, mergeResults } from '@engine/graph.ts';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 import { parseWidget } from '@engine/elements/nodes/gui/GuiNodeRunner.ts';
 import type { TextChange } from '@engine/host/api.ts';
@@ -272,27 +272,6 @@ export interface GraphStore {
   clearSentValues: (result: ExecutionResult, sent: Graph) => void;
   /** Stop the run in flight. Nodes already finished keep their results. */
   stopRun: () => Promise<void>;
-}
-
-/**
- * A partial run laid over what the page already showed.
- *
- * The nodes that ran replace their old results; the ones that were not asked
- * keep theirs. A page is the one node that is *partly* re-run -- one of its
- * displays got a new value, the others did not -- so what it received and what
- * it shows are merged block by block rather than replaced.
- */
-export function mergeResults(previous: ExecutionResult, fresh: ExecutionResult): ExecutionResult {
-  const ran = new Map(fresh.node_results.map((r) => [r.node_id, r]));
-  const kept = previous.node_results
-    .filter((r) => !ran.has(r.node_id));
-  const merged = fresh.node_results.map((r) => {
-    const before = previous.node_results.find((old) => old.node_id === r.node_id);
-    return before
-      ? { ...r, inputs: { ...before.inputs, ...r.inputs }, display: { ...before.display, ...r.display } }
-      : r;
-  });
-  return { ...fresh, node_results: [...kept, ...merged], outputs: { ...previous.outputs, ...fresh.outputs } };
 }
 
 /**

@@ -67,7 +67,7 @@ flowchart LR
 | `Deployed tool page` | [`editor/src/runtime/`](../editor/src/runtime/) | entry `runtime/main.tsx` → `runtime.html`; may not reach editor-only modules (`runtime/boundary.test.ts`) |
 | `API client` | [`editor/src/api/client.ts`](../editor/src/api/client.ts) | `call(route, request)`; `ApiError`; `EditorView` narrows returned graphs; `watchGeneration` (a generation's calls, polled while it runs; a signal stops the watch at once, and what comes back later is dropped) |
 | `Contract` | [`engine/src/host/api.ts`](../engine/src/host/api.ts) | every route: method, path, `tool`/`editor`, request and response types |
-| `Server` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts), [`http.ts`](../engine/src/host/http.ts), [`runs.ts`](../engine/src/host/runs.ts), [`schedule.ts`](../engine/src/host/schedule.ts) | serves the page and the `tool` routes; refuses to start if a route has no handler |
+| `Server` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts), [`http.ts`](../engine/src/host/http.ts), [`session.ts`](../engine/src/host/session.ts), [`schedule.ts`](../engine/src/host/schedule.ts) | serves the page and the `tool` routes; refuses to start if a route has no handler; holds the one session: the graph in use and its state |
 | `Editor routes` | [`engine/src/host/editor/routes.ts`](../engine/src/host/editor/routes.ts) | the `editor` routes; dynamic import, never in a bundle |
 | `Runtime services` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | files, sandboxed code, models, tools: the `Runtime` handed to elements |
 | `CLI` | [`engine/src/main.ts`](../engine/src/main.ts), [`engine/src/cli/cli.ts`](../engine/src/cli/cli.ts) | run a folder or a file once / on a clock / `--serve` / `--bundle` / `--mcp` / `--editor` / `check` / `test` / `run-node` |
@@ -324,8 +324,9 @@ classDiagram
 
 ## Class diagram: runs and their state
 
-The classes that are not elements: what the server keeps while graphs run. `serve()` creates the `Latch`, the
-`Rounds` and the `Lifecycle` and hands the first two to the `RunBoard` and the clock.
+The classes that are not elements: what the server keeps while graphs run. `serve()` opens one `Session` --
+the graph in use and what using it leaves behind -- or, for the editor, holds none until a graph is handed
+over (`SessionHolder`), and gives the clock the session's rounds.
 
 ```mermaid
 classDiagram
@@ -334,46 +335,69 @@ classDiagram
     shutdown(graceMs)
     stopping
   }
-  class RunBoard {
-    start()
+  class SessionHolder {
+    session
+    hold(graph)
+  }
+  class Session {
+    id
+    graph
+    open(graph, file)$
+    hold(graph)
+    start(trigger)
+    run(trigger, signal)
+    snapshot(id)
+    stop(id)
+    stopAll()
+    reset()
+    kept()
+  }
+  class Rounds {
+    start(total, labelOf, work)
+    exclusive(work)
     snapshot(id)
     stop(id)
     stopAll()
   }
-  class Run {
+  class Round {
     id
     total
     completed
     result
     snapshot()
-    stop()
-  }
-  class Rounds {
-    turn()
+    halt()
   }
   class Latch {
     key()
     get()
     set()
+    heldBy(nodes)
+    restore(held)
+  }
+  class RoundLatch {
+    commit()
   }
   class LastOutputs {
     get()
     set()
   }
-  RunBoard "1" *-- "0..*" Run : in flight
-  RunBoard o-- Rounds : shared with the clock
-  RunBoard o-- Latch : shared with the clock
-  RunBoard *-- LastOutputs
-  Lifecycle ..> RunBoard : stopAll() while stopping
+  SessionHolder o-- Session : one per server
+  Session *-- Rounds : one at a time
+  Rounds "1" *-- "0..*" Round : going, or ended 5 min ago
+  Session *-- Latch : what each node made last
+  Session *-- LastOutputs
+  Latch <|-- RoundLatch : held back until a round ends
+  Session ..> RoundLatch : one per round
+  Lifecycle ..> Session : stopAll() while stopping
 ```
 
 | Diagram node | Path | Notes |
 |---|---|---|
 | `Lifecycle` | [`engine/src/host/lifecycle.ts`](../engine/src/host/lifecycle.ts) | what a server stops, in order, once, within a grace period |
-| `RunBoard`, `Run` | [`engine/src/host/runs.ts`](../engine/src/host/runs.ts) | two classes in one file (a review-sized exception to "one class per file"); forgets a run after 5 minutes |
-| `Rounds` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | one round of a graph at a time; a graph is known by its name and shape (`graphKey`) |
-| `Latch` | [`engine/src/execution/latch.ts`](../engine/src/execution/latch.ts) | what every node made last, for rounds its ◆ stays shut, kept under the graph and what the node is made from as written; gone at restart |
-| `LastOutputs` | [`engine/src/execution/reuse.ts`](../engine/src/execution/reuse.ts) | outputs a page event may hand back for context-only nodes; the file is not named after the class |
+| `Session`, `RoundLatch`, `SessionHolder` | [`engine/src/host/session.ts`](../engine/src/host/session.ts) | a round runs on a working copy -- the design, each node's slots put back (`NodeRunner.state`/`setState`) -- and commits only when it ran to its end; slots are kept with the design value they started from and dropped, said, when their node, block or design changed; `state.json` ([`stateFileOf`](../engine/src/project/folder.ts)) after every round, read back by `open`, deleted by `reset` |
+| `Rounds`, `Round` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | the rounds of one session: queued in the order asked, watched (`RunSnapshot`), stopped -- a waiting one at once; `exclusive` for a reset; forgets a round 5 minutes after it ended |
+| `Latch` | [`engine/src/execution/latch.ts`](../engine/src/execution/latch.ts) | what every node made last, for rounds its ◆ stays shut, kept under the graph and what the node is made from as written; one entry a node is written to `state.json` (`heldBy`) |
+| `LastOutputs` | [`engine/src/execution/reuse.ts`](../engine/src/execution/reuse.ts) | outputs a page event may hand back for context-only nodes; the file is not named after the class; not kept beyond the process |
 
 Not drawn: the error classes (`Refusal`, `NotFound`, `NotAGraph`, `FileChanged`, …), spread over the
 files that throw them; `errors.ts` holds `NotFound` and `NotAGraph`, the two more than one file needs.
@@ -390,7 +414,8 @@ flowchart TD
     Api["api.ts — contract"]
     Http["http.ts"]
     Serve["serve.ts"]
-    Runs["runs.ts — RunBoard"]
+    Session["session.ts — Session"]
+    Rounds["rounds.ts — Rounds"]
     Schedule["schedule.ts"]
     Lifecycle["lifecycle.ts"]
     Node["node.ts — Runtime"]
@@ -405,14 +430,15 @@ flowchart TD
 
   Serve --> Api
   Serve --> Http
-  Serve --> Runs
+  Serve --> Session
   Serve --> Schedule
   Serve --> Lifecycle
-  Serve --> Node
   Serve -. "await import" .-> Routes
   Http --> Api
-  Runs --> Api
-  Runs --> Node
+  Session --> Rounds
+  Session --> Node
+  Rounds --> Api
+  Routes --> Session
   Routes --> Api
   Routes --> Http
   Routes --> Node
@@ -430,9 +456,9 @@ flowchart TD
 |---|---|---|
 | `api.ts — contract` | [`engine/src/host/api.ts`](../engine/src/host/api.ts) | `API` table, `RequestOf`/`ResponseOf`, `matchRoute`, `pathFor`; wire types (`RunSnapshot`, `AICall`, `SettingsStatus`, …) |
 | `http.ts` | [`engine/src/host/http.ts`](../engine/src/host/http.ts) | `Refusal` (thrown with a status), `Download`, `Handler`/`Handlers`, JSON (only as `application/json`) and byte bodies, static page; `foreignRequest`: a loopback host -- with the server's port on a loopback bind; bound wider, on any port, or the address bound to, or a name `AI_GRAPH_ALLOWED_HOSTS` lists (`namesFor`) -- and no foreign origin or cross-site call |
-| `serve.ts` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts) | `serve()`: dispatch by the table; `toolRoutes()`: graph, schedule, AI settings (read-only), requirements, run/watch/stop, browse |
-| `runs.ts — RunBoard` | [`engine/src/host/runs.ts`](../engine/src/host/runs.ts) | runs in flight: start, snapshot, stop, `stopAll` for a shutdown, forget after 5 min |
-| `rounds.ts` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | one round of a graph at a time: the clock's and the page's rounds share the queue, and the [`Latch`](../engine/src/execution/latch.ts) that holds what every node made last |
+| `serve.ts` | [`engine/src/host/serve.ts`](../engine/src/host/serve.ts) | `serve()`: dispatch by the table, one session held (`holderOf`); `toolRoutes()`: graph, schedule, AI settings (read-only), requirements, run/watch/stop, browse |
+| `session.ts — Session` | [`engine/src/host/session.ts`](../engine/src/host/session.ts) | the graph in use and what using it leaves behind, the clock's rounds and the page's alike: see the class diagram above |
+| `rounds.ts — Rounds` | [`engine/src/host/rounds.ts`](../engine/src/host/rounds.ts) | the rounds of one session, one at a time: start, snapshot, stop, `stopAll` for a shutdown, forget after 5 min |
 | `schedule.ts` | [`engine/src/host/schedule.ts`](../engine/src/host/schedule.ts) | a clock per trigger node, each round told which began it; `ScheduleState`, kept across restarts in `flow.last-run.json` (a project) or `<file>.last-run.json` (a graph file) |
 | `lifecycle.ts` | [`engine/src/host/lifecycle.ts`](../engine/src/host/lifecycle.ts) | `Lifecycle`: what a server must stop, in order, once, within a grace period; `untilStopped`: signals → shutdown → exit code, used by [`cli/cli.ts`](../engine/src/cli/cli.ts) |
 | `node.ts — Runtime` | [`engine/src/host/node.ts`](../engine/src/host/node.ts) | `nodeFiles`, `nodeCode` (sandboxed `node --permission`; a body may ask this process for what it may not do itself — `BodyContext.calls`, how `node.llm` works), `nodeRuntime()` |

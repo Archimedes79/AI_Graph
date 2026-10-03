@@ -117,7 +117,7 @@ describe('what a run calls', () => {
     ...readdirSync(join(SRC, 'execution')).filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name))
       .map((name) => `execution/${name}`),
     'elements/body.ts', 'elements/folderListing.ts', 'elements/images.ts', 'authoring/logic.ts',
-    'host/serve.ts', 'host/runs.ts', 'host/rounds.ts', 'host/schedule.ts', 'host/node.ts',
+    'host/serve.ts', 'host/session.ts', 'host/rounds.ts', 'host/schedule.ts', 'host/node.ts',
   ];
 
   it.each(RUN_TIME)('%s reaches nothing that is build time', (path) => {

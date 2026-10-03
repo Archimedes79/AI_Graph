@@ -347,6 +347,29 @@ export abstract class NodeRunner<C = unknown> extends ElementRunner<GraphNode, C
   settleMemory(_node: GraphNode, _portId: string, _value: unknown): void {}
 
   /**
+   * What this node keeps between rounds, slot by slot: what using the graph
+   * changes about it, as against how it was designed -- a page's blocks by id,
+   * a data node's `data_value`, an input node's `value`. A session reads it
+   * after a round and puts it back before the next (`setState`), on a copy, so
+   * that using a graph never changes its design (`host/session.ts`). Nothing,
+   * for a node that keeps nothing. A slot that holds nothing is `null`.
+   */
+  state(_node: GraphNode): Record<string, unknown> {
+    return {};
+  }
+
+  /** Put slots `state` read back where this element keeps them. */
+  setState(_node: GraphNode, _slots: Record<string, unknown>): void {}
+
+  /**
+   * Empty what this node held only until a round delivered it: a message,
+   * said once -- not a setting somebody would have to type again. *sent* is
+   * its slots as the round was handed them; what changed since is not what
+   * was delivered, and stays.
+   */
+  clearDelivered(_node: GraphNode, _sent: Record<string, unknown>): void {}
+
+  /**
    * What this node shows, per block id, given everything that arrived.
    *
    * Asked by the executor once the round has settled, so values that came back

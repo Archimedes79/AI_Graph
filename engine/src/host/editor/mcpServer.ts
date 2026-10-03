@@ -71,7 +71,7 @@ import { generateGraph } from './generate.ts';
 import { GRAPH_SYSTEM } from './graphPrompt.ts';
 import { withoutAuthoring } from '../../authoring/handedOn.ts';
 import {
-  FLOW_FILE, LAYOUT_FILE, NODE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
+  FLOW_FILE, LAYOUT_FILE, NODE_FILE, STATE_FILE, loadGraph as loadProject, projectFolderOf, saveGraph as saveToDisk,
 } from '../../project/folder.ts';
 import { INTERFACE_FILE } from '../../project/interfaceFile.ts';
 import { names, problemsIn, type Problem } from '../../project/check.ts';
@@ -675,8 +675,9 @@ export function createGraphTools(options: GraphToolsOptions): GraphTools {
             continue;
           }
           if (!entry.isFile() || extname(entry.name).toLowerCase() !== '.json') continue;
-          // A project's own parts: its flow.json stands for all of them.
-          if ([NODE_FILE, INTERFACE_FILE, LAYOUT_FILE].includes(entry.name)) continue;
+          // A project's own parts: its flow.json stands for all of them. What a
+          // session of a graph keeps beside it is no graph either.
+          if ([NODE_FILE, INTERFACE_FILE, LAYOUT_FILE, STATE_FILE].includes(entry.name) || entry.name.endsWith(`.${STATE_FILE}`)) continue;
           try {
             // The same door as every other read, so the same files stay shut.
             await confine(full, 'path');

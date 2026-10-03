@@ -16,8 +16,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { parseGraph, type Graph } from '../graph.ts';
-import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
+import { parseGraph } from '../graph.ts';
+import { memoryFeedbackEdges } from '../execution/executor.ts';
 import { registry } from '../elements/registry.ts';
 import { runtimeRequirements } from '../execution/runtimeValues.ts';
 import { triggeredNodes } from '../execution/triggers.ts';
@@ -29,13 +29,10 @@ import {
 import { browse } from './browse.ts';
 import { extensionFilter } from '../elements/folderListing.ts';
 import { NotFound } from '../errors.ts';
-import { RunBoard } from './runs.ts';
-import { Rounds } from './rounds.ts';
-import { Latch } from '../execution/latch.ts';
-import { nodeRuntime } from './node.ts';
+import { Session, holderOf, type SessionHolder } from './session.ts';
 import { schedule } from './schedule.ts';
 import { Lifecycle } from './lifecycle.ts';
-import { loadGraph, projectFolderOf } from '../project/folder.ts';
+import { loadGraph, projectFolderOf, stateFileOf } from '../project/folder.ts';
 import { withoutAuthoring } from '../authoring/handedOn.ts';
 
 /** Where a served tool keeps its last scheduled round: inside a project, beside a file. */
@@ -80,25 +77,20 @@ export async function serve(options: ServeOptions): Promise<Served> {
   /** Who this server is, for telling its own page from another's: its port is known once it listens. */
   const self = { loopback, port: 0, names: namesFor(host) };
 
-  // The graph this server ships is held, not re-read: what a run remembers is
-  // settled into it, so the next scheduled round -- and the next page to open --
-  // starts from there. A page that runs the graph hands over its copy, so the
-  // clock goes on with the file the person picked.
-  // Shared by the clock and the page's runs: both run the same graph, so both
-  // queue for it and both read what its nodes were left holding.
-  const latch = new Latch();
-  const rounds = new Rounds();
-  const held: { graph: Graph | null } = {
-    graph: options.graphPath ? await loadGraph(options.graphPath) : null,
-  };
-  const clock = held.graph
-    ? schedule(() => held.graph!, (graph, signal, trigger) => {
-      return rounds.turn(graph, () => executeGraph(graph, { runtime: nodeRuntime(), registry, signal, trigger, latch }), signal);
-    }, lastRunFile(options.graphPath!))
+  // The graph in use, and what using it leaves behind: one session, shared by
+  // the clock and the page, so both queue for one graph and both read what its
+  // nodes were left holding. A deployed tool's is opened with the server and
+  // goes on from its state.json; the editor's begins with the graph it hands
+  // over. A page that runs the graph hands over its copy, so the clock goes on
+  // with the file the person picked.
+  const held = holderOf(options.graphPath
+    ? await Session.open(await loadGraph(options.graphPath), { file: stateFileOf(options.graphPath) })
+    : null);
+  const clock = held.session
+    ? schedule(() => held.session!.graph, (trigger, signal) => held.session!.run(trigger, signal), lastRunFile(options.graphPath!))
     : null;
   if (clock) lifecycle.own('the schedule', () => clock.stop());
-  const runs = new RunBoard({ latch, rounds });
-  lifecycle.own('runs in flight', () => runs.stopAll());
+  lifecycle.own('runs in flight', async () => { await held.session?.stopAll(); });
 
   const handlers: Handlers = {
     // Where an empty path opens the picker, decided here and nowhere else. A
@@ -106,7 +98,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
     // what its paths are relative to. The editor's opens where the editor was
     // started, which is the same idea one level up, even when it was given a
     // graph to serve as well.
-    ...toolRoutes(held, clock, runs, options.graphPath !== undefined, options.editor || !options.graphPath
+    ...toolRoutes(held, clock, options.editor || !options.graphPath
       ? process.cwd()
       : (projectFolderOf(options.graphPath) ?? dirname(resolve(options.graphPath)))),
     // Loaded, not imported: a bundle carries this file without the `editor/`
@@ -199,18 +191,16 @@ export function portTaken(error: unknown): boolean {
 
 /** The `tool` rows: what any server answers, a deployed tool's included. */
 function toolRoutes(
-  held: { graph: Graph | null },
+  held: SessionHolder,
   clock: ReturnType<typeof schedule> | null,
-  runs: RunBoard,
-  ships: boolean,
   /** Where the file picker opens: the folder a tool's graph sits in, or where the editor was started. */
   toolRoot: string,
 ): Handlers {
   return {
     graph() {
-      if (!held.graph) throw new Refusal(404, 'This server ships no graph; post the one to run.');
+      if (!held.session) throw new Refusal(404, 'This server ships no graph; post the one to run.');
       // A tool's page is handed what runs, not how each node was written.
-      return withoutAuthoring(held.graph);
+      return withoutAuthoring(held.session.graph);
     },
 
     schedule: () => clock?.state() ?? {
@@ -240,24 +230,21 @@ function toolRoutes(
       return runtimeRequirements(graph, registry, only);
     },
 
-    startRun(asked) {
-      const graph = parseGraph(asked);
-      if (ships) held.graph = graph;
-      const trigger = asked.trigger?.node_id ? asked.trigger : null;
-      const only = trigger
-        ? triggeredNodes(graph, trigger, memoryFeedbackEdges(graph.nodes, graph.edges, registry))
-        : null;
-      const total = only?.size ?? graph.nodes.length;
-      return { run_id: runs.start(graph, trigger, total), total };
+    // The page hands over its copy of the graph with each round, so the clock
+    // goes on with the file the person picked.
+    async startRun(asked) {
+      const session = await held.hold(parseGraph(asked));
+      const { id, total } = session.start(asked.trigger?.node_id ? asked.trigger : null);
+      return { run_id: id, total };
     },
 
     run(asked) {
-      const snapshot = runs.snapshot(asked.id);
+      const snapshot = held.session?.snapshot(asked.id);
       if (!snapshot) throw new Refusal(404, 'No such run.');
       return snapshot;
     },
 
-    stopRun: (asked) => ({ cancelled: runs.stop(asked.id) }),
+    stopRun: (asked) => ({ cancelled: held.session?.stop(asked.id) ?? false }),
 
     // The one picker, the editor's too. It used to list the starting directory's
     // files and nothing else -- no folders, no parent, no drives -- which left

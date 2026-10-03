@@ -87,7 +87,7 @@ describe('schedule', () => {
   it('stops: no round starts afterwards, and the one in flight is told', async () => {
     let told = false;
     let runs = 0;
-    const clock = schedule(() => graphWith({ on_start: true, every: '0.02' }), async (_graph, signal) => {
+    const clock = schedule(() => graphWith({ on_start: true, every: '0.02' }), async (_event, signal) => {
       runs += 1;
       signal.addEventListener('abort', () => { told = true; });
       await wait(40);
@@ -149,7 +149,7 @@ describe('trigger nodes', () => {
   it('tells each round which trigger began it', async () => {
     const began: string[] = [];
     const clock = schedule(() => clocks([{ trigger_on_start: true }, { trigger_on_start: false, trigger_every: '0.05' }]),
-      async (_graph, _signal, event) => { began.push(event.node_id); return done(); });
+      async (event) => { began.push(event.node_id); return done(); });
     await wait(200);
     clock.stop();
     expect(began[0]).toBe('t0');
@@ -169,7 +169,7 @@ describe('trigger nodes', () => {
 
   it('keeps what an earlier round showed when a later one touched something else', async () => {
     const clock = schedule(() => clocks([{ trigger_on_start: true }, { trigger_on_start: true }]),
-      async (_graph, _signal, event) => ({
+      async (event) => ({
         status: 'success', outputs: {},
         node_results: [{ node_id: `made-by-${event.node_id}`, status: 'success', inputs: {}, outputs: {} }],
       }));

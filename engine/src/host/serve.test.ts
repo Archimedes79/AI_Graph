@@ -1,7 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { copyFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { request as httpRequest, type Server } from 'node:http';
 import { portTaken, serve } from './serve.ts';
 import { API, pathFor } from './api.ts';
@@ -24,8 +25,12 @@ const started: Server[] = [];
 
 afterAll(() => { for (const server of started) server.close(); });
 
-/** A graph with nothing to carry along, so what is tested is the server. */
-const MINIMAL = resolve(REPO, 'engine', 'fixtures', 'minimal.json');
+/**
+ * A graph with nothing to carry along, so what is tested is the server -- a
+ * copy, because a served graph keeps what its rounds leave beside it.
+ */
+const MINIMAL = join(mkdtempSync(join(tmpdir(), 'served-')), 'minimal.json');
+copyFileSync(resolve(REPO, 'engine', 'fixtures', 'minimal.json'), MINIMAL);
 
 async function serveGraph(graphPath = MINIMAL, pageDir?: string) {
   const { server, url } = await serve({ graphPath, pageDir, port: 0 });
@@ -347,7 +352,7 @@ describe('the engine as the front door of the editor', () => {
     started.push(asEditor.server);
     expect(await ask(asEditor.url)).toBe(resolve(process.cwd()));
     const { url: asTool } = await serveGraph();
-    expect(await ask(asTool)).toBe(resolve(REPO, 'engine', 'fixtures'));
+    expect(await ask(asTool)).toBe(dirname(MINIMAL));
   });
 
   it('still refuses what nothing serves, rather than guessing', async () => {

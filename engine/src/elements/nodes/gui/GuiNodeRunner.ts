@@ -203,6 +203,37 @@ export class GuiNodeRunner extends NodeRunner<GuiConfig> {
     }
   }
 
+  /**
+   * What its blocks hold, each under its id: what was typed or chosen, a
+   * conversation, what a loop fed back. A block without a port is its design.
+   */
+  override state(node: GraphNode): Record<string, unknown> {
+    const slots: Record<string, unknown> = {};
+    for (const stored of this.blocks(node)) {
+      const widget = parseWidget(stored);
+      if (BY_KIND.get(widget.kind)?.keepsState(widget)) slots[widget.id] = stored.value ?? null;
+    }
+    return slots;
+  }
+
+  override setState(node: GraphNode, slots: Record<string, unknown>): void {
+    for (const stored of this.blocks(node)) {
+      const id = String(stored.id ?? '');
+      if (!(id in slots)) continue;
+      if (slots[id] === null) delete stored.value;
+      else stored.value = slots[id];
+    }
+  }
+
+  /** A block that holds a message empties it once a round has delivered it (`clearsValueAfterRun`). */
+  override clearDelivered(node: GraphNode, sent: Record<string, unknown>): void {
+    for (const stored of this.blocks(node)) {
+      const widget = parseWidget(stored);
+      if (!BY_KIND.get(widget.kind)?.clearsValueAfterRun(widget)) continue;
+      if (JSON.stringify(stored.value ?? null) === JSON.stringify(sent[widget.id] ?? null)) stored.value = '';
+    }
+  }
+
   // ── Build time ────────────────────────────────────────────────────────────
 
   /**

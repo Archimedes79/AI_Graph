@@ -7,9 +7,9 @@
 // than an empty screen and a countdown.
 //
 // So the server holds the graph, runs it, keeps the last result, and the page
-// asks for that. One held graph, deliberately: what memory nodes kept from one
-// round is what the next round starts from, which only works if the rounds
-// share the object. The run settles into it; nothing has to be carried across.
+// asks for that. A round of the clock is a round of the server's session
+// (`session.ts`), like the page's: what memory nodes kept from one round is
+// what the next starts from, whoever started either.
 //
 // When a round is due is the clock's (`execution/clock.ts`), the one the
 // editor's ▶ Run keeps too; what is kept of the rounds is this file's.
@@ -19,7 +19,7 @@
 // page until the next one is due.
 
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
-import type { ExecutionResult, Graph } from '../graph.ts';
+import { mergeResults, type ExecutionResult, type Graph } from '../graph.ts';
 import type { Trigger } from '../execution/triggers.ts';
 import { startClock } from '../execution/clock.ts';
 import { registry } from '../elements/registry.ts';
@@ -68,29 +68,18 @@ function keep(path: string, state: ScheduleState): void {
   }
 }
 
-/** What two rounds of one graph come to: the later one, over what it did not touch. */
-function over(before: ExecutionResult | null, fresh: ExecutionResult): ExecutionResult {
-  if (!before) return fresh;
-  const touched = new Set(fresh.node_results.map((result) => result.node_id));
-  return {
-    ...fresh,
-    node_results: [...before.node_results.filter((result) => !touched.has(result.node_id)), ...fresh.node_results],
-    outputs: { ...before.outputs, ...fresh.outputs },
-  };
-}
-
 /**
  * Start running *graph* as its own trigger nodes say.
  *
- * `run` is handed the graph, a signal and the event that began the round; it
- * is the server's ordinary run, so a scheduled round is a round like any other
- * and runs what that trigger is wired to. Nothing here knows what a node is.
- * *keptAt*, when given, is the file the last round is written to and read back
- * from at start.
+ * `run` is handed the event that began the round and a signal; it is the
+ * session's ordinary round (`session.ts`), so a scheduled round is a round
+ * like any other and runs what that trigger is wired to. Nothing here knows
+ * what a node is. *keptAt*, when given, is the file the last round is written
+ * to and read back from at start.
  */
 export function schedule(
   graph: () => Graph,
-  run: (graph: Graph, signal: AbortSignal, event: Trigger) => Promise<ExecutionResult>,
+  run: (event: Trigger, signal: AbortSignal) => Promise<ExecutionResult>,
   keptAt?: string,
 ): Schedule {
   const abort = new AbortController();
@@ -104,7 +93,7 @@ export function schedule(
     let result: ExecutionResult | null = null;
     let failure: string | null = null;
     try {
-      result = await run(graph(), abort.signal, event);
+      result = await run(event, abort.signal);
     } catch (error) {
       // A round that could not even start -- a cycle, a graph edited into
       // nonsense -- must not end the schedule: the next round may be fine.
@@ -114,7 +103,7 @@ export function schedule(
     // Stopped in the middle: not a round. What is remembered stays the last one
     // that ran to its end, not the half of one the shutdown cut off.
     if (abort.signal.aborted) return;
-    if (result) current.result = over(current.result, result);
+    if (result) current.result = current.result ? mergeResults(current.result, result) : result;
     // An interval nobody could parse stays said: that clock never runs, and a
     // round of another that went well is not the end of that.
     current.error = failure ?? clock.problem();

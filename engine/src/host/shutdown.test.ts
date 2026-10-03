@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from './serve.ts';
-import { RunBoard } from './runs.ts';
+import { Session } from './session.ts';
 import { parseGraph } from '../graph.ts';
 
 /**
@@ -26,20 +26,19 @@ const post = (url: string, body: unknown) => fetch(url, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 });
 
-describe('RunBoard.stopAll', () => {
-  it('ends every run still going and waits until each has wound down', async () => {
-    const runs = new RunBoard();
-    const graph = parseGraph(slowGraph());
-    const first = runs.start(graph, null, 1);
-    const second = runs.start(graph, null, 1);
+describe('Session.stopAll', () => {
+  it('ends the round going and the one waiting, and waits until each has wound down', async () => {
+    const session = await Session.open(parseGraph(slowGraph()));
+    const first = session.start(null).id;
+    const second = session.start(null).id;
     await wait(300);
     const began = Date.now();
-    expect(await runs.stopAll()).toBe(2);
+    expect(await session.stopAll()).toBe(2);
     expect(Date.now() - began).toBeLessThan(10_000);
-    for (const id of [first, second]) {
-      expect(runs.snapshot(id)).toMatchObject({ done: true, cancelled: true, result: { status: 'cancelled' } });
-    }
-    expect(await runs.stopAll()).toBe(0);                          // nothing left to stop
+    expect(session.snapshot(first)).toMatchObject({ done: true, cancelled: true, result: { status: 'cancelled' } });
+    // It never started: stopped where it waited, it has nothing to show.
+    expect(session.snapshot(second)).toMatchObject({ done: true, cancelled: true, result: null });
+    expect(await session.stopAll()).toBe(0);                       // nothing left to stop
   }, 30_000);
 });
 
@@ -79,6 +78,8 @@ describe('shutting a server down', () => {
     expect(await shutdown()).toEqual([]);
     expect(existsSync(kept)).toBe(true);
     expect(await readFile(kept, 'utf8')).toBe(before);
+    // Nor does what the round began become the session's: it was not a round.
+    expect(existsSync(`${graphPath}.state.json`)).toBe(false);
   }, 30_000);
 
   it('does not wait for a scheduled round queued behind a page\'s run: the clock stops first, the run after', async () => {

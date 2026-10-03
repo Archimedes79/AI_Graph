@@ -71,6 +71,17 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
     node.config.value = value;
   }
 
+  /** Where it was told to write when the graph was used. */
+  override state(node: GraphNode): Record<string, unknown> {
+    return { value: node.config.value ?? null };
+  }
+
+  override setState(node: GraphNode, slots: Record<string, unknown>): void {
+    if (!('value' in slots)) return;
+    if (slots.value === null) delete node.config.value;
+    else node.config.value = slots.value;
+  }
+
   async execute(node: GraphNode, inputs: Record<string, unknown>, runtime: Runtime): Promise<Record<string, unknown>> {
     const settings = this.config(node);
     // A wired `path` sets the target at run time and always wins over the

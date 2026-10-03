@@ -71,6 +71,16 @@ export class DataNodeRunner extends NodeRunner<DataConfig> {
     if (value !== null && value !== undefined && typeof value !== 'string') node.config.data_format = 'structure';
   }
 
+  /** What it holds: what it was given, or what arrived since. */
+  override state(node: GraphNode): Record<string, unknown> {
+    return { data_value: node.config.data_value ?? null };
+  }
+
+  /** Put back as it was kept: what it holds decides whether it holds structure, as when it arrived. */
+  override setState(node: GraphNode, slots: Record<string, unknown>): void {
+    if ('data_value' in slots) this.settleMemory(node, 'input', slots.data_value);
+  }
+
   // ── Build time ────────────────────────────────────────────────────────────
 
   override graphAuthorNote(): string {

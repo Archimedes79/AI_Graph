@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { mergeResults, useGraphStore } from '@/store/graphStore';
+import { useGraphStore } from '@/store/graphStore';
+import { mergeResults } from '@engine/graph.ts';
 import { GuiSurfacePage } from '@/page/GuiPage';
 import { useDeliveredRun } from '@/page/useDeliveredRun';
 import { useSchemeOnRoot } from '@/page/useSchemeOnRoot';
