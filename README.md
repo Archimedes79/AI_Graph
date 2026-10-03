@@ -13,7 +13,8 @@ chat, a chart — and 🚀 Deploy packs it into a folder someone else can run.
 ### ⬇ [Windows](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows-x64.zip) · [macOS (Apple silicon)](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-arm64.zip) · [macOS (Intel)](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-x64.zip) · [Linux](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux-x64.zip)
 
 Unzip and double-click `run.cmd` (Windows) or `run.command` (macOS) — the editor opens in your browser.<br>
-Nothing to install: each download carries the Node.js it runs on. No Docker, no account.
+Nothing to install: each download carries the Node.js it runs on. No Docker, no account.<br>
+ARM Windows and Linux, and any other system: [every download](#quick-start).
 
 [Quick start](#quick-start) · [Examples](#the-examples) · [Documentation](#documentation) · [Licence](#licence)
 
@@ -214,9 +215,11 @@ included — nothing is installed, before or while it runs:
 | System | Download | Start it with |
 |---|---|---|
 | Windows | [ai-graph-windows-x64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows-x64.zip) | `run.cmd` |
+| Windows on ARM (Snapdragon) | [ai-graph-windows-arm64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-windows-arm64.zip) | `run.cmd` |
 | macOS, Apple silicon (M1 and later) | [ai-graph-macos-arm64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-arm64.zip) | `run.command` |
 | macOS, Intel | [ai-graph-macos-x64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-macos-x64.zip) | `run.command` |
 | Linux | [ai-graph-linux-x64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux-x64.zip) | `./run.sh` |
+| Linux on ARM (Raspberry Pi 4/5, ARM servers) | [ai-graph-linux-arm64.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-linux-arm64.zip) | `./run.sh` |
 | Any, with Node 24 of your own | [ai-graph-node-required.zip](https://github.com/Archimedes79/AI_Graph/releases/latest/download/ai-graph-node-required.zip) (1 MB) | any of them |
 
 The editor opens in your browser at <http://127.0.0.1:8000>, or the next free port.

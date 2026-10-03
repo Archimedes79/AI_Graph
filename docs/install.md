@@ -77,7 +77,7 @@ hold the engine's source, the editor's built page and the examples:
 
 | Release | Zip | What it is |
 |---|---|---|
-| `vX.Y.Z` | `ai-graph-windows-x64.zip`, `ai-graph-macos-arm64.zip`, `ai-graph-macos-x64.zip`, `ai-graph-linux-x64.zip` | A version for one system, with the Node.js it runs on in `node/`: nothing to install. Published when the tag is pushed, and never changed afterwards. `releases/latest/download/<name>` is always the newest. |
+| `vX.Y.Z` | `ai-graph-windows-x64.zip`, `ai-graph-windows-arm64.zip`, `ai-graph-macos-arm64.zip`, `ai-graph-macos-x64.zip`, `ai-graph-linux-x64.zip`, `ai-graph-linux-arm64.zip` | A version for one system, with the Node.js it runs on in `node/`: nothing to install. Published when the tag is pushed, and never changed afterwards. `releases/latest/download/<name>` is always the newest. |
 | `vX.Y.Z` | `ai-graph-node-required.zip` | The same for any system, without Node: 1 MB, for a computer that has Node 24 or newer. |
 | `latest` (pre-release) | `ai-graph-latest.zip` | Whatever `main` is, without Node. Rebuilt on every green push to `main`, at an address that stays the same. |
 
