@@ -72,34 +72,35 @@ first.
 
 ## The download, without a checkout
 
-The [releases page](https://github.com/Archimedes79/AI_Graph/releases) has two kinds of
-zip, both holding the engine's source, the editor's built page and the examples:
+The [releases page](https://github.com/Archimedes79/AI_Graph/releases) has zips that
+hold the engine's source, the editor's built page and the examples:
 
 | Release | Zip | What it is |
 |---|---|---|
-| `vX.Y.Z` | `ai-graph-vX.Y.Z.zip` | A version. Published when that tag is pushed, and never changes afterwards. |
-| `latest` (pre-release) | `ai-graph-latest.zip` | Whatever `main` is. Rebuilt on every green push to `main`, at an address that stays the same. |
+| `vX.Y.Z` | `ai-graph-windows-x64.zip`, `ai-graph-macos-arm64.zip`, `ai-graph-macos-x64.zip`, `ai-graph-linux-x64.zip` | A version for one system, with the Node.js it runs on in `node/`: nothing to install. Published when the tag is pushed, and never changed afterwards. `releases/latest/download/<name>` is always the newest. |
+| `vX.Y.Z` | `ai-graph-node-required.zip` | The same for any system, without Node: 1 MB, for a computer that has Node 24 or newer. |
+| `latest` (pre-release) | `ai-graph-latest.zip` | Whatever `main` is, without Node. Rebuilt on every green push to `main`, at an address that stays the same. |
 
-Take the `ai-graph-….zip` asset. The *Source code (zip)* GitHub adds to every release is
-the bare repository — no built page and no `run.cmd` — and needs the checkout route above.
+The *Source code (zip)* GitHub adds to every release is the bare repository — no built
+page and no `run.cmd` — and needs the checkout route above.
 
 The engine has no runtime dependencies and Node runs its TypeScript unbuilt, so there is
-nothing to install and nothing to build:
+nothing to install and nothing to build: unzip, then double-click `run.cmd` (Windows) or
+`run.command` (macOS), or run `./run.sh` in a terminal. macOS asks once about a script
+from the internet: *System Settings ▸ Privacy & Security ▸ Open Anyway*.
 
-```bash
-unzip ai-graph-latest.zip && cd ai-graph-latest
-./run.sh          # run.cmd on Windows -- double-clicking it works
-```
+The launchers use the Node in `node/` where the folder has one, and otherwise the
+computer's, which must then be 24 or newer: they check before starting, a missing or
+older Node is named in a sentence, and on Windows the window stays open until it has been
+read. The editor opens in the browser on port 8000, or the next free one if something —
+another editor, say — is already there; `PORT=8123` insists on one. `VERSION` in the
+folder says which build it is and which commit it came from.
 
-Node 24 or newer is the whole requirement, and `run.sh` / `run.cmd` check it before
-starting: a missing or older Node is named in a sentence, and on Windows the window stays
-open until it has been read. The editor opens in the browser on port 8000, or the next
-free one if something — another editor, say — is already there; `PORT=8123` insists on
-one. `VERSION` in the folder says which build it is and which commit it came from.
-
-`npm run package` builds the same zip from a checkout, and `node --test
-scripts/package.test.mjs` unzips it and starts it the way a person would, which CI does on
-Linux and on Windows before anything is published.
+`npm run package` builds the zip without Node from a checkout; `node scripts/package.mjs
+out.zip --node <an unpacked Node download>` builds one with it. `node --test
+scripts/package.test.mjs` unzips both and starts them the way a person would — the one
+with Node on a computer whose only Node is too old — which CI does on Linux, macOS and
+Windows before anything is published.
 
 ## In a container
 

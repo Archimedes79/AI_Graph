@@ -6,13 +6,13 @@
 // busy on any machine already running an editor -- and closed its window
 // before the error could be read, while its run.sh came out of the archive
 // without an executable bit. None of that shows without unzipping it and
-// double-clicking, so this does exactly that, on Linux and on Windows.
+// double-clicking, so this does exactly that, on Linux, macOS and Windows.
 
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, chmodSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,9 +60,9 @@ const currentPath = () => environment().PATH ?? environment().Path ?? Object.ent
   .find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? '';
 
 /** Start the launcher as a double-click would: its path, from some other folder. */
-function launch(env = {}) {
-  const command = windows ? process.env.ComSpec || 'cmd.exe' : launcher;
-  const args = windows ? ['/d', '/c', launcher] : [];
+function launch(env = {}, script = launcher) {
+  const command = windows ? process.env.ComSpec || 'cmd.exe' : script;
+  const args = windows ? ['/d', '/c', script] : [];
   const child = spawn(command, args, {
     cwd: work,
     env: environment(env),
@@ -175,3 +175,39 @@ test('a Node that is too old is named, and the launcher stops', async () => {
   assert.match(output, /needs Node\.js 24 or newer/);
   assert.match(output, /v20\.0\.0/);
 }, { timeout: 30_000 });
+
+test('the download for one system carries its own Node, and needs none on the computer', async () => {
+  // A Node download's layout -- node.exe beside LICENSE on Windows, bin/node
+  // under it elsewhere -- made of the Node running this. An installed Node
+  // need not have its LICENSE beside it; a download always does.
+  const nodeFolder = join(work, 'node-download');
+  const binary = join(nodeFolder, windows ? 'node.exe' : join('bin', 'node'));
+  mkdirSync(dirname(binary), { recursive: true });
+  copyFileSync(process.execPath, binary);
+  if (!windows) chmodSync(binary, 0o755);
+  writeFileSync(join(nodeFolder, 'LICENSE'), 'Node.js is licensed for use as follows: ...\n');
+
+  const zip = join(work, 'ai-graph-system.zip');
+  const packed = spawnSync(process.execPath, [join(root, 'scripts', 'package.mjs'), zip, '--node', nodeFolder], {
+    cwd: root, encoding: 'utf8', env: { ...process.env, AI_GRAPH_VERSION: 'test' },
+  });
+  assert.equal(packed.status, 0, packed.stderr);
+  const unpacked = windows
+    ? spawnSync('tar', ['-xf', zip, '-C', work], { encoding: 'utf8' })
+    : spawnSync('unzip', ['-q', zip, '-d', work], { encoding: 'utf8' });
+  assert.equal(unpacked.status, 0, unpacked.stderr);
+  const system = join(work, 'ai-graph-system');
+  assert.ok(existsSync(join(system, 'node', 'LICENSE')), "Node's licence travels with it");
+  if (!windows) {
+    assert.ok(statSync(join(system, 'node', 'node')).mode & 0o111, 'the Node in it is executable once unzipped');
+    assert.ok(statSync(join(system, 'run.command')).mode & 0o111, 'run.command is executable once unzipped');
+  }
+
+  // The computer's only Node is too old: the one in the folder is what runs.
+  const path = windows ? `${oldNode()};${process.env.SystemRoot ?? 'C:\\Windows'}\\System32` : `${oldNode()}:/usr/bin:/bin`;
+  const run = launch({ PATH: path }, join(system, windows ? 'run.cmd' : 'run.sh'));
+  const url = await run.served;
+  assert.equal((await fetch(url)).status, 200);
+  stopTree(run.child);
+  await run.ended;
+}, { timeout: 120_000 });

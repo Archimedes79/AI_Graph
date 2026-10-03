@@ -34,23 +34,33 @@ export interface LauncherOptions {
 /** The node expression that fails on a Node older than NODE_MAJOR. Quote-safe in sh and cmd. */
 const TOO_OLD = `process.exit(Number(process.versions.node.split('.')[0]) < ${NODE_MAJOR} ? 1 : 0)`;
 
+/**
+ * Where a folder carries its own Node: the download for one system has it, so
+ * nothing needs to be installed first -- "install Node 24" was the step that
+ * stopped people who only wanted to try it. Without it, the computer's Node.
+ */
+export const BUNDLED_NODE = { unix: 'node/node', windows: 'node\\node.exe' };
+
 /** `run.sh`, for macOS and Linux. Needs its executable bit -- see `zipMode`. */
 export function runSh({ command, portFromEnv = false }: LauncherOptions): string {
   const port = portFromEnv ? ' ${PORT:+--port "$PORT"}' : '';
   return [
     '#!/bin/sh',
-    `# Needs Node ${NODE_MAJOR} or newer, and nothing else.`,
+    `# Needs Node ${NODE_MAJOR} or newer: the one in ${BUNDLED_NODE.unix} where this folder has it, else this computer's.`,
     '# From its own folder: wherever it was started from, the paths below are relative to it.',
     'cd "$(dirname "$0")" || exit 1',
-    'if ! command -v node >/dev/null 2>&1; then',
+    'NODE=node',
+    `if [ -x ${BUNDLED_NODE.unix} ]; then`,
+    `  NODE=${BUNDLED_NODE.unix}`,
+    'elif ! command -v node >/dev/null 2>&1; then',
     `  echo "Node.js is not installed. Get it from ${GET_NODE} (${NODE_MAJOR} or newer), then run this again." >&2`,
     '  exit 1',
     'fi',
-    `if ! node -e "${TOO_OLD}"; then`,
-    `  echo "This needs Node.js ${NODE_MAJOR} or newer, and this computer has $(node --version). Get the current one from ${GET_NODE}." >&2`,
+    `if ! "$NODE" -e "${TOO_OLD}"; then`,
+    `  echo "This needs Node.js ${NODE_MAJOR} or newer, and this computer has $("$NODE" --version). Get the current one from ${GET_NODE}." >&2`,
     '  exit 1',
     'fi',
-    `exec node ${command}${port} "$@"`,
+    `exec "$NODE" ${command}${port} "$@"`,
     '',
   ].join('\n');
 }
@@ -67,25 +77,32 @@ export function runCmd({ command, portFromEnv = false }: LauncherOptions): strin
   const windowsCommand = command.replace(/\//g, '\\');
   return [
     '@echo off',
-    `rem Needs Node ${NODE_MAJOR} or newer, and nothing else.`,
+    `rem Needs Node ${NODE_MAJOR} or newer: the one in ${BUNDLED_NODE.windows} where this folder has it, else this computer's.`,
     'rem From its own folder: a double-click, a shortcut and "Run as administrator"',
     'rem each start somewhere else, and the paths below are relative to this one.',
     'setlocal',
     'set "CODE=1"',
     'cd /d "%~dp0"',
-    'where node >nul 2>&1 || (',
-    '  echo.',
-    `  echo Node.js is not installed. Get it from ${GET_NODE} ^(${NODE_MAJOR} or newer^), then run this again.`,
-    '  goto :failed',
+    // Unquoted where it is used: both values are free of spaces, and a quoted
+    // command first in `for /f` loses its quotes to cmd /c.
+    'set "NODE=node"',
+    `if exist "${BUNDLED_NODE.windows}" (`,
+    `  set "NODE=${BUNDLED_NODE.windows}"`,
+    ') else (',
+    '  where node >nul 2>&1 || (',
+    '    echo.',
+    `    echo Node.js is not installed. Get it from ${GET_NODE} ^(${NODE_MAJOR} or newer^), then run this again.`,
+    '    goto :failed',
+    '  )',
     ')',
-    `node -e "${TOO_OLD}" || (`,
+    `%NODE% -e "${TOO_OLD}" || (`,
     '  echo.',
-    `  for /f "delims=" %%v in ('node --version') do echo This needs Node.js ${NODE_MAJOR} or newer, and this computer has %%v.`,
+    `  for /f "delims=" %%v in ('%NODE% --version') do echo This needs Node.js ${NODE_MAJOR} or newer, and this computer has %%v.`,
     `  echo Get the current one from ${GET_NODE}, then run this again.`,
     '  goto :failed',
     ')',
     ...(portFromEnv ? ['set "PORTARG="', 'if defined PORT set "PORTARG=--port %PORT%"'] : []),
-    `node ${windowsCommand}${portFromEnv ? ' %PORTARG%' : ''} %*`,
+    `%NODE% ${windowsCommand}${portFromEnv ? ' %PORTARG%' : ''} %*`,
     'set "CODE=%ERRORLEVEL%"',
     'if "%CODE%"=="0" exit /b 0',
     'echo.',
@@ -111,5 +128,5 @@ export function runCmd({ command, portFromEnv = false }: LauncherOptions): strin
  * well be running on Windows, which has no executable bit to read.
  */
 export function zipMode(path: string): number | undefined {
-  return path.endsWith('.sh') ? 0o755 : undefined;
+  return /\.(sh|command)$/.test(path) || path.endsWith(BUNDLED_NODE.unix) ? 0o755 : undefined;
 }
