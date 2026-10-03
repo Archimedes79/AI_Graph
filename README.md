@@ -246,6 +246,7 @@ node engine/src/main.ts my.json --bundle ./out            # to hand to someone
 
 | Document | What is in it |
 |---|---|
+| [docs/user-guide.md](docs/user-guide.md) | A first tool in 30 minutes, by mouse: install, model, page, node, run, hand on -- and where the time goes |
 | [docs/install.md](docs/install.md) | Running the editor, working on it, containers, tests and CI |
 | [docs/graphs.md](docs/graphs.md) | The Graph DSL, code and AI nodes, the page and its blocks |
 | [docs/ai-providers.md](docs/ai-providers.md) | Providers, the one AI setting and a node's own, where the API key goes |
