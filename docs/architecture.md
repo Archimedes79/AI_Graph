@@ -662,15 +662,76 @@ or a page that has them can do the same.
   back -- two differing only in case, a number, a "." or "->" -- are problems as well
   (`flow.ts`'s `unsavableIds`), and a save refuses them.
 
-## Where state lives
+## State
 
-| State | Lives in | Travels as |
+**The design is the document. What using it leaves behind is state.** A graph is designed in
+the editor and saved as a folder; it is *used* by a page, a clock, a command line, a model
+over MCP. This section says what using a graph leaves behind, where it is kept today, and
+the rules it is kept by from here on.
+
+### Where it lives today
+
+| State | Lives in | Written by |
 |---|---|---|
-| the graph | a project folder: `flow.json`, `layout.json`, `page/` (`page.json`), `nodes/<id>/` (`node.json`, `interface.json`, writing) — or one `.json` with everything inline | the document ([`project/folder.ts`](../engine/src/project/folder.ts)) |
-| a widget's value, a conversation, a data node's value | inside the graph, in the element's own config | `result.memory` → `applyMemory` |
-| a run in flight | `RunBoard` on the server | `RunSnapshot`, polled |
-| what every node made last, for rounds its ◆ stays shut | `Latch`, in the process holding the graph; gone at restart | `NodeResult.held` |
-| the last run | the editor's store / the served page / `schedule.ts` | `ExecutionResult` |
+| what a person set on the page: a block's value -- typed text, a choice, a slider, a picked path, a chat's message in hand | the block's `value`, inside the graph (`page.json`) | the page (`page/pageWrite.ts`), the "before running" dialog (`applyRuntimeValues`); in the editor each is a change of the document, with an undo step |
+| what a round settled: a value that came back around a loop into a node that remembers -- a chat's reply, a chart's data, a picker fed back -- and anything delivered to a data node | the element's own config, inside the graph (`NodeRunner.settleMemory`) | the executor, into the copy it ran; replayed (`result.memory` → `applyMemory`) by whoever holds the long-lived copy: the editor's document, or the served page's copy, which posts it back with its next round |
+| a message, once delivered | emptied (`WidgetRunner.clearsValueAfterRun`) | the editor's store (`clearSentValues`) |
+| what every node made last, for the rounds its ◆ stays shut | `Latch` ([`execution/latch.ts`](../engine/src/execution/latch.ts)), one per server, keyed by the graph's name and shape because a graph has no identity; gone at restart | the executor |
+| what a node made from the same inputs | `LastOutputs` ([`execution/reuse.ts`](../engine/src/execution/reuse.ts)), one per `RunBoard`: an optimisation, which changes how long a round takes and nothing else | the executor |
+| the last round | the editor's store and the served page (`mergeResults`); a scheduled tool's in `schedule.ts` and in `flow.last-run.json` | whoever started the round |
+| a round in flight | `RunBoard` ([`host/runs.ts`](../engine/src/host/runs.ts)) | — |
+
+So the page holds the document *and* the person's use of it, and posts both with every
+round (`startRun` takes the whole graph); the server holds what it ran last and tells one
+graph from another by its name and shape. Using a tool in the editor changes the document
+-- a word typed into the running application is an undo step and a reason to save -- and a
+saved project carries a conversation, the last data a chart showed and what a counter
+counted to, which Deploy then ships.
+
+### The rules
+
+These are being built on `feat/session-api`; until that is merged the table above is what
+holds.
+
+1. **Using a graph does not change its design.** A **session** holds one graph as it was
+   handed over -- by the editor, or loaded by a served tool -- and everything using it leaves
+   behind. A value typed into the page, what a round settled, a message emptied after it was
+   delivered: the session's, never the document's. Nothing of it marks the editor's document
+   unsaved, Save writes none of it, Deploy ships none of it.
+2. **What state is.** For each node, its *slots*: what it keeps between rounds -- a page's
+   blocks by id (a value set, a conversation, what a loop fed back), a data node's
+   `data_value`, an input or output node's `value`. Which slots a node has is its element's
+   to say (`NodeRunner.state` and `setState`), as where it settles memory is. Beside the
+   slots: what each node made last (the latch), what the page shows (the rounds' results
+   laid over each other), and how many rounds ran. Not state: the reuse cache, and a round
+   in flight.
+3. **Where.** In the session, and in `state.json` beside the project's `flow.json` --
+   `<file>.state.json` beside a single graph file; an unsaved graph's state is held in memory
+   only. The file is not part of the project: `check` and a save leave it alone and a bundle
+   never carries it. *Reset* empties the session and deletes the file.
+4. **When.** A round runs on a working copy: the design, the slots over it, the values the
+   round was given over those. A round that ran to its end commits -- its slots, what it
+   left in the latch, the result it shows, the messages it delivered emptied -- and the file
+   is written. A round that was stopped, or could not start, commits nothing: it was not a
+   round, which is what `schedule.ts` already says of one a shutdown cut off. What a failed
+   node did not deliver is not settled, as today: a chat whose model failed keeps its
+   conversation and the message in hand.
+5. **A design that changed wins.** Each slot is kept with the design value it started from.
+   When a session loads its file, and whenever the editor hands it a changed graph, the
+   slots of a node that is gone, of a block that is gone, and of a slot whose design value
+   changed since, are dropped and said -- never guessed. A renamed node is one that is gone
+   and one that is new. The latch needs no rule of its own: its keys are the nodes as written.
+6. **One session per server**, for now. Its id travels in every runtime route, so a session
+   per visitor needs no change to the contract; it is kept in `state.json`, so a restarted
+   tool goes on with the same session.
+7. **Calling a graph keeps nothing.** `ai-graph run` and the MCP server's `run_graph` start
+   from the design with what they are given and return what it hands back: a function call.
+   Rounds of one `--every` share their memory while the process lives, as they do today.
+
+### Not state of a graph
+
+| What | Lives in | Travels as |
+|---|---|---|
 | keys, endpoints, MCP servers that start programs | `ai-settings.json`, machine-side, never in a graph | — |
 | the one AI setting: what ✨, ▶ Try and every run call unless a node pins its own | `ai-settings.json`'s `ai` (or `AI_GRAPH_AI_PROVIDER`/`_MODEL`), read only by `aiSetting` in [`ai/settings.ts`](../engine/src/ai/settings.ts) | `ProviderStatus.target`, for the editor's "now: …" |
 | a node's own model | the node's config (`ai_provider`, `ai_model`) | the graph |
