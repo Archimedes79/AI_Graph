@@ -24,6 +24,7 @@ import type { ScheduleState } from './schedule.ts';
 import type { TextChange } from '../project/changes.ts';
 import type { ExampleRun } from '../authoring/examples.ts';
 import type { RuntimeRequirement } from '../execution/runtimeValues.ts';
+import type { GraphInterface } from '../execution/graphInterface.ts';
 
 export type { TextChange };
 
@@ -54,12 +55,64 @@ export interface RunSnapshot {
   idle_seconds: number | null;
   error: string | null;
   result: ExecutionResult | null;
+  /** What it handed back by name, once it has ended: the graph's outputs (`graphInterface.ts`). */
+  outputs: Record<string, unknown> | null;
+}
+
+/**
+ * What a frontend is told of the session: the values each name holds now,
+ * what each output showed last, and the round going or gone. By name, never
+ * by node -- the round's `result` aside, which the editor reads.
+ */
+export interface SessionView {
+  session: string;
+  /** What each value holds now: what a round was given or left, else its design. */
+  values: Record<string, unknown>;
+  /** What each output showed last, laid over from every round. */
+  outputs: Record<string, unknown>;
+  /** How many rounds have run to their end, and when the last did. */
+  rounds: number;
+  finished_at: number | null;
+  /** The round going now, or the last one. */
+  round: RunSnapshot | null;
+  /** What opening the session, or handing it a graph, dropped of what it kept: said once, in words. */
+  dropped: string[];
+}
+
+/** What the graph offers whoever uses it, by name -- and which session that is. */
+export interface InterfaceView extends GraphInterface {
+  session: string;
+  name: string;
+  description: string;
+}
+
+/** A round asked for by name: the event that starts it -- none, the whole graph -- and the values it is given. */
+export interface RoundRequest {
+  /** The session asked about; this server's, when left out. */
+  session?: string;
+  event?: string | null;
+  values?: Record<string, unknown>;
+}
+
+/** What a round handed back, once it ended: what `runRound` answers. */
+export interface RoundOutcome {
+  session: string;
+  round_id: string;
+  status: ExecutionResult['status'];
+  error: string | null;
+  outputs: Record<string, unknown>;
+  values: Record<string, unknown>;
+}
+
+/** A question about the session: this server's, when it names none. */
+interface InSession {
+  session?: string;
 }
 
 /**
  * A path the graph needs before it can run, as the "before running" dialog
- * asks for it: the engine's own question, keyed as its answer is written back
- * (`applyRuntimeValues`), so no end takes the key apart or builds it again.
+ * asks for it: the engine's own question, keyed by the name of the value that
+ * answers it (`applyValues`), so no end takes the key apart or builds it again.
  */
 export type Requirement = RuntimeRequirement;
 
@@ -275,6 +328,26 @@ export const API = {
   stopRun: route<{ id: string }, { cancelled: boolean }>('POST', '/api/execute/runs/:id/cancel', 'tool'),
   /** Loopback only: listing directories is for the person at the keyboard. */
   browse: route<{ path: string; extensions?: string }, BrowsePage>('POST', '/api/files/browse', 'tool'),
+
+  // -- the runtime API: a graph used by name, by any frontend ---------------
+  /** What the graph offers -- its events, values and outputs -- by name. */
+  interface: route<InSession, InterfaceView>('GET', '/api/runtime/interface', 'tool'),
+  /** The session now: values, what the outputs showed, the round going or gone. */
+  session: route<InSession, SessionView>('GET', '/api/runtime/session', 'tool'),
+  /**
+   * Server-sent events, not JSON: `session` once on connect and after every
+   * change, `round` as each round starts, goes and ends -- the page's, a
+   * clock's, another tab's. Read with an `EventSource`.
+   */
+  stream: route<InSession, never>('GET', '/api/runtime/stream', 'tool'),
+  /** Start a round, and watch it by its id. */
+  startRound: route<RoundRequest, { session: string; round_id: string; total: number }>('POST', '/api/runtime/rounds', 'tool'),
+  round: route<InSession & { id: string }, RunSnapshot>('GET', '/api/runtime/rounds/:id', 'tool'),
+  stopRound: route<InSession & { id: string }, { stopped: boolean }>('POST', '/api/runtime/rounds/:id/stop', 'tool'),
+  /** Run a round and answer once it has ended: a function call. */
+  runRound: route<RoundRequest, RoundOutcome>('POST', '/api/runtime/run', 'tool'),
+  /** Forget what using the graph left behind: it is as designed again. */
+  reset: route<InSession, SessionView>('POST', '/api/runtime/reset', 'tool'),
 
   // -- what only the editor serves ------------------------------------------
   /** One node on the inputs given, as a run runs it: files read, lists fanned out. How the editor reads a file the way a run does. */

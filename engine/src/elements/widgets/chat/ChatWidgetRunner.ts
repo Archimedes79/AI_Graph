@@ -59,6 +59,19 @@ export class ChatWidgetRunner extends WidgetRunner<ChatValue> {
     };
   }
 
+  /**
+   * Given a message, it is the one in hand, and what was said before stays:
+   * what a page or a script sends a chat. Given a whole conversation, it is
+   * that conversation.
+   */
+  override setValue(stored: RawConfig, value: unknown): void {
+    if (value && typeof value === 'object') {
+      stored.value = chatValue(value);
+      return;
+    }
+    stored.value = { messages: chatValue(stored.value).messages, pending: String(value ?? '') };
+  }
+
   /** The reply closes the turn: question and answer go into the transcript together. */
   override settle(stored: RawConfig, value: unknown): void {
     const { messages, pending } = chatValue(stored.value);

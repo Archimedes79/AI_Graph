@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useGraphStore } from '@/store/graphStore';
 import { call, type Requirement, type RunTrigger } from '@/api/client';
 import type { Graph } from '@/graph';
-import { applyRuntimeValues } from '@engine/execution/runtimeValues.ts';
+import { applyValues } from '@engine/execution/graphInterface.ts';
 import { baseNodeConfig } from '@/document/baseNodeConfig';
 import { registry as engineRegistry } from '@engine/elements/registry.ts';
 
@@ -49,19 +49,24 @@ export function useDeliveredRun() {
   };
 
   const submit = async (values: Record<string, string>) => {
+    const asked = exportGraph();
     // A copy: the answers are written into it before it is handed to the run.
-    const graph: Graph = JSON.parse(JSON.stringify(exportGraph()));
-    // Where an answer goes is each element's own business (`applyRuntimeValue`:
-    // an input keeps it as its value, a page in the block that asked) -- the
-    // engine's code, run here, rather than a second copy of it.
-    const answered = applyRuntimeValues(graph, values, engineRegistry);
+    const graph: Graph = JSON.parse(JSON.stringify(asked));
+    // An answer is a value by the name the graph takes it under, and where it
+    // goes is each element's own business (`NodeRunner.setValue`: an input
+    // keeps it as its value, a page in the block that asked) -- the engine's
+    // code, run here, rather than a second copy of it.
+    applyValues(graph, values, engineRegistry);
     // Write the answers back into the store, not just into the copy about to
     // run -- otherwise an operator running the same tool daily retypes the
     // same paths on every single run.
     for (const node of graph.nodes) {
+      const before = asked.nodes.find((one) => one.id === node.id);
       // Over every setting the node has in memory, not the lean form the copy
       // was exported in: that leaves out each key that equals its default.
-      if (answered.has(node.id)) updateNode(node.id, { config: { ...baseNodeConfig(), ...node.config } });
+      if (JSON.stringify(before?.config) !== JSON.stringify(node.config)) {
+        updateNode(node.id, { config: { ...baseNodeConfig(), ...node.config } });
+      }
     }
     setRequirements(null);
     const trigger = pending.current;

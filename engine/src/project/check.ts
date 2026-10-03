@@ -15,6 +15,7 @@ import { ERROR_PORT, names, wiringProblems, type Problem } from '../execution/wi
 import { registry } from '../elements/registry.ts';
 import { resultKeys } from '../elements/NodeRunner.ts';
 import { portMisfit } from '../execution/interface.ts';
+import { interfaceProblems } from '../execution/graphInterface.ts';
 import { definitionExample } from '../authoring/definition.ts';
 import { unsavableIds } from './flow.ts';
 
@@ -164,7 +165,7 @@ export function problemsIn(graph: Graph, inside = '', depth = 0): Problem[] {
       fix: 'End every branch in an "output" node -- the run\'s result, under its label; config.write_mode "file" or "directory" writes it too -- or in a "gui" node with a block that displays the value.',
     });
   }
-  if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph), ...idlePage(graph));
+  if (!inside) problems.push(...sharedResultLabels(graph), ...secondPages(graph), ...idlePage(graph), ...interfaceProblems(graph, registry));
 
   return problems;
 }

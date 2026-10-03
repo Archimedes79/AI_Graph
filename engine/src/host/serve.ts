@@ -24,8 +24,10 @@ import { triggeredNodes } from '../execution/triggers.ts';
 import { aiSetting, settingsPath } from '../ai/settings.ts';
 import { API, matchRoute, type RouteName } from './api.ts';
 import {
-  Download, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendJson, servePage, type Exchange, type Handlers,
+  Download, EventStream, Refusal, foreignRequest, hostnameOf, message, namesFor, readJson, sendDownload, sendEvents, sendJson, servePage,
+  type Exchange, type Handlers,
 } from './http.ts';
+import { NotOffered, eventOf, interfaceOf, outputsOf } from '../execution/graphInterface.ts';
 import { browse } from './browse.ts';
 import { extensionFilter } from '../elements/folderListing.ts';
 import { NotFound } from '../errors.ts';
@@ -87,7 +89,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
     ? await Session.open(await loadGraph(options.graphPath), { file: stateFileOf(options.graphPath) })
     : null);
   const clock = held.session
-    ? schedule(() => held.session!.graph, (trigger, signal) => held.session!.run(trigger, signal), lastRunFile(options.graphPath!))
+    ? schedule(() => held.session!.graph, (trigger, signal) => held.session!.run(trigger, {}, signal), lastRunFile(options.graphPath!))
     : null;
   if (clock) lifecycle.own('the schedule', () => clock.stop());
   lifecycle.own('runs in flight', async () => { await held.session?.stopAll(); });
@@ -123,7 +125,7 @@ export async function serve(options: ServeOptions): Promise<Served> {
     if (path.startsWith('/api/')) {
       const found = matchRoute(request.method ?? 'GET', path);
       // Watching and stopping still answer while the runs wind down; nothing new starts.
-      if (lifecycle.stopping && request.method !== 'GET' && found?.name !== 'stopRun') {
+      if (lifecycle.stopping && request.method !== 'GET' && found?.name !== 'stopRun' && found?.name !== 'stopRound') {
         return sendJson(response, 503, { detail: 'This server is stopping.' });
       }
       const handler = found ? handlers[found.name] as ((request: unknown, exchange: Exchange) => unknown) | undefined : undefined;
@@ -138,9 +140,13 @@ export async function serve(options: ServeOptions): Promise<Served> {
           ...(route.method === 'POST' ? await readJson(request) : {}),
         };
         const answer = await handler(asked, exchange);
-        return answer instanceof Download ? sendDownload(response, answer) : sendJson(response, 200, answer);
+        if (answer instanceof Download) return sendDownload(response, answer);
+        if (answer instanceof EventStream) return sendEvents(response, answer);
+        return sendJson(response, 200, answer);
       } catch (error) {
         if (error instanceof Refusal) return sendJson(response, error.status, { detail: error.message, ...error.extra });
+        // A name the graph does not offer is the caller's mistake, said as one.
+        if (error instanceof NotOffered) return sendJson(response, 400, { detail: error.message });
         throw error;
       }
     }
@@ -196,7 +202,75 @@ function toolRoutes(
   /** Where the file picker opens: the folder a tool's graph sits in, or where the editor was started. */
   toolRoot: string,
 ): Handlers {
+  /** The session a request asks about: this server's -- unless it names another, which is not here. */
+  const sessionAsked = (asked: { session?: string }): Session => {
+    const session = held.session;
+    if (!session) throw new Refusal(404, 'This server holds no graph yet.');
+    if (asked.session && asked.session !== session.id) {
+      throw new Refusal(404, `No session "${asked.session}" here: this server's is "${session.id}". Ask for its interface again.`);
+    }
+    return session;
+  };
+
   return {
+    // -- the runtime API: what any frontend uses, by name ---------------------
+
+    interface(asked) {
+      const session = sessionAsked(asked);
+      const { name, description } = session.graph.metadata;
+      return { session: session.id, name, description: description ?? '', ...interfaceOf(session.graph, registry) };
+    },
+
+    session: (asked) => sessionAsked(asked).view(),
+
+    stream(asked) {
+      const session = sessionAsked(asked);
+      return new EventStream((send) => {
+        send('session', session.view());
+        return session.watch((event) => send(event.type, event.type === 'round' ? event.round : event.session));
+      });
+    },
+
+    startRound(asked) {
+      const session = sessionAsked(asked);
+      const { id, total } = session.start(eventOf(session.graph, asked.event, registry), asked.values ?? {});
+      return { session: session.id, round_id: id, total };
+    },
+
+    round(asked) {
+      const snapshot = sessionAsked(asked).snapshot(asked.id);
+      if (!snapshot) throw new Refusal(404, 'No such round.');
+      return snapshot;
+    },
+
+    stopRound: (asked) => ({ stopped: sessionAsked(asked).stop(asked.id) }),
+
+    async runRound(asked) {
+      const session = sessionAsked(asked);
+      const { id, outcome } = session.start(eventOf(session.graph, asked.event, registry), asked.values ?? {});
+      const ended = await outcome.then((result) => result, (error: unknown) => {
+        // Stopped while it waited: a round that did not run, not a graph that cannot.
+        if (session.snapshot(id)?.cancelled) return null;
+        throw new Refusal(422, `The graph could not run: ${message(error)}`);
+      });
+      return {
+        session: session.id,
+        round_id: id,
+        status: ended?.status ?? 'cancelled',
+        error: ended?.error ?? null,
+        outputs: outputsOf(session.graph, ended, registry),
+        values: session.view().values,
+      };
+    },
+
+    async reset(asked) {
+      const session = sessionAsked(asked);
+      await session.reset();
+      return session.view();
+    },
+
+    // -- what the built-in page still calls, until it uses the API above ------
+
     graph() {
       if (!held.session) throw new Refusal(404, 'This server ships no graph; post the one to run.');
       // A tool's page is handed what runs, not how each node was written.

@@ -28,11 +28,15 @@ data path in the graph resolves inside the bundle. That is why **a bundle carrie
 the graph starts on** (see [What a bundle carries](#what-a-bundle-carries)) -- every one of
 them, or there is no bundle: a tool is handed on whole.
 
-Override an input node:
+Give it a value by name -- an input node by its id, a block on its page by the block's id --
+and start the round one of its events starts, the way pressing that button would:
 
 ```bash
-node engine/src/main.ts my_graph.json --inputs my-text-node-id="Custom input text"
+node engine/src/main.ts my_graph.json --value topic="Custom input text" --event go
 ```
+
+A name the graph does not offer is turned down with the names it does; `describe_graph` over
+MCP and `GET /api/runtime/interface` on a served tool list them.
 
 Run it on a schedule — the whole trigger, with no service to install:
 

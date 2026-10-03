@@ -46,7 +46,7 @@ describe('a file picker', () => {
     expect(element.runtimeRequirements(unchosen)).toEqual([{ label: 'Folder', kind: 'directory', direction: 'input', current: '' }]);
     expect(element.runtimeRequirements(parseWidget({ id: 'w1', kind: 'input_picker', value: 'a.csv' }))).toEqual([]);
     const stored: RawConfig = { id: 'w1', kind: 'input_picker' };
-    element.applyRuntimeValue(stored, '/data');
+    element.setValue(stored, '/data');
     expect(stored.value).toBe('/data');
   });
 

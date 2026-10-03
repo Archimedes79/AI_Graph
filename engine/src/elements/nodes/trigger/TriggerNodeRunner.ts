@@ -3,6 +3,7 @@ import type { Runtime } from '../../Runtime.ts';
 import type { GraphNode } from '../../../graph.ts';
 import { port } from '../../port.ts';
 import type { Problem } from '../../../execution/wiring.ts';
+import type { Offer } from '../../../execution/graphInterface.ts';
 import { parseInterval, RUN_PORT, TRIGGER_PORT } from '../../../execution/triggers.ts';
 
 export interface TriggerConfig {
@@ -46,6 +47,14 @@ export class TriggerNodeRunner extends NodeRunner<TriggerConfig> {
 
   override eventPorts(): string[] {
     return [TRIGGER_PORT];
+  }
+
+  /** An event under its own id: what it starts, started by whoever asks -- not only by its clock. */
+  override offers(node: GraphNode): Offer[] {
+    return [{
+      kind: 'event', name: node.id, label: node.label || node.id, key: null, type: 'boolean', port: TRIGGER_PORT,
+      ...(node.description ? { description: node.description } : {}),
+    }];
   }
 
   /** It keeps time when it names an interval: what a graph inside a node cannot do. */

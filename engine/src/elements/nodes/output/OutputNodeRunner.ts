@@ -1,6 +1,7 @@
 import { NodeRunner, type WhatRuns } from '../../NodeRunner.ts';
 import { type Runtime } from '../../Runtime.ts';
-import { type GraphNode, type Port } from '../../../graph.ts';
+import { type GraphNode, type NodeResult, type Port } from '../../../graph.ts';
+import type { Offer } from '../../../execution/graphInterface.ts';
 
 /**
  * The input that says *where* to write rather than *what*: a control input,
@@ -67,8 +68,34 @@ export class OutputNodeRunner extends NodeRunner<OutputConfig> {
     }];
   }
 
-  override applyRuntimeValue(node: GraphNode, _widgetId: string | null, value: string): void {
-    node.config.value = value;
+  /**
+   * An output under its own id: what is wired into it. And, while it writes
+   * a file or a folder, a value of the same name: where.
+   */
+  override offers(node: GraphNode): Offer[] {
+    const named = { name: node.id, label: this.resultLabel(node), key: null, ...(node.description ? { description: node.description } : {}) };
+    const carried = this.valuePorts(node);
+    const offers: Offer[] = [{
+      ...named, kind: 'output', type: carried.length === 1 ? carried[0].data_type : 'any',
+      ...(carried.length === 1 && carried[0].multi ? { list: true } : {}),
+    }];
+    if (this.config(node).mode !== 'none') offers.push({ ...named, kind: 'value', type: 'file_path' });
+    return offers;
+  }
+
+  override setValue(node: GraphNode, _key: string | null, value: unknown): void {
+    node.config.value = value as never;
+  }
+
+  override value(node: GraphNode): unknown {
+    return this.config(node).path;
+  }
+
+  /** What arrived: the one thing wired into it, or each of several by its port. */
+  override shows(node: GraphNode, result: NodeResult): unknown {
+    const carried = this.valuePorts(node);
+    if (carried.length === 1) return result.inputs[carried[0].id] ?? null;
+    return Object.fromEntries(carried.map((port) => [port.id, result.inputs[port.id] ?? null]));
   }
 
   /** Where it was told to write when the graph was used. */

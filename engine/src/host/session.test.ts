@@ -7,7 +7,8 @@ import type { Graph, GraphNode } from '../graph.ts';
 import type { Runtime } from '../elements/Runtime.ts';
 import { RUN_PORT } from '../execution/triggers.ts';
 import { edge, graphOf, quietRuntime } from '../../test/fakes.ts';
-import { Session, type SessionOptions } from './session.ts';
+import { Session, type SessionEvent, type SessionOptions } from './session.ts';
+import { NotOffered } from '../execution/graphInterface.ts';
 
 /**
  * A graph in use, and what using it leaves behind: the rules of "State" in
@@ -235,6 +236,62 @@ describe('a design that changed', () => {
     relabelled.nodes[1].label = 'Add one';
     expect(session.hold(relabelled)).toEqual([]);
     expect(session.kept()).toEqual({ count: { data_value: 1 } });
+  });
+});
+
+describe('a round given values by name', () => {
+  it('runs on them and keeps them: the session says them back by name, and what the outputs showed', async () => {
+    const session = await open(echo());
+    await session.run({ node_id: 'page', port_id: 'pick_out' }, { pick: 'b' });
+    expect(session.kept()).toEqual({ page: { pick: 'b', shown: 'picked b' } });
+    expect(session.view()).toMatchObject({ values: { pick: 'b' }, outputs: { shown: 'picked b' }, rounds: 1, dropped: [] });
+    // The next round starts from what this one was given.
+    await session.run({ node_id: 'page', port_id: 'pick_out' });
+    expect(session.view().outputs).toEqual({ shown: 'picked b' });
+  });
+
+  it('refuses a name the graph does not take before anything starts', async () => {
+    const session = await open(echo());
+    expect(() => session.start(null, { nobody: 1 })).toThrow(NotOffered);
+    expect(session.view().rounds).toBe(0);
+  });
+
+  it('keeps nothing of what a stopped round was given', async () => {
+    const graph = echo();
+    graph.nodes[1].config.code = 'function run(i) { slow; return { out: i.pick }; }';
+    const session = await open(graph);
+    const { id } = session.start({ node_id: 'page', port_id: 'pick_out' }, { pick: 'b' });
+    await wait(30);
+    session.stop(id);
+    for (let i = 0; i < 50 && !session.snapshot(id)?.done; i += 1) await wait(10);
+    expect(session.view().values).toEqual({ pick: 'a' });
+  });
+});
+
+describe('whoever watches a session', () => {
+  it('is told each round as it is asked for and as it ends -- with its outputs by name -- and the session after it commits', async () => {
+    const session = await open(echo());
+    const told: SessionEvent[] = [];
+    const stop = session.watch((event) => told.push(event));
+    await session.run({ node_id: 'page', port_id: 'pick_out' }, { pick: 'b' });
+    await wait(10);
+    stop();
+    const rounds = told.flatMap((event) => (event.type === 'round' ? [event.round] : []));
+    expect(rounds[0]).toMatchObject({ done: false, current_label: 'Waiting for the round before it' });
+    expect(rounds.at(-1)).toMatchObject({ done: true, outputs: { shown: 'picked b' } });
+    expect(told.find((event) => event.type === 'session')).toMatchObject({ session: { values: { pick: 'b' }, outputs: { shown: 'picked b' } } });
+    await session.run({ node_id: 'page', port_id: 'pick_out' });
+    expect(told.length).toBe(rounds.length + 1);                    // told nothing once it stopped listening
+  });
+
+  it('is told the session again when a reset emptied it', async () => {
+    const session = await open(echo());
+    await session.run({ node_id: 'page', port_id: 'pick_out' }, { pick: 'b' });
+    await wait(10);                                                 // the round's end is told once it has ended
+    const told: SessionEvent[] = [];
+    session.watch((event) => told.push(event));
+    await session.reset();
+    expect(told).toEqual([{ type: 'session', session: expect.objectContaining({ values: { pick: 'a' }, outputs: {}, rounds: 0 }) }]);
   });
 });
 

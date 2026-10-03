@@ -37,6 +37,18 @@ export class Download {
   }
 }
 
+/**
+ * A reply that goes on: server-sent events, for as long as the page listens.
+ * *open* starts the telling with a way to send one event, and returns the way
+ * to stop once the page has gone.
+ */
+export class EventStream {
+  readonly open: (send: (event: string, data: unknown) => void) => () => void;
+  constructor(open: (send: (event: string, data: unknown) => void) => () => void) {
+    this.open = open;
+  }
+}
+
 /** What a handler knows about the exchange beyond its request. */
 export interface Exchange {
   /** The server answers on this machine only: listing files and starting programs are allowed. */
@@ -44,7 +56,8 @@ export interface Exchange {
 }
 
 export type Handler<K extends RouteName> =
-  (request: RequestOf<K>, exchange: Exchange) => Promise<ResponseOf<K> | Download> | ResponseOf<K> | Download;
+  (request: RequestOf<K>, exchange: Exchange) =>
+    Promise<ResponseOf<K> | Download | EventStream> | ResponseOf<K> | Download | EventStream;
 
 export type Handlers = { [K in RouteName]?: Handler<K> };
 
@@ -63,6 +76,31 @@ export function sendDownload(response: ServerResponse, download: Download): void
     'Content-Disposition': `attachment; filename="${download.filename}"`,
   });
   response.end(download.bytes);
+}
+
+/** How often a stream says it is still there: a proxy between drops a connection that stays silent. */
+const STREAM_PING_MS = 25_000;
+
+/**
+ * Answer with *stream*: events, one JSON line each, until the page goes. A
+ * comment first, so the page's `EventSource` opens at once rather than at
+ * the first event.
+ */
+export function sendEvents(response: ServerResponse, stream: EventStream): void {
+  response.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  response.write(': open\n\n');
+  const stop = stream.open((event, data) => { response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); });
+  const ping = setInterval(() => response.write(': still here\n\n'), STREAM_PING_MS);
+  ping.unref();
+  // The response is never ended: it closes when the page goes, or the server does.
+  response.on('close', () => {
+    clearInterval(ping);
+    stop();
+  });
 }
 
 /**

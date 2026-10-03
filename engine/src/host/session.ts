@@ -8,8 +8,9 @@
 // in docs/architecture.md; what they come to here:
 //
 // - Using a graph never changes its design. A round runs on a working copy,
-//   the design with the slots put back into it, and what the round leaves is
-//   read back off the copy afterwards (`NodeRunner.state`).
+//   the design with the slots put back into it and the values the round was
+//   given put in by name, and what the round leaves is read back off the copy
+//   afterwards (`NodeRunner.state`).
 // - A round that ran to its end commits. One that was stopped, or could not
 //   start, does not: what it began is nobody's to keep.
 // - A slot is kept with the design value it started from, and is dropped --
@@ -17,6 +18,10 @@
 //   changed: the design wins.
 // - All of it is written to `state.json` after every round that commits, read
 //   back when the session opens, and deleted by a reset.
+//
+// Whoever watches a session (`watch`) is told every round as it starts, goes
+// and ends, and the session again whenever what it keeps changed: what the
+// stream a frontend reads is made of.
 //
 // One session per server, for now. It has an id all the same, kept in its
 // file, so that more than one needs no change to what is said about each.
@@ -26,13 +31,14 @@ import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { mergeResults, type ExecutionResult, type Graph, type GraphNode } from '../graph.ts';
 import { executeGraph, memoryFeedbackEdges } from '../execution/executor.ts';
 import { triggeredNodes, type Trigger } from '../execution/triggers.ts';
+import { applyValues, checkValues, outputsOf, valuesOf } from '../execution/graphInterface.ts';
 import { Latch, type Held } from '../execution/latch.ts';
 import { LastOutputs } from '../execution/reuse.ts';
 import { registry } from '../elements/registry.ts';
 import type { ProgressEvent, Runtime } from '../elements/Runtime.ts';
 import { nodeRuntime } from './node.ts';
 import { Rounds, type RoundWork } from './rounds.ts';
-import type { RunSnapshot } from './api.ts';
+import type { RunSnapshot, SessionView } from './api.ts';
 
 /** One slot a node keeps: what it holds now, and what its design held when that was kept. */
 interface Slot {
@@ -56,6 +62,11 @@ interface StateFile {
   finished_at: number | null;
 }
 
+/** What a watcher of a session is told: a round as it starts, goes and ends, or the session after a change. */
+export type SessionEvent =
+  | { type: 'round'; round: RunSnapshot }
+  | { type: 'session'; session: SessionView };
+
 export interface SessionOptions {
   /** Where its state is kept (`stateFileOf`). None: a graph never saved, whose state lives as long as the session. */
   file?: string | null;
@@ -63,19 +74,26 @@ export interface SessionOptions {
   runtime?: (report: (event: ProgressEvent) => void) => Runtime;
 }
 
+/** How often a watcher is told how far a round is: a fan-out over 500 items reports 500 times. */
+const PROGRESS_EVERY_MS = 100;
+
 export class Session {
   readonly id: string;
   private design: Graph;
   private slots: Slots = new Map();
   private latch = new Latch();
   private reuse = new LastOutputs();
-  private readonly rounds = new Rounds();
+  private readonly rounds: Rounds;
   private shown: ExecutionResult | null = null;
   private count = 0;
   private finishedAt: number | null = null;
   private notes: string[] = [];
+  private lastRound: string | null = null;
   private readonly file: string | null;
   private readonly runtime: (report: (event: ProgressEvent) => void) => Runtime;
+  private readonly watchers = new Set<(event: SessionEvent) => void>();
+  /** When each round's watchers were last told how far it is. */
+  private readonly told = new Map<string, number>();
   /** The last write of the file, so the next waits for it: two at once would leave half of each. */
   private writing: Promise<void> = Promise.resolve();
 
@@ -84,6 +102,7 @@ export class Session {
     this.design = design;
     this.file = options.file ?? null;
     this.runtime = options.runtime ?? ((report) => nodeRuntime({ report }));
+    this.rounds = new Rounds((round, moment) => this.roundChanged(round, moment));
   }
 
   /** A session of *graph*, going on from what its file kept -- or a new one, when there is no file or it cannot be read. */
@@ -119,6 +138,29 @@ export class Session {
     return Object.fromEntries([...this.slots].map(([node, slots]) => [node, Object.fromEntries([...slots].map(([key, slot]) => [key, slot.value]))]));
   }
 
+  /** The session as whoever uses the graph sees it: by name, never by node. */
+  view(): SessionView {
+    return {
+      session: this.id,
+      values: valuesOf(withState(this.design, this.slots).copy, registry),
+      outputs: outputsOf(this.design, this.shown, registry),
+      rounds: this.count,
+      finished_at: this.finishedAt,
+      round: this.lastRound ? this.snapshot(this.lastRound) : null,
+      dropped: this.notes,
+    };
+  }
+
+  /**
+   * Be told what happens in this session from now on: every round as it
+   * starts, goes and ends, and the session whenever what it keeps changed.
+   * Returns how to stop being told.
+   */
+  watch(listener: (event: SessionEvent) => void): () => void {
+    this.watchers.add(listener);
+    return () => { this.watchers.delete(listener); };
+  }
+
   /**
    * Go on with a changed design: what the editor hands over as it is edited.
    * What the session kept for a node that is gone, or a slot whose design
@@ -129,23 +171,32 @@ export class Session {
     const { slots, notes } = checked(graph, this.slots);
     this.slots = slots;
     this.notes = notes;
-    if (notes.length) void this.save();
+    if (notes.length) {
+      void this.save();
+      this.tell({ type: 'session', session: this.view() });
+    }
     return notes;
   }
 
-  /** Start a round for *trigger* -- the whole graph for none -- and hand back its id at once, to watch it by. */
-  start(trigger: Trigger | null): { id: string; total: number } {
-    const { id, total } = this.begin(trigger);
-    return { id, total };
+  /**
+   * Start a round for *trigger* -- the whole graph for none -- given *values*
+   * by name, and hand back its id at once, to watch it by. A value the graph
+   * takes under no such name is refused before anything starts (`NotOffered`).
+   */
+  start(trigger: Trigger | null, values: Record<string, unknown> = {}): { id: string; total: number; outcome: Promise<ExecutionResult> } {
+    return this.begin(trigger, values);
   }
 
-  /** Run a round for *trigger* and wait for what it produced. *signal* stops it, as Stop does. */
-  run(trigger: Trigger | null, signal?: AbortSignal): Promise<ExecutionResult> {
-    return this.begin(trigger, signal).outcome;
+  /** Run a round and wait for what it produced. *signal* stops it, as Stop does. */
+  run(trigger: Trigger | null, values: Record<string, unknown> = {}, signal?: AbortSignal): Promise<ExecutionResult> {
+    return this.begin(trigger, values, signal).outcome;
   }
 
+  /** A round as a watcher sees it -- and, once it has ended, what it handed back by name. */
   snapshot(id: string): RunSnapshot | null {
-    return this.rounds.snapshot(id);
+    const snapshot = this.rounds.snapshot(id);
+    if (!snapshot) return null;
+    return { ...snapshot, outputs: snapshot.result ? outputsOf(this.design, snapshot.result, registry) : null };
   }
 
   stop(id: string): boolean {
@@ -172,22 +223,25 @@ export class Session {
       this.notes = [];
       await this.writing;
       if (this.file) await rm(this.file, { force: true });
+      this.tell({ type: 'session', session: this.view() });
     });
   }
 
-  private begin(trigger: Trigger | null, signal?: AbortSignal) {
+  private begin(trigger: Trigger | null, values: Record<string, unknown>, signal?: AbortSignal) {
     const design = this.design;
+    checkValues(design, values, registry);
     const only = trigger ? triggeredNodes(design, trigger, memoryFeedbackEdges(design.nodes, design.edges, registry)) : null;
     const total = only?.size ?? design.nodes.length;
     const labels = new Map(design.nodes.map((node) => [node.id, node.label || node.id]));
-    const { id, outcome } = this.rounds.start(total, (node) => labels.get(node) ?? node, (work) => this.round(trigger, work), signal);
+    const { id, outcome } = this.rounds.start(total, (node) => labels.get(node) ?? node, (work) => this.round(trigger, values, work), signal);
+    this.lastRound = id;
     return { id, total, outcome };
   }
 
   /** One round, on a working copy; what it leaves is kept only once it has run to its end. */
-  private async round(trigger: Trigger | null, work: RoundWork): Promise<ExecutionResult> {
+  private async round(trigger: Trigger | null, values: Record<string, unknown>, work: RoundWork): Promise<ExecutionResult> {
     const design = this.design;
-    const { copy, sent } = withState(design, this.slots);
+    const { copy, sent } = withState(design, this.slots, values);
     const latch = new RoundLatch(this.latch);
     const result = await executeGraph(copy, {
       runtime: this.runtime(work.report), registry, trigger, signal: work.signal, reuse: this.reuse, latch,
@@ -211,7 +265,29 @@ export class Session {
     this.count += 1;
     this.finishedAt = Date.now();
     await this.save();
+    this.tell({ type: 'session', session: this.view() });
     return result;
+  }
+
+  /** A round started, began, ended or went a step further: tell the watchers -- how far it is, not more often than they can use. */
+  private roundChanged(id: string, moment: boolean): void {
+    if (!this.watchers.size) return;
+    const now = Date.now();
+    if (!moment && now - (this.told.get(id) ?? 0) < PROGRESS_EVERY_MS) return;
+    this.told.set(id, now);
+    const round = this.snapshot(id);
+    if (round?.done) this.told.delete(id);
+    if (round) this.tell({ type: 'round', round });
+  }
+
+  private tell(event: SessionEvent): void {
+    for (const watcher of this.watchers) {
+      try {
+        watcher(event);
+      } catch {
+        // One watcher that cannot listen is no reason to stop telling the others.
+      }
+    }
   }
 
   /** Take back what the file kept, as far as the design still has a place for it. */
@@ -304,16 +380,20 @@ class RoundLatch extends Latch {
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-/** *design* with what the session keeps put back into it, and each node's slots as the round is handed them. */
-function withState(design: Graph, slots: Slots): { copy: Graph; sent: Map<string, Record<string, unknown>> } {
+/**
+ * *design* with what the session keeps put back into it and *values* put in by
+ * name -- what a round starts from -- and each node's slots as it is handed them.
+ */
+function withState(design: Graph, slots: Slots, values: Record<string, unknown> = {}): { copy: Graph; sent: Map<string, Record<string, unknown>> } {
   const copy = structuredClone(design);
+  for (const node of copy.nodes) {
+    const held = slots.get(node.id);
+    if (held) registry.node(node.node_type)?.setState(node, Object.fromEntries([...held].map(([key, slot]) => [key, slot.value])));
+  }
+  applyValues(copy, values, registry);
   const sent = new Map<string, Record<string, unknown>>();
   for (const node of copy.nodes) {
-    const element = registry.node(node.node_type);
-    if (!element) continue;
-    const held = slots.get(node.id);
-    if (held) element.setState(node, Object.fromEntries([...held].map(([key, slot]) => [key, slot.value])));
-    const now = element.state(node);
+    const now = registry.node(node.node_type)?.state(node) ?? {};
     if (Object.keys(now).length) sent.set(node.id, now);
   }
   return { copy, sent };

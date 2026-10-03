@@ -70,7 +70,7 @@ class Round {
     this.stop.abort();
   }
 
-  snapshot(): RunSnapshot {
+  snapshot(): Omit<RunSnapshot, 'outputs'> {
     return {
       run_id: this.id,
       done: this.finishedAt !== null,
@@ -87,10 +87,21 @@ class Round {
   }
 }
 
+/**
+ * Told when a round changed: *moment* when it was asked for, began or ended --
+ * a change a watcher must see -- and not when it only went a step further.
+ */
+export type RoundChanged = (id: string, moment: boolean) => void;
+
 export class Rounds {
   /** Settles once every round asked for so far has ended: what the next one waits for. */
   private ahead: Promise<void> = Promise.resolve();
   private readonly kept = new Map<string, Round>();
+  private readonly changed: RoundChanged;
+
+  constructor(changed: RoundChanged = () => {}) {
+    this.changed = changed;
+  }
 
   /**
    * Queue *work* as a round, and hand back its id at once -- and *outcome*,
@@ -117,7 +128,14 @@ export class Rounds {
     const before = this.ahead;
     const outcome = waited(before, round.stop.signal).then(() => {
       round.currentLabel = '';
-      return work({ report: (event) => round.report(event, labelOf), signal: round.stop.signal });
+      this.changed(id, true);
+      return work({
+        report: (event) => {
+          round.report(event, labelOf);
+          this.changed(id, false);
+        },
+        signal: round.stop.signal,
+      });
     });
     // The next in line waits for this one to end, however it ends -- and for
     // the ones ahead of it, which a round stopped while it waited did not end.
@@ -128,7 +146,9 @@ export class Rounds {
         round.finishedAt = Date.now();
         signal?.removeEventListener('abort', halt);
         this.forgetOld();
+        this.changed(id, true);
       });
+    this.changed(id, true);
     return { id, outcome };
   }
 
@@ -139,7 +159,8 @@ export class Rounds {
     return done;
   }
 
-  snapshot(id: string): RunSnapshot | null {
+  /** A round as a watcher sees it: what it handed back by name is its owner's to add (`Session.snapshot`). */
+  snapshot(id: string): Omit<RunSnapshot, 'outputs'> | null {
     return this.kept.get(id)?.snapshot() ?? null;
   }
 

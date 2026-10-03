@@ -331,9 +331,17 @@ describe('the engine as the front door of the editor', () => {
     const { url } = await serveGraph();
     for (const [name, route] of Object.entries(API)) {
       const { path } = pathFor(name as keyof typeof API, { id: 'none' });
-      const init = { method: route.method, headers: { 'Content-Type': 'application/json' }, body: route.method === 'GET' ? undefined : '{}' };
+      const stop = new AbortController();
+      const init = { method: route.method, headers: { 'Content-Type': 'application/json' }, body: route.method === 'GET' ? undefined : '{}', signal: stop.signal };
+      const response = await fetch(`${url}${path}`, init);
+      // A stream answers by going on: that it opened is the handler.
+      if (response.headers.get('content-type')?.startsWith('text/event-stream')) {
+        expect(route.for, name).toBe('tool');
+        stop.abort();
+        continue;
+      }
       // Any answer but "no such route" means a handler: its own refusals (a run that is not there) are its business.
-      const detail = (await asJson(await fetch(`${url}${path}`, init))).detail;
+      const detail = (await asJson(response)).detail;
       if (route.for === 'editor') expect(detail, name).toBe('Not part of this server.');
       else expect(detail, name).not.toBe('Not part of this server.');
     }

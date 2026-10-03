@@ -121,8 +121,20 @@ export abstract class WidgetRunner<C = unknown> extends ElementRunner<Widget, C>
     return [];
   }
 
-  /** Keep one supplied value in *stored*, the block as the graph file holds it. Only a block that asked is told. */
-  applyRuntimeValue(_stored: RawConfig, _value: string): void {}
+  /**
+   * Whether a person sets what this block hands on -- a choice, a text, a
+   * path, a message: a value a round can be given under the block's id. A
+   * block that hands on nothing takes none, and nor does one that only says
+   * it was used (a button).
+   */
+  takesValue(widget: Widget): boolean {
+    return this.ports(widget).outputs.some((port) => port.id === `${widget.id}_out`);
+  }
+
+  /** Keep a value given from outside -- a person, a page, a script -- in *stored*, the block as the graph file holds it. */
+  setValue(stored: RawConfig, value: unknown): void {
+    stored.value = value;
+  }
 
   // ── Build time ────────────────────────────────────────────────────────────
   // What building a neighbour asks of it.

@@ -36,6 +36,11 @@ export class ButtonWidgetRunner extends WidgetRunner<Record<string, never>> {
     return true;
   }
 
+  /** What it hands on is that it was pressed, which nobody gives it: it is an event, not a value. */
+  override takesValue(): boolean {
+    return false;
+  }
+
   async execute(widget: Widget, _inputs: Record<string, unknown>, runtime: Runtime) {
     const out = `${widget.id}_out`;
     return { [out]: runtime.fired?.(out) ?? true };
